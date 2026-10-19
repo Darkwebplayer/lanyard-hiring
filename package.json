@@ -1,0 +1,43 @@
+{
+  "name": "hiring-app",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev",
+    "generate": "nuxt generate",
+    "preview": "nuxt build && wrangler dev --test-scheduled",
+    "postinstall": "nuxt prepare",
+    "deploy": "nuxt build && wrangler deploy",
+    "typecheck": "nuxt typecheck",
+    "test": "vitest run",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "cf:types": "wrangler types"
+  },
+  "dependencies": {
+    "ai": "^7.0.143",
+    "better-auth": "^1.7.11",
+    "drizzle-orm": "^0.45.4",
+    "fflate": "^0.8.3",
+    "nuxt": "^4.6.2",
+    "postgres": "^3.4.9",
+    "unpdf": "^1.9.1",
+    "vue": "^3.5.44",
+    "vue-router": "^5.4.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.11",
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.5",
+    "vue-tsc": "^3.3.13",
+    "wrangler": "^4.151.2"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "workerd"
+    ]
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "hiring-app",
+  "main": "./.output/server/index.mjs",
+  "assets": { "directory": "./.output/public/", "binding": "ASSETS" },
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  // ids are placeholders until the resources exist (wrangler hyperdrive create / queues create / r2 bucket create)
+  "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "00000000000000000000000000000000" }],
+  "r2_buckets": [{ "binding": "CV_BUCKET", "bucket_name": "hiring-app-cvs" }],
+  "queues": {
+    "producers": [{ "binding": "ENGINE", "queue": "hiring-app-engine" }],
+    "consumers": [{ "queue": "hiring-app-engine", "max_batch_size": 10, "max_retries": 3 }]
+  },
+  "triggers": { "crons": ["*/5 * * * *", "0 8 * * *"] }
+}
