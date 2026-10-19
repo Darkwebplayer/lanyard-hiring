@@ -50,7 +50,7 @@ export function createAuth(env: AppEnv, db: Db) {
   })
 }
 
-async function loadAccess(db: Db, env: AppEnv, userId: string) {
+export async function loadAccess(db: Db, env: AppEnv, userId: string) {
   const [row] = await db
     .select({ user: schema.user, roleLevel: schema.roles.level })
     .from(schema.user)

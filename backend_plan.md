@@ -63,7 +63,7 @@ Rules:
 | Cron | `*/5 * * * *` sweeper, `0 8 * * *` reminders, through the same entry's `scheduled` (switch on `cron`) |
 | AI | AI SDK `generateObject` |
 | Bot protection | Turnstile |
-| Tests | Vitest. Pure units for `shared/`; integration tests for the engine against real Postgres (local Docker or a Neon branch), with the queue injected as a function |
+| Tests | Vitest. `pnpm test` runs everything on **PGlite**: in-memory Postgres in wasm, a fresh db per file, about 9s. `pnpm test:pg` runs the same suite on **real Postgres** (`TEST_PG_URL`, a separate `hiring_test` database on the Neon server) to prove locks and races under true concurrency. The queue is injected as a function |
 
 Env: `ADMIN_EMAIL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `TURNSTILE_SECRET`, `DISABLED_NODE_TYPES`, `AI_*`, `EMAIL_*`, `APP_FROM_EMAIL`.
 
@@ -314,6 +314,17 @@ Choices made here:
 - Server-side publish checks still to add in phase 3: assignee user and role ids exist, a panel has enough assignees, and form keys are unchanged from the last published version.
 
 Verified by `test/workflow.test.ts` (25 tests).
+
+### Phase 3 status (2026-10-19)
+`server/domain/jobs.ts`:
+- `createJob`: from blank, from Standard hire, or a copy of another job.
+- `saveDraft`: lenient. It locks the job row, so concurrent saves open exactly one draft N+1.
+- `validateDraft` / `publish`: pure validation, key types kept across versions, and assignee users and roles exist with enough people for `min_submissions`. Publish freezes the version and sets the job `open`.
+- `pickerFields`.
+
+Routes under `/api/jobs` (manager+). `DomainError` maps to HTTP through `domain()`.
+
+Verified by `test/jobs.int.test.ts`, on PGlite and on Neon.
 
 ## 9. Still open
 1. AI provider and model: pick by screening quality on about 20 real CVs, with zero data retention.

@@ -175,3 +175,23 @@ export function validateVersion(form: unknown, graph: unknown): Issue[] {
   if (!g.success) return [...formIssues, ...g.error.issues.map(i => ({ code: 'invalid_graph', message: `workflow.${i.path.join('.')}: ${i.message}` }))]
   return [...formIssues, ...validateGraph(g.data, formOk.success ? formOk.data : [])]
 }
+
+// Keys are immutable across versions: a key may disappear, but never come back with another type.
+// (Reports and timelines compare answers and node outputs by key across versions.)
+export function checkVersionCompat(
+  prev: { form: FormField[], workflow: Graph },
+  next: { form: FormField[], workflow: Graph },
+): Issue[] {
+  const issues: Issue[] = []
+  const prevFields = new Map(prev.form.map(f => [f.key, f.type]))
+  for (const f of next.form) {
+    const was = prevFields.get(f.key)
+    if (was && was !== f.type) issues.push({ code: 'field_type_changed', message: `form field "${f.key}" was ${was}; use a new key for a ${f.type}` })
+  }
+  const prevNodes = new Map(prev.workflow.nodes.map(n => [n.key, n.type]))
+  for (const n of next.workflow.nodes) {
+    const was = prevNodes.get(n.key)
+    if (was && was !== n.type) issues.push({ node: n.key, code: 'node_type_changed', message: `node "${n.key}" was a ${was}; use a new key for a ${n.type}` })
+  }
+  return issues
+}

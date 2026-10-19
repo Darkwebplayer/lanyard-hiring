@@ -17,8 +17,8 @@ const env = {
   GOOGLE_CLIENT_SECRET: 'secret',
 } as AppEnv
 
-const db = testDb()
-const auth = createAuth(env, db)
+let db: Awaited<ReturnType<typeof testDb>>
+let auth: ReturnType<typeof createAuth>
 let roleId: string
 
 const signUp = async (e: string, emailVerified = true) =>
@@ -26,6 +26,8 @@ const signUp = async (e: string, emailVerified = true) =>
 const signIn = async (userId: string) => (await auth.$context).internalAdapter.createSession(userId)
 
 beforeAll(async () => {
+  db = await testDb()
+  auth = createAuth(env, db)
   const [admin] = await db.insert(s.user).values({ id: `seed-${tag}`, email: email('seed'), name: 'seed' }).returning()
   ;[{ id: roleId }] = await db.insert(s.roles).values({ name: `Interviewer ${tag}`, level: 'employee' }).returning() as any
   await db.insert(s.invites).values({ email: email('invited'), roleId, invitedBy: admin!.id })
