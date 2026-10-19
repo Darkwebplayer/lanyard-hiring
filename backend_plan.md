@@ -293,6 +293,28 @@ Verified:
 
 Waiting on Google credentials: a real Google round trip.
 
+### Phase 2 status (2026-10-19)
+`shared/workflow/`:
+
+| File | Contents |
+|---|---|
+| `types.ts` | Shared types |
+| `rules.ts` | Evaluator with a full trace, per-type operators, `checkRule`, `pickBranch` |
+| `template.ts` | `render`; strict mode throws `MissingRefError` |
+| `form.ts` | Core fields, form validation, `answersSchema` |
+| `registry.ts` | The 8 node types, scorecard schema and aggregation, presets, `runSetVariable` |
+| `graph.ts` | `graphSchema` for drafts, `validateGraph` / `validateVersion` for publish, `fieldsAvailableAt` |
+| `templates.ts` | Standard hire |
+
+Choices made here:
+- A node may read only the outputs of its **dominators**: the nodes on every path from the trigger to it. A converging graph never reads a branch that didn't run.
+- Condition edges carry `branch` = a branch key, `default` or `missing`.
+- `not(...)` over a missing value is true, which is why the template routes missing data through `on_missing`.
+- In the template, the interview is one person (the job owner). For a panel, add a role and set `min_submissions: 2`.
+- Server-side publish checks still to add in phase 3: assignee user and role ids exist, a panel has enough assignees, and form keys are unchanged from the last published version.
+
+Verified by `test/workflow.test.ts` (25 tests).
+
 ## 9. Still open
 1. AI provider and model: pick by screening quality on about 20 real CVs, with zero data retention.
 2. Email: mocked for now. Going live means a Resend account and a verified sending domain.

@@ -1,0 +1,183 @@
+import { z } from 'zod'
+import type { Field, FieldType, Issue } from './types'
+
+export const OPS = ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'between', 'in', 'nin', 'contains', 'exists', 'is_true', 'is_false'] as const
+export type Op = typeof OPS[number]
+
+export interface Comparison { ref: string, op: Op, value?: unknown, valueRef?: string }
+export type Rule = { all: Rule[] } | { any: Rule[] } | { not: Rule } | Comparison
+
+export const ruleSchema: z.ZodType<Rule> = z.lazy(() => z.union([
+  z.object({ all: z.array(ruleSchema).min(1) }).strict(),
+  z.object({ any: z.array(ruleSchema).min(1) }).strict(),
+  z.object({ not: ruleSchema }).strict(),
+  z.object({ ref: z.string().min(1), op: z.enum(OPS), value: z.unknown().optional(), valueRef: z.string().min(1).optional() }).strict(),
+]))
+
+// Operators each field type supports; the variable picker filters by this too.
+export const OPS_BY_TYPE: Record<FieldType, readonly Op[]> = {
+  number: ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'between', 'in', 'nin', 'exists'],
+  date: ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'between', 'exists'],
+  string: ['eq', 'neq', 'in', 'nin', 'contains', 'exists'],
+  text: ['contains', 'exists'],
+  enum: ['eq', 'neq', 'in', 'nin', 'exists'],
+  boolean: ['is_true', 'is_false', 'exists'],
+  list: ['contains', 'exists'],
+  file: ['exists'],
+}
+
+// ---------- runtime ----------
+
+export function resolvePath(ctx: unknown, path: string): unknown {
+  let cur: any = ctx
+  for (const part of path.split('.')) {
+    if (cur == null || typeof cur !== 'object') return undefined
+    cur = cur[part]
+  }
+  return cur
+}
+
+export const isMissing = (v: unknown) => v === undefined || v === null || v === ''
+
+export interface TraceEntry {
+  ref: string
+  op: Op
+  expected: unknown
+  actual: unknown
+  result: boolean
+  missing?: true
+}
+
+const norm = (v: unknown) => typeof v === 'string' ? v.trim().toLowerCase() : v
+// dates are ISO strings; compare as timestamps
+const ord = (v: unknown) => typeof v === 'string' && !Number.isNaN(Date.parse(v)) && /^\d{4}-\d{2}-\d{2}/.test(v) ? Date.parse(v) : v as number
+
+function compare(op: Op, actual: unknown, expected: unknown): boolean {
+  switch (op) {
+    case 'exists': return true // only reached when present
+    case 'is_true': return actual === true
+    case 'is_false': return actual === false
+    case 'eq': return norm(actual) === norm(expected) || ord(actual) === ord(expected)
+    case 'neq': return !compare('eq', actual, expected)
+    case 'gt': return ord(actual) > ord(expected)
+    case 'gte': return ord(actual) >= ord(expected)
+    case 'lt': return ord(actual) < ord(expected)
+    case 'lte': return ord(actual) <= ord(expected)
+    case 'between': {
+      const [lo, hi] = expected as [unknown, unknown]
+      return ord(actual) >= ord(lo) && ord(actual) <= ord(hi)
+    }
+    case 'in': return (expected as unknown[]).some(e => compare('eq', actual, e))
+    case 'nin': return !compare('in', actual, expected)
+    case 'contains':
+      if (Array.isArray(actual)) return actual.some(a => norm(a) === norm(expected))
+      return String(norm(actual)).includes(String(norm(expected)))
+  }
+}
+
+// Evaluates every comparison (no short-circuit) so the trace explains the whole decision.
+// A comparison whose value (or valueRef) is missing is false, and is marked missing.
+export function evaluate(rule: Rule, ctx: unknown, trace: TraceEntry[] = []): { result: boolean, trace: TraceEntry[] } {
+  let result: boolean
+  if ('all' in rule) result = rule.all.map(r => evaluate(r, ctx, trace).result).every(Boolean)
+  else if ('any' in rule) result = rule.any.map(r => evaluate(r, ctx, trace).result).some(Boolean)
+  else if ('not' in rule) result = !evaluate(rule.not, ctx, trace).result
+  else {
+    const actual = resolvePath(ctx, rule.ref)
+    const expected = rule.valueRef ? resolvePath(ctx, rule.valueRef) : rule.value
+    const missing = isMissing(actual) || (rule.valueRef !== undefined && isMissing(expected))
+    result = !missing && compare(rule.op, actual, expected)
+    trace.push({ ref: rule.ref, op: rule.op, expected, actual, result, ...(missing && { missing: true as const }) })
+  }
+  return { result, trace }
+}
+
+export function refsInRule(rule: Rule, out: string[] = []): string[] {
+  if ('all' in rule) rule.all.forEach(r => refsInRule(r, out))
+  else if ('any' in rule) rule.any.forEach(r => refsInRule(r, out))
+  else if ('not' in rule) refsInRule(rule.not, out)
+  else {
+    out.push(rule.ref)
+    if (rule.valueRef) out.push(rule.valueRef)
+  }
+  return out
+}
+
+// ---------- validation ----------
+
+const textLike = new Set<FieldType>(['string', 'text', 'enum'])
+const compatible = (a: FieldType, b: FieldType) => a === b || (textLike.has(a) && textLike.has(b))
+
+function valueOk(type: FieldType, v: unknown) {
+  if (type === 'number') return typeof v === 'number' && Number.isFinite(v)
+  if (type === 'date') return typeof v === 'string' && !Number.isNaN(Date.parse(v))
+  return typeof v === 'string' && v.length > 0
+}
+
+// Checks refs resolve to upstream fields and that operators and values fit their types.
+export function checkRule(rule: Rule, fields: Map<string, Field>, node: string, issues: Issue[] = []): Issue[] {
+  if ('all' in rule) rule.all.forEach(r => checkRule(r, fields, node, issues))
+  else if ('any' in rule) rule.any.forEach(r => checkRule(r, fields, node, issues))
+  else if ('not' in rule) checkRule(rule.not, fields, node, issues)
+  else {
+    const f = fields.get(rule.ref)
+    if (!f) return issues.push({ node, code: 'unknown_ref', message: `"${rule.ref}" is not available here` }), issues
+    if (!OPS_BY_TYPE[f.type].includes(rule.op)) {
+      return issues.push({ node, code: 'bad_operator', message: `"${rule.op}" does not work on ${f.type} field "${rule.ref}"` }), issues
+    }
+    const noValue = rule.op === 'exists' || rule.op === 'is_true' || rule.op === 'is_false'
+    if (noValue) return issues
+    // contains on a list compares against one item (string)
+    const itemType: FieldType = f.type === 'list' ? 'string' : f.type
+    if (rule.valueRef !== undefined) {
+      const g = fields.get(rule.valueRef)
+      if (!g) issues.push({ node, code: 'unknown_ref', message: `"${rule.valueRef}" is not available here` })
+      else if (!compatible(itemType, g.type)) {
+        issues.push({ node, code: 'type_mismatch', message: `"${rule.ref}" (${f.type}) can't be compared with "${rule.valueRef}" (${g.type})` })
+      }
+      return issues
+    }
+    const v = rule.value
+    const ok = rule.op === 'between'
+      ? Array.isArray(v) && v.length === 2 && v.every(x => valueOk(itemType, x))
+      : rule.op === 'in' || rule.op === 'nin'
+        ? Array.isArray(v) && v.length > 0 && v.every(x => valueOk(itemType, x))
+        : valueOk(itemType, v)
+    if (!ok) issues.push({ node, code: 'bad_value', message: `"${rule.ref}" ${rule.op}: value does not fit a ${f.type} field` })
+    if (ok && f.type === 'enum' && f.options) {
+      const vals = (Array.isArray(v) ? v : [v]) as string[]
+      const bad = vals.filter(x => !f.options!.includes(x))
+      if (bad.length) issues.push({ node, code: 'bad_value', message: `"${rule.ref}" has no option ${bad.map(b => `"${b}"`).join(', ')}` })
+    }
+  }
+  return issues
+}
+
+// ---------- condition node ----------
+
+export interface ConditionConfig {
+  branches: { key: string, label: string, rule: Rule }[]
+  on_missing: boolean
+}
+
+export const DEFAULT_BRANCH = 'default'
+export const MISSING_BRANCH = 'missing'
+
+export const conditionBranchKeys = (c: ConditionConfig) =>
+  [...c.branches.map(b => b.key), DEFAULT_BRANCH, ...(c.on_missing ? [MISSING_BRANCH] : [])]
+
+export interface ConditionEvaluation {
+  branch: string
+  missing: string[]
+  branches: { key: string, result: boolean, trace: TraceEntry[] }[]
+}
+
+// Missing data first (if a missing branch exists), then the first matching branch, then default.
+// The returned evaluation is stored on the run: it is the "why" behind every decision.
+export function pickBranch(config: ConditionConfig, ctx: unknown): ConditionEvaluation {
+  const refs = [...new Set(config.branches.flatMap(b => refsInRule(b.rule)))]
+  const missing = refs.filter(r => isMissing(resolvePath(ctx, r)))
+  const branches = config.branches.map(b => ({ key: b.key, ...evaluate(b.rule, ctx) }))
+  if (config.on_missing && missing.length) return { branch: MISSING_BRANCH, missing, branches }
+  return { branch: branches.find(b => b.result)?.key ?? DEFAULT_BRANCH, missing, branches }
+}
