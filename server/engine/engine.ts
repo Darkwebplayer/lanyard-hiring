@@ -400,5 +400,11 @@ export async function sweep(deps: EngineDeps) {
   const dead = await deps.db.select().from(nodeRuns)
     .where(and(eq(nodeRuns.status, 'running'), lt(nodeRuns.claimedAt, new Date(t - STALE_RUNNING_MS)))).limit(500)
   for (const run of dead) await recordFailure(deps, run, run.claimedAt!, new HandlerError('worker_lost', true))
-  return { requeued: lost.length, recovered: dead.length }
+
+  // applications committed but never started (the apply request died after its commit)
+  const unstarted = await deps.db.select({ id: applications.id }).from(applications)
+    .where(and(eq(applications.status, 'active'), lt(applications.createdAt, new Date(t - LOST_PENDING_MS)),
+      sql`not exists (select 1 from ${nodeRuns} r where r.application_id = ${applications.id})`)).limit(500)
+  for (const a of unstarted) await startApplication(deps, a.id)
+  return { requeued: lost.length, recovered: dead.length, started: unstarted.length }
 }

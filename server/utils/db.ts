@@ -1,17 +1,15 @@
 import type { H3Event } from 'h3'
 import { createDb, type Db } from '../db/client'
+import { pgCode } from '../domain/errors'
 import type { AppEnv } from '../env'
 
 export const useEnv = (event: H3Event) => event.context.cloudflare.env as AppEnv
 
-// One db per request. The runtime drops the socket when the request ends, so no explicit close.
+// One db per request, closed after the response by server/plugins/db-close.ts.
 export function useDb(event: H3Event): Db {
   return (event.context.db ??= createDb(useEnv(event).HYPERDRIVE.connectionString))
 }
 
-// Postgres error code from a (possibly drizzle-wrapped) error: 23505 unique, 23503 foreign key.
-export const pgCode = (e: unknown): string | undefined =>
-  (e as any)?.code ?? (e as any)?.cause?.code
 
 // Runs a write, turning constraint violations into 409/422 instead of 500.
 export async function constrained<T>(write: Promise<T>, messages: { unique?: string, fk?: string } = {}) {

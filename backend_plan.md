@@ -362,6 +362,22 @@ Verified by `test/engine.int.test.ts`, which covers cases 1–4, 6, 7, 9–14, 1
 
 Verified by `test/handlers.int.test.ts`: per-handler cases, a leak test on the AI input, and an end-to-end flow from a real PDF to the interview task.
 
+### Phase 6 status (2026-10-20)
+`server/domain/apply.ts` (`openJob`, `publicJob`, `submitApplication`) and `server/domain/turnstile.ts` (fails closed). Routes: `GET /api/public/jobs/:id` and `POST /api/public/jobs/:id/apply`.
+
+How a submit runs:
+1. Check that the job is published, open and before its closing date (otherwise 404).
+2. Validate core fields, answers and files before writing anything. Files are checked by magic bytes and must be under 10 MB. A refused file is reported once.
+3. Upload to R2 under a write-once key, `jobs/<job>/<application>/<uuid>`, with the sha256 stored.
+4. Upsert the candidate by lowercase email and insert the application in one transaction. A duplicate gets 409 and its uploads are deleted.
+5. Start the workflow.
+
+`sweep()` now also starts applications that were committed but never started. The public page leaves out internal requirements such as salary. Local `.env` uses Cloudflare's always-pass Turnstile test secret. `pnpm db:seed` creates a demo job in the dev db.
+
+Verified:
+- `test/apply.int.test.ts`.
+- Over real HTTP in `wrangler dev`: Turnstile, a disguised file, 201, a duplicate 409, then queue → cv_parse in workerd → mock AI → shortlist → interview waiting.
+
 ## 9. Still open
 1. AI provider and model: pick by screening quality on about 20 real CVs, with zero data retention.
 2. Email: mocked for now. Going live means a Resend account and a verified sending domain.
