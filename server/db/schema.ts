@@ -84,6 +84,31 @@ export const settings = pgTable('settings', {
   aiNoticeText: text('ai_notice_text'),
 }, t => [check('settings_single_row', sql`${t.id} = 1`)])
 
+// ---------- step presets ----------
+
+// Company-wide starting points for canvas steps. The palette shows the ones with in_palette, in position order
+// per section (sections follow the step type). A preset is only a starting config: a step copies it when added.
+export const stepPresets = pgTable('step_presets', {
+  id: id(),
+  type: text('type').notNull(),
+  label: text('label').notNull(),
+  description: text('description').notNull().default(''),
+  config: jsonb('config').notNull(),
+  position: integer('position').notNull().default(0),
+  inPalette: boolean('in_palette').notNull().default(true),
+  createdAt: createdAt(),
+})
+
+// Saved form + flow pairs a new job or a draft starts from. Copied on use, like step presets.
+export const flowPresets = pgTable('flow_presets', {
+  id: id(),
+  name: text('name').notNull(),
+  description: text('description').notNull().default(''),
+  form: jsonb('form').notNull(),
+  workflow: jsonb('workflow').notNull(),
+  createdAt: createdAt(),
+})
+
 // ---------- jobs ----------
 
 export const jobStatus = pgEnum('job_status', ['draft', 'open', 'closed', 'archived'])

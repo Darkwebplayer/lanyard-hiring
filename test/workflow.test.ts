@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { jobFieldsRead, namedPeople, withoutNamedPeople } from '../shared/workflow/flowPresets'
 import { answersSchema, validateForm } from '../shared/workflow/form'
 import { fieldsAvailableAt, validateGraph, validateVersion } from '../shared/workflow/graph'
 import { aggregateScorecard, normalizeOutput, REGISTRY, runSetVariable, scorecardSchema } from '../shared/workflow/registry'
@@ -349,5 +350,33 @@ describe('review regressions', () => {
   it('handler outputs are normalized to declared types', () => {
     expect(normalizeOutput(REGISTRY.cv_parse!.outputs({ file_field: 'cv' }), { years_experience: '6', skills: 'Go' }))
       .toMatchObject({ years_experience: 6, skills: ['Go'] })
+  })
+})
+
+describe('flow preset leftovers', () => {
+  const paths = (g: Graph) => jobFieldsRead(g).map(f => f.path)
+
+  it('lists the job requirements a flow reads, not the ones every job has', () => {
+    expect(paths(STANDARD_HIRE.workflow).sort()).toEqual(['job.min_experience_years', 'job.must_have_skills'])
+    expect(paths({ nodes: [{ key: 'start', type: 'application_received', config: {} }], edges: [] })).toEqual([])
+    const g: Graph = { nodes: [
+      { key: 'gate', type: 'condition', config: { branches: [{ key: 'ok', rule: { ref: 'form.salary', op: 'lte', valueRef: 'job.salary_max' } }] } },
+      { key: 'mail', type: 'send_email', config: { subject: 'Hi', body: 'Based in {{ job.location }}, {{job.title}}' } },
+    ], edges: [] }
+    expect(paths(g)).toEqual(['job.salary_max', 'job.location'])
+  })
+
+  it('swaps named people for the job owner only where there were named people', () => {
+    const g = clone().workflow
+    const interview = g.nodes.find(n => n.key === 'interview')!
+    const review = g.nodes.find(n => n.type === 'human_task' && n.key !== 'interview')!
+    interview.config = { ...(interview.config as object), assignees: { users: ['u1'], roles: ['r1'], job_owner: false } }
+    review.config = { ...(review.config as object), assignees: { users: [], roles: ['r2'], job_owner: false } }
+    expect(namedPeople(g).map(n => n.key)).toEqual(['interview'])
+
+    const out = withoutNamedPeople(g)
+    expect((out.nodes.find(n => n.key === 'interview')!.config as any).assignees).toEqual({ users: [], roles: ['r1'], job_owner: true })
+    expect((out.nodes.find(n => n.key === review.key)!.config as any).assignees).toEqual({ users: [], roles: ['r2'], job_owner: false })
+    expect(namedPeople(g)).toHaveLength(1) // the input is untouched
   })
 })

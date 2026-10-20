@@ -47,24 +47,42 @@ function closes(j: JobRow) {
 
 // ---- new job ----
 const dlg = ref<HTMLDialogElement>()
-const form = reactive({ title: '', openings: 1, from: 'standard_hire' as 'standard_hire' | 'blank' | 'job', jobId: '' })
+const form = reactive({ title: '', openings: 1, from: 'standard_hire' as 'standard_hire' | 'blank' | 'job' | 'preset', jobId: '', presetId: '' })
 const creating = ref(false)
 const createError = ref<string | null>(null)
+const presetGone = ref(false)
 const copyable = computed(() => jobs.value?.filter(j => j.status !== 'archived') ?? [])
+const { flowPresets, error: presetsError, refresh: refreshPresets } = useFlowPresets()
+refreshPresets()
+const counts = (p: { form: unknown[], workflow: { nodes: { type: string }[] } }) =>
+  `${plural(p.workflow.nodes.filter(n => n.type !== 'application_received').length, 'step')} · ${plural(p.form.length, 'field')}`
+// one radio group: the built-ins, then each preset as preset:<id>
+const choice = computed({
+  get: () => (form.from === 'preset' ? `preset:${form.presetId}` : form.from),
+  set: (v: string) => v.startsWith('preset:') ? Object.assign(form, { from: 'preset', presetId: v.slice(7) }) : (form.from = v as typeof form.from),
+})
 
-function openNew() {
-  Object.assign(form, { title: '', openings: 1, from: 'standard_hire', jobId: copyable.value[0]?.id ?? '' })
+function openNew(start = 'standard') {
+  const preset = flowPresets.value?.find(p => p.id === start)
+  presetGone.value = start !== 'standard' && !preset
+  Object.assign(form, { title: '', openings: 1, from: preset ? 'preset' : 'standard_hire', presetId: preset?.id ?? '', jobId: copyable.value[0]?.id ?? '' })
   createError.value = null
   dlg.value?.showModal()
 }
+// ?new=<preset id|standard> from the library: open the dialog once the jobs and presets are in
+watch([() => route.query.new, jobs, () => flowPresets.value ?? presetsError.value], ([n, j, p]) => {
+  if (typeof n !== 'string' || !j || !p) return
+  router.replace({ query: { ...route.query, new: undefined } })
+  openNew(n)
+}, { immediate: true })
 async function create() {
   creating.value = true
   createError.value = null
   try {
-    const from = form.from === 'job' ? { kind: 'job', jobId: form.jobId } : { kind: form.from }
+    const from = form.from === 'job' ? { kind: 'job', jobId: form.jobId } : form.from === 'preset' ? { kind: 'preset', presetId: form.presetId } : { kind: form.from }
     const { job } = await api<{ job: { id: string } }>('/api/jobs', { method: 'POST', body: { title: form.title, openings: form.openings, from } })
     dlg.value?.close()
-    await navigateTo(`/jobs/${job.id}/details`)
+    await navigateTo(form.from === 'preset' ? `/jobs/${job.id}/details?check=1` : `/jobs/${job.id}/details`)
   }
   catch (e) { createError.value = toApiError(e).message }
   finally { creating.value = false }
@@ -76,7 +94,7 @@ async function create() {
     <header class="page-head">
       <h1>Jobs</h1>
       <div v-if="jobs?.length" class="actions">
-        <button class="btn btn-primary" @click="openNew"><Icon name="plus" />New job</button>
+        <button class="btn btn-primary" @click="openNew()"><Icon name="plus" />New job</button>
       </div>
     </header>
 
@@ -92,7 +110,7 @@ async function create() {
       <Icon name="jobs" :size="28" />
       <h2>No jobs yet</h2>
       <p>A job holds the role, its application form and the flow each candidate goes through. Publish it and share the apply link.</p>
-      <button class="btn btn-primary" @click="openNew"><Icon name="plus" />New job</button>
+      <button class="btn btn-primary" @click="openNew()"><Icon name="plus" />New job</button>
     </section>
 
     <template v-else>
@@ -152,9 +170,14 @@ async function create() {
           </div>
           <fieldset class="field">
             <legend class="legend">Start from</legend>
-            <label class="check"><input v-model="form.from" type="radio" value="standard_hire"><span><b>Standard hire flow</b><span class="hint">CV read, AI review, shortlist, interview, offer. Already wired up.</span></span></label>
-            <label class="check"><input v-model="form.from" type="radio" value="blank"><span><b>Blank flow</b><span class="hint">Only the start. You build every step.</span></span></label>
-            <label class="check"><input v-model="form.from" type="radio" value="job" :disabled="!copyable.length"><span><b>Copy another job</b><span class="hint">Its form and flow, not its candidates.</span></span></label>
+            <p v-if="presetGone" class="gone" role="status"><Icon name="alert" :size="14" />That flow preset was deleted, so this starts from Standard hire.</p>
+            <label class="check"><input v-model="choice" type="radio" value="standard_hire"><span><b>Standard hire</b><span class="hint">CV read, AI review, shortlist, interview, offer. Already wired up.</span></span></label>
+            <label class="check"><input v-model="choice" type="radio" value="blank"><span><b>Blank flow</b><span class="hint">Only the start. You build every step.</span></span></label>
+            <div v-if="flowPresets?.length" class="presets" role="group" aria-labelledby="nj-presets">
+              <span id="nj-presets" class="eyebrow">Your flow presets</span>
+              <label v-for="p in flowPresets" :key="p.id" class="check"><input v-model="choice" type="radio" :value="`preset:${p.id}`"><span><b>{{ p.name }} <span class="n">{{ counts(p) }}</span></b><span v-if="p.description" class="hint">{{ p.description }}</span></span></label>
+            </div>
+            <label class="check"><input v-model="choice" type="radio" value="job" :disabled="!copyable.length"><span><b>Copy another job</b><span class="hint">Its form and flow, not its candidates.</span></span></label>
             <select v-if="form.from === 'job'" v-model="form.jobId" aria-label="Job to copy" required class="copy-from">
               <option v-for="j in copyable" :key="j.id" :value="j.id">{{ j.title }}</option>
             </select>
@@ -186,9 +209,14 @@ async function create() {
 .form-error .btn { margin-left: auto; }
 .openings input { width: 120px; }
 fieldset.field { gap: 10px; }
+/* radios read as choices, not as field labels (the global .field > label rule), same as the grouped presets */
+.field > .check { font-weight: 400; font-size: var(--t-md); }
 .check > span { display: grid; gap: 1px; }
 .check b { font-weight: 600; }
+.check b .n { margin-left: 4px; font-weight: 400; font-size: var(--t-sm); color: var(--ink-2); }
 .check .hint { font-size: var(--t-sm); color: var(--ink-2); }
+.presets { display: grid; gap: 10px; max-height: min(260px, 32dvh); overflow-y: auto; padding: 8px 2px 2px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding-bottom: 10px; }
+.gone { display: flex; align-items: center; gap: 6px; font-size: var(--t-sm); color: var(--warn); font-weight: 500; }
 .copy-from { margin-left: 28px; width: calc(100% - 28px); }
 .cands { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .cand-n { color: var(--ink); text-decoration: none; font-variant-numeric: tabular-nums; }

@@ -51,6 +51,9 @@ export interface JobContext {
   salary_max?: number
   location?: string
   employment_type?: string
+  workplace_type?: 'on_site' | 'hybrid' | 'remote'
+  salary_currency?: string
+  show_salary?: boolean
   openings: number
 }
 

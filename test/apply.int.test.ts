@@ -52,7 +52,20 @@ describe('public job page', () => {
     const page = await publicJob(db, jobId, now)
     expect(page).toMatchObject({ title: 'Backend Engineer', companyName: 'Northwind', location: 'Remote', mustHaveSkills: ['Go'], consentText: expect.any(String), aiNoticeText: expect.any(String) })
     expect(page.form.map(f => f.key)).toEqual(['cv', 'linkedin', 'notice_period_weeks'])
-    expect(JSON.stringify(page)).not.toContain('salary') // internal requirements stay internal
+    expect(page.salary).toBeNull() // internal unless the recruiter opts in
+    expect(JSON.stringify(page)).not.toContain('salary_min')
+    expect(page).toMatchObject({ openings: 1, postedAt: expect.any(Date), workplaceType: null })
+  })
+
+  it('shows the salary only when the job opts in, from the next publish', async () => {
+    await updateJob(db, jobId, { requirements: { location: 'Remote', salary_min: 60000, salary_max: 70000, salary_currency: 'EUR', show_salary: true, workplace_type: 'remote', must_have_skills: ['Go'] } })
+    expect((await publicJob(db, jobId, now)).salary).toBeNull() // frozen into the version at publish
+    await saveDraft(db, jobId, STANDARD_HIRE)
+    await publish(db, jobId, 'admin@example.test')
+    const page = await publicJob(db, jobId, now)
+    expect(page).toMatchObject({ salary: { min: 60000, max: 70000, currency: 'EUR' }, workplaceType: 'remote' })
+    // posted is the first publish, not this one
+    expect(page.postedAt!.getTime()).toBeLessThanOrEqual(Date.now())
   })
 
   it('is gone after the closing date or when the job is closed', async () => {

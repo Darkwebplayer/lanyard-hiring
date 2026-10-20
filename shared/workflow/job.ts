@@ -9,6 +9,9 @@ export const requirementsSchema = z.object({
   salary_max: z.number().min(0).optional(),
   location: z.string().trim().max(200).optional(),
   employment_type: z.string().trim().max(50).optional(),
+  workplace_type: z.enum(['on_site', 'hybrid', 'remote']).optional(),
+  salary_currency: z.string().trim().regex(/^[A-Z]{3}$/, 'a three-letter currency code, e.g. EUR').optional(),
+  show_salary: z.boolean().optional(), // salary stays internal unless this is on
 }).strict().refine(r => r.salary_min === undefined || r.salary_max === undefined || r.salary_min <= r.salary_max, 'salary_min > salary_max')
 
 export type Requirements = z.infer<typeof requirementsSchema>

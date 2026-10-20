@@ -1,6 +1,8 @@
 // Canvas helpers: layout, words for each step, palette defaults. Pure, so the editor stays about state.
-import { nodeLabel } from '~/utils/nodes'
-import { HUMAN_TASK_PRESETS, REGISTRY, conditionBranchKeys, type HumanTaskConfig } from '~~/shared/workflow/registry'
+import { toRaw } from 'vue'
+import { nodeLabel, nodeMeta } from '~/utils/nodes'
+import { PRESET_SECTIONS } from '~~/shared/workflow/presets'
+import { REGISTRY, conditionBranchKeys, type HumanTaskConfig } from '~~/shared/workflow/registry'
 import type { ConditionConfig, Op, Rule } from '~~/shared/workflow/rules'
 import type { Field, FieldType, FormField, Graph, GraphEdge, GraphNode, Issue } from '~~/shared/workflow/types'
 
@@ -196,35 +198,38 @@ export function freeSlot(g: Graph, n: GraphNode): string | null | undefined {
 
 // ---------- palette ----------
 
-export interface PaletteItem { id: string, type: string, label: string, icon: string, preset?: string, outcome?: string }
+export interface Preset { id: string, type: string, label: string, description: string, config: unknown, position: number, inPalette: boolean }
+// A palette entry: a saved preset (presetId + config), or the blank step of a type, which is always there.
+export interface PaletteItem { id: string, type: string, label: string, icon: string, presetId?: string, config?: unknown }
 
-export const PALETTE: { group: string, items: PaletteItem[] }[] = [
-  { group: 'System steps', items: [
-    { id: 'cv_parse', type: 'cv_parse', label: 'Read CV', icon: 'scan' },
-    { id: 'ai_review', type: 'ai_review', label: 'AI review', icon: 'ai' },
-    { id: 'send_email', type: 'send_email', label: 'Email', icon: 'mail' },
-  ] },
-  { group: 'Decisions', items: [
-    { id: 'condition', type: 'condition', label: 'Decision', icon: 'split' },
-    { id: 'set_variable', type: 'set_variable', label: 'Set values', icon: 'braces' },
-  ] },
-  { group: 'Person steps', items: [
-    ...Object.entries(HUMAN_TASK_PRESETS).map(([k, p]) => ({ id: k, type: 'human_task', label: p.label, icon: 'person', preset: k })),
-    { id: 'person', type: 'human_task', label: 'Custom person step', icon: 'person' },
-  ] },
-  { group: 'Endings', items: [
-    { id: 'hired', type: 'end', label: 'Hired', icon: 'flag', outcome: 'hired' },
-    { id: 'rejected', type: 'end', label: 'Rejected', icon: 'flag', outcome: 'rejected' },
-    { id: 'withdrawn', type: 'end', label: 'Withdrawn', icon: 'flag', outcome: 'withdrawn' },
-  ] },
-]
+const BLANK_LABEL: Record<string, string> = {
+  cv_parse: 'Read CV', ai_review: 'AI review', send_email: 'Email', condition: 'Decision', set_variable: 'Set values',
+  human_task: 'Custom person step', end: 'Ending',
+}
+// The blank step's name inside a sentence: "an email", "an AI review", "a read CV" (acronyms keep their capitals)
+export const blankNoun = (type: string) => {
+  const l = BLANK_LABEL[type] ?? type
+  return /^[A-Z][a-z]/.test(l) ? l[0]!.toLowerCase() + l.slice(1) : l
+}
+export const blankItem = (type: string): PaletteItem => ({ id: `blank:${type}`, type, label: BLANK_LABEL[type] ?? type, icon: nodeMeta(type).icon })
 
-const BASE_KEY: Record<string, string> = { cv_parse: 'read_cv', ai_review: 'ai_review', send_email: 'email', condition: 'decision', set_variable: 'values', person: 'person_step' }
+// The palette: each section's presets that are in the palette, in order, then its blank steps.
+export function buildPalette(presets: Preset[]) {
+  return PRESET_SECTIONS.map(s => ({
+    key: s.key,
+    group: s.label,
+    items: [
+      ...presets.filter(p => p.inPalette && (s.types as readonly string[]).includes(p.type)).sort((a, b) => a.position - b.position)
+        .map((p): PaletteItem => ({ id: p.id, type: p.type, label: p.label, icon: nodeMeta(p.type).icon, presetId: p.id, config: p.config })),
+      ...s.types.map(blankItem),
+    ],
+  }))
+}
 
-// A new step whose settings already pass validation where that's possible.
-export function makeNode(item: PaletteItem, g: Graph, form: FormField[]): GraphNode {
-  const key = uniqueKey(item.preset ?? item.outcome ?? BASE_KEY[item.id] ?? item.id, g.nodes.map(n => n.key))
-  const owner = { users: [], roles: [], job_owner: true }
+const BASE_KEY: Record<string, string> = { cv_parse: 'read_cv', ai_review: 'ai_review', send_email: 'email', condition: 'decision', set_variable: 'values', human_task: 'person_step', end: 'end' }
+
+// A blank step's settings, passing validation where that's possible.
+export function blankConfig(type: string, g: Graph, form: FormField[]): unknown {
   const cv = g.nodes.find(n => n.type === 'cv_parse')
   const config: Record<string, unknown> = {
     cv_parse: { file_field: form.find(f => f.type === 'file')?.key ?? 'cv' },
@@ -235,18 +240,26 @@ export function makeNode(item: PaletteItem, g: Graph, form: FormField[]): GraphN
     send_email: { subject: 'About your application for {{job.title}}', body: 'Hi {{candidate.first_name}},\n\n' },
     condition: { branches: [{ key: 'yes', label: 'Yes', rule: { ref: 'candidate.email', op: 'exists' } }], on_missing: false },
     set_variable: { fields: [{ key: 'value_1', type: 'string', source: { kind: 'literal', value: '' } }] },
-    end: { outcome: item.outcome },
-    human_task: item.preset
-      ? { ...structuredClone(HUMAN_TASK_PRESETS[item.preset]!.config), assignees: owner }
-      : {
-          title: 'Review {{candidate.first_name}} {{candidate.last_name}}',
-          assignees: owner,
-          scorecard: [{ key: 'notes', label: 'Notes', type: 'text', required: true }],
-          min_submissions: 1,
-          due_days: 3,
-        } satisfies HumanTaskConfig,
+    end: { outcome: 'hired' },
+    human_task: {
+      title: 'Review {{candidate.first_name}} {{candidate.last_name}}',
+      assignees: { users: [], roles: [], job_owner: true },
+      scorecard: [{ key: 'notes', label: 'Notes', type: 'text', required: true }],
+      min_submissions: 1,
+      due_days: 3,
+    } satisfies HumanTaskConfig,
   }
-  return { key, type: item.type, label: item.preset || item.outcome ? item.label : undefined, config: config[item.type] }
+  return config[type]
+}
+
+export function makeNode(item: PaletteItem, g: Graph, form: FormField[]): GraphNode {
+  const key = uniqueKey(item.presetId ? slug(item.label, BASE_KEY[item.type]) : BASE_KEY[item.type] ?? item.type, g.nodes.map(n => n.key))
+  if (!item.presetId) return { key, type: item.type, config: blankConfig(item.type, g, form) }
+  const config = structuredClone(toRaw(item.config)) as any
+  // a preset made against Standard hire reads the CV text from "cv"; point it at this flow's Read CV step
+  const cv = g.nodes.find(n => n.type === 'cv_parse')
+  if (item.type === 'ai_review' && cv && typeof config.cv_text_ref === 'string' && config.cv_text_ref.startsWith('nodes.')) config.cv_text_ref = `nodes.${cv.key}.text`
+  return { key, type: item.type, label: item.label, config }
 }
 
 // ---------- fields ----------

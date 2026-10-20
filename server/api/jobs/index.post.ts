@@ -12,6 +12,7 @@ const body = z.object({
     z.object({ kind: z.literal('blank') }),
     z.object({ kind: z.literal('standard_hire') }),
     z.object({ kind: z.literal('job'), jobId: z.uuid() }),
+    z.object({ kind: z.literal('preset'), presetId: z.uuid() }),
   ]).default({ kind: 'standard_hire' }),
 })
 

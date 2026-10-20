@@ -7,6 +7,7 @@ export default defineConfig({
     globalSetup: ['./test/setup.ts'],
     fileParallelism: !process.env.TEST_PG, // real-Postgres files share one db
     testTimeout: process.env.TEST_PG ? 180_000 : 10_000, // remote round trips
-    hookTimeout: process.env.TEST_PG ? 180_000 : 10_000,
+    // PGlite migrates a fresh database per file; with files in parallel on a busy machine that passes 10 s
+    hookTimeout: process.env.TEST_PG ? 180_000 : 30_000,
   },
 })

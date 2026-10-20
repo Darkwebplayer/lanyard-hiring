@@ -1,5 +1,6 @@
-import { and, eq, gt, isNull, or, sql } from 'drizzle-orm'
+import { and, eq, gt, isNull, min, or, sql } from 'drizzle-orm'
 import { answersSchema, coreSchema, FILE_MIMES, type FileMeta, MAX_FILE_BYTES } from '../../shared/workflow/form'
+import type { Requirements } from '../../shared/workflow/job'
 import type { FormField, Issue } from '../../shared/workflow/types'
 import type { Db } from '../db/client'
 import { applications, candidates, jobs, jobVersions, settings } from '../db/schema'
@@ -24,7 +25,9 @@ export async function openJob(db: Db, jobId: string, now: Date) {
 export async function publicJob(db: Db, jobId: string, now: Date) {
   const { job, version } = await openJob(db, jobId, now)
   const [s] = await db.select().from(settings)
-  const req = version.requirements as Record<string, unknown>
+  // "posted": the first publish, not the latest re-publish
+  const [{ postedAt } = { postedAt: null }] = await db.select({ postedAt: min(jobVersions.publishedAt) }).from(jobVersions).where(eq(jobVersions.jobId, jobId))
+  const req = version.requirements as Requirements
   return {
     id: job.id,
     title: job.title,
@@ -34,6 +37,13 @@ export async function publicJob(db: Db, jobId: string, now: Date) {
     contactEmail: s?.replyToEmail ?? null,
     location: req.location ?? null,
     employmentType: req.employment_type ?? null,
+    workplaceType: req.workplace_type ?? null,
+    openings: job.openings,
+    postedAt,
+    // internal unless the recruiter opted in for this version
+    salary: req.show_salary && (req.salary_min !== undefined || req.salary_max !== undefined)
+      ? { min: req.salary_min ?? null, max: req.salary_max ?? null, currency: req.salary_currency ?? null }
+      : null,
     minExperienceYears: req.min_experience_years ?? null,
     mustHaveSkills: req.must_have_skills ?? [],
     closesAt: job.closesAt,

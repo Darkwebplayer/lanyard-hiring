@@ -1,24 +1,30 @@
 import { and, desc, eq, inArray, max, sql } from 'drizzle-orm'
+import { z } from 'zod'
 import { formSchemaDef } from '../../shared/workflow/form'
-import { checkVersionCompat, fieldsAvailableAt, validateVersion } from '../../shared/workflow/graph'
+import { checkVersionCompat, fieldsAvailableAt, graphSchema, validateVersion } from '../../shared/workflow/graph'
 import type { HumanTaskConfig } from '../../shared/workflow/registry'
 import { REGISTRY } from '../../shared/workflow/registry'
 import { STANDARD_HIRE } from '../../shared/workflow/templates'
 import type { FormField, Graph, Issue } from '../../shared/workflow/types'
 import type { Db, Tx } from '../db/client'
-import { jobs, jobVersions, roles, user } from '../db/schema'
+import { flowPresets, jobs, jobVersions, roles, user } from '../db/schema'
 import { accessLevel } from './access'
 import { DomainError } from './errors'
 
-
 type Version = typeof jobVersions.$inferSelect
+
+// Lenient on purpose: drafts (and flow presets saved from them) may be half-built. Publish runs the full validation.
+export const draftShape = z.object({
+  form: z.array(z.looseObject({ key: z.string() })).max(100),
+  workflow: graphSchema,
+})
 
 const BLANK: { form: FormField[], workflow: Graph } = {
   form: [],
   workflow: { nodes: [{ key: 'start', type: 'application_received', config: {}, position: { x: 0, y: 0 } }], edges: [] },
 }
 
-export type StartFrom = { kind: 'blank' } | { kind: 'standard_hire' } | { kind: 'job', jobId: string }
+export type StartFrom = { kind: 'blank' } | { kind: 'standard_hire' } | { kind: 'job', jobId: string } | { kind: 'preset', presetId: string }
 
 export async function createJob(
   db: Db,
@@ -31,10 +37,15 @@ export async function createJob(
     ? BLANK
     : from.kind === 'standard_hire'
       ? STANDARD_HIRE
-      : await latestVersion(db, from.jobId).then((v) => {
-          if (!v) throw new DomainError(404, 'source_job_not_found')
-          return { form: v.form as FormField[], workflow: v.workflow as Graph }
-        })
+      : from.kind === 'preset'
+        ? await db.select().from(flowPresets).where(eq(flowPresets.id, from.presetId)).then(([p]) => {
+            if (!p) throw new DomainError(404, 'flow_preset_not_found')
+            return { form: p.form as FormField[], workflow: p.workflow as Graph }
+          })
+        : await latestVersion(db, from.jobId).then((v) => {
+            if (!v) throw new DomainError(404, 'source_job_not_found')
+            return { form: v.form as FormField[], workflow: v.workflow as Graph }
+          })
   return db.transaction(async (tx) => {
     const [job] = await tx.insert(jobs).values({ ...input, ownerId }).returning()
     const [draft] = await tx.insert(jobVersions).values({

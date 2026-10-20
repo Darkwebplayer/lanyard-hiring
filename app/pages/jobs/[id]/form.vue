@@ -166,8 +166,8 @@ const maxLabel = (t: FieldType) => t === 'number' ? 'Highest value' : t === 'lis
               <input :id="`f-label-${r.uid}`" v-model="r.label" class="label-input" placeholder="Question, e.g. Portfolio link" maxlength="200" @input="onLabel(r)">
             </div>
             <div class="row-actions">
-              <button :id="`f-up-${r.uid}`" type="button" class="btn btn-icon btn-sm btn-quiet" :disabled="i === 0" :aria-label="`Move ${r.label || 'field'} up`" @click="move(i, -1)"><Icon name="arrow-right" class="up" /></button>
-              <button :id="`f-down-${r.uid}`" type="button" class="btn btn-icon btn-sm btn-quiet" :disabled="i === rows.length - 1" :aria-label="`Move ${r.label || 'field'} down`" @click="move(i, 1)"><Icon name="arrow-right" class="down" /></button>
+              <button :id="`f-up-${r.uid}`" type="button" class="btn btn-icon btn-sm btn-quiet" :disabled="i === 0" :aria-label="`Move ${r.label || 'field'} up`" @click="move(i, -1)"><Icon name="arrow-up" /></button>
+              <button :id="`f-down-${r.uid}`" type="button" class="btn btn-icon btn-sm btn-quiet" :disabled="i === rows.length - 1" :aria-label="`Move ${r.label || 'field'} down`" @click="move(i, 1)"><Icon name="arrow-down" /></button>
               <button type="button" class="btn btn-icon btn-sm btn-quiet" :aria-label="`Remove ${r.label || 'field'}`" @click="remove(i)"><Icon name="trash" /></button>
             </div>
           </div>
@@ -276,8 +276,6 @@ const maxLabel = (t: FieldType) => t === 'number' ? 'Highest value' : t === 'lis
 .grow { flex: 1; }
 .label-input { font-weight: 600; }
 .row-actions { display: flex; gap: 2px; flex: none; }
-.up { rotate: -90deg; }
-.down { rotate: 90deg; }
 .grid3 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 12px; align-items: end; padding-left: 34px; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding-left: 34px; }
 .row > .field, .row > .check, .issues { margin-left: 34px; }

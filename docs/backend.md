@@ -80,7 +80,7 @@ Users are never deleted, only deactivated. An invite is consumed on first sign-i
 | Method & path | Body | Returns |
 |---|---|---|
 | `GET /api/jobs` | – | `[{ id, title, status, openings, closesAt, ownerId, ownerName, createdAt, publishedVersion: number\|null, hasDraft, active, stopped, hired }]`, newest first. `active`: active applications; `stopped`: active ones whose latest step failed; `hired`: closed as hired |
-| `POST /api/jobs` | `{ title, description?, requirements?, openings?=1, closesAt?, from?: {kind:'standard_hire'} \| {kind:'blank'} \| {kind:'job', jobId} }` (default `standard_hire`) | `{ job, draft }`. The new job is `draft`, with draft version 1 |
+| `POST /api/jobs` | `{ title, description?, requirements?, openings?=1, closesAt?, from?: {kind:'standard_hire'} \| {kind:'blank'} \| {kind:'job', jobId} \| {kind:'preset', presetId} }` (default `standard_hire`) | `{ job, draft }`. The new job is `draft`, with draft version 1. `job` and `preset` copy the form and flow; 404 `source_job_not_found` / `flow_preset_not_found` |
 | `GET /api/jobs/:id` | – | `{ job, draft: Version\|null, published: Version\|null }` |
 | `PATCH /api/jobs/:id` | any of `{ title, description, requirements, openings, closesAt, ownerId, status: 'open'\|'closed'\|'archived' }` | job |
 | `PUT /api/jobs/:id/draft` | `{ form: FormField[], workflow: Graph }` | the draft `Version`. Creates draft N+1 if there's no draft |
@@ -100,6 +100,9 @@ Users are never deleted, only deactivated. An invite is consumed on first sign-i
   - `salary_min`, `salary_max`
   - `location`
   - `employment_type`
+  - `workplace_type`: `on_site` | `hybrid` | `remote`
+  - `salary_currency`: three letters, e.g. `EUR`
+  - `show_salary`: when true, the public job page shows the salary range (otherwise it never leaves the team)
 
   They're frozen into the version at publish, so edits take effect from the next publish.
 - **`ownerId`** must be a manager or admin (422 `owner_must_be_manager`).
@@ -111,11 +114,38 @@ Users are never deleted, only deactivated. An invite is consumed on first sign-i
   - A field's type can't change. Publish reports this as `field_type_changed` or `node_type_changed`.
 - **Validate as the user edits:** call `validateVersion(form, workflow)` from `shared/workflow/graph` client-side. Before publishing, call `/validate`, which also checks assignees, roles and compatibility with older versions.
 
+### Step presets (manager)
+
+Company-wide starting points for canvas steps. A step copies a preset's config when it's added, so editing or deleting a preset never changes flows that already use it. Sections follow the step type (`PRESET_SECTIONS` in `shared/workflow/presets.ts`): system (`cv_parse`, `ai_review`, `send_email`), decisions (`condition`, `set_variable`), person (`human_task`), endings (`end`). The built-ins in `BUILTIN_PRESETS` are seeded by migration 0006.
+
+| Method & path | Body | Returns |
+|---|---|---|
+| `GET /api/step-presets` | – | `Preset[]`, `{ id, type, label, description, config, position, inPalette, createdAt }`, by position |
+| `POST /api/step-presets` | `{ type, label, description?, config, inPalette?=true }` | 201 `Preset`, placed last in its section. 422 `invalid_preset` with `data.issues` when the config doesn't fit the type |
+| `PATCH /api/step-presets/:id` | any of `{ label, description, config, inPalette }` (the type can't change) | `Preset`. 422 `invalid_preset`, 404 `preset_not_found` |
+| `DELETE /api/step-presets/:id` | – | the deleted preset. 404 `preset_not_found` |
+| `PUT /api/step-presets/order` | `{ section, ids }`: every preset of that section, in the new order | the section's presets. 409 `section_changed` if the list isn't the section's current one, 422 `unknown_section` |
+
+Only the config's shape is checked; field references (e.g. `nodes.ai.overall`) depend on the flow a preset lands in, and publish checks those.
+
+### Flow presets (manager)
+
+Saved form + flow pairs that a new job (`POST /api/jobs` with `from: {kind:'preset', presetId}`) or a job's draft starts from. A job copies the preset, so editing or deleting a preset never changes jobs that used it. Standard hire stays built into the code (`STANDARD_HIRE`) and isn't a row. Loading a preset into an existing job's draft is a plain `PUT /api/jobs/:id/draft` with the preset's `{ form, workflow }`.
+
+| Method & path | Body | Returns |
+|---|---|---|
+| `GET /api/flow-presets` | – | `FlowPreset[]`, `{ id, name, description, form, workflow, createdAt }`, by name |
+| `POST /api/flow-presets` | `{ name, description?, form, workflow }` | 201 `FlowPreset` |
+| `PATCH /api/flow-presets/:id` | `{ name?, description? }`, or `{ form, workflow, name?, description? }` (form and flow only together) | `FlowPreset`. 404 `flow_preset_not_found` |
+| `DELETE /api/flow-presets/:id` | – | the deleted preset. 404 `flow_preset_not_found` |
+
+`form` and `workflow` take the same lenient shape as a draft (`draftShape` in `server/domain/jobs.ts`), so a half-built flow can be saved; problems surface when a job using it validates or publishes. What a preset carries from the job it was saved from is found by helpers in `shared/workflow/flowPresets.ts`: `namedPeople(workflow)` (person steps assigned to named users), `withoutNamedPeople(workflow)` (those users swapped for the job owner, roles kept) and `jobFieldsRead(workflow)` (the `job.*` requirements the flow reads; an AI review counts as reading must-have skills and minimum years).
+
 ### Public apply (no auth)
 
 | Method & path | Notes |
 |---|---|
-| `GET /api/public/jobs/:id` | `{ id, title, description, companyName, contactEmail, location, employmentType, minExperienceYears, mustHaveSkills, closesAt, form: [{ key, label, type, required, min?, max?, options? }], consentText, aiNoticeText }`. 404 `job_not_open` unless the job is published, open and before `closesAt` |
+| `GET /api/public/jobs/:id` | `{ id, title, description, companyName, contactEmail, location, employmentType, workplaceType, openings, postedAt, salary: { min, max, currency } | null, minExperienceYears, mustHaveSkills, closesAt, form: [{ key, label, type, required, min?, max?, options? }], consentText, aiNoticeText }`. 404 `job_not_open` unless the job is published, open and before `closesAt` |
 | `POST /api/public/jobs/:id/apply` | multipart; see below. 201 `{ ok: true }` |
 
 How to send an application:
@@ -139,7 +169,9 @@ How to send an application:
   - `consentText`, with a checkbox. The backend doesn't record consent, so the checkbox only gates the submit button.
   - `aiNoticeText`.
 - **After a 201,** show "application received". The workflow runs in the background.
-- Never show salary; the public endpoint doesn't return it.
+- Salary appears only when the job's `show_salary` is on (frozen at publish); otherwise `salary` is `null`.
+- `description` is Markdown (a small subset: headings, bold, italic, lists, links). Render it with `renderMarkdown` from `app/utils/markdown.ts`, which escapes all HTML first.
+- `postedAt` is the first publish, not the latest.
 
 ### Tasks (inbox and scorecards)
 

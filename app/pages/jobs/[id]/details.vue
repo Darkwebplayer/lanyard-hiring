@@ -1,10 +1,11 @@
 <script setup lang="ts">
+import { jobFieldsRead } from '~~/shared/workflow/flowPresets'
 import type { Requirements } from '~~/shared/workflow/job'
 import type { Job } from '~/composables/useJob'
 
 const route = useRoute()
 const id = route.params.id as string
-const { detail } = useJob(id)
+const { detail, editable } = useJob(id)
 const { me } = useMe()
 const job = computed(() => detail.value?.job)
 const archived = computed(() => job.value?.status === 'archived')
@@ -23,6 +24,8 @@ function fromJob(j: Job) {
     minYears: (r.min_experience_years ?? '') as number | '', skills: [...(r.must_have_skills ?? [])],
     salaryMin: (r.salary_min ?? '') as number | '', salaryMax: (r.salary_max ?? '') as number | '',
     location: r.location ?? '', employmentType: r.employment_type ?? '',
+    workplace: (r.workplace_type ?? '') as '' | 'on_site' | 'hybrid' | 'remote',
+    currency: r.salary_currency ?? 'EUR', showSalary: !!r.show_salary,
   }
 }
 type Draft = ReturnType<typeof fromJob>
@@ -44,8 +47,18 @@ function requirementsOf(f: Draft): Requirements {
   if (f.salaryMax !== '') r.salary_max = f.salaryMax
   if (f.location.trim()) r.location = f.location.trim()
   if (f.employmentType.trim()) r.employment_type = f.employmentType.trim()
+  if (f.workplace) r.workplace_type = f.workplace
+  if (f.salaryMin !== '' || f.salaryMax !== '') r.salary_currency = f.currency.trim().toUpperCase() || 'EUR'
+  if (f.showSalary) r.show_salary = true
   return r
 }
+
+const WORKPLACES = [
+  { value: '', label: 'Not set' },
+  { value: 'on_site', label: 'On-site' },
+  { value: 'hybrid', label: 'Hybrid' },
+  { value: 'remote', label: 'Remote' },
+] as const
 
 // Only what changed goes to the server; requirements are one object, so they go whole.
 const patch = computed(() => {
@@ -86,6 +99,24 @@ async function save() {
 }
 watch(form, () => { saved.value = false }, { deep: true })
 onBeforeRouteLeave(() => !dirty.value || confirm('Leave without saving your changes?'))
+
+// ---- requirements the flow reads that this job leaves empty (a flow from a preset or another job brings its own) ----
+const emptyRead = computed(() => {
+  const f = form.value
+  const wf = editable.value?.workflow
+  if (!f || !wf) return []
+  const empty: Record<string, boolean> = {
+    'job.min_experience_years': f.minYears === '', 'job.must_have_skills': !f.skills.length,
+    'job.salary_min': f.salaryMin === '', 'job.salary_max': f.salaryMax === '',
+    'job.location': !f.location.trim(), 'job.employment_type': !f.employmentType.trim(),
+  }
+  return jobFieldsRead(wf).filter(x => empty[x.path])
+})
+// AI review sends the requirements with the CV, so empty skills or years weaken its score
+const aiReads = computed(() => editable.value?.workflow.nodes.some(n => n.type === 'ai_review')
+  ? emptyRead.value.filter(x => x.path === 'job.must_have_skills' || x.path === 'job.min_experience_years').map(x => x.label)
+  : [])
+const listOf = (xs: string[]) => xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs.at(-1)}`
 
 // ---- skills: type and press Enter or comma; a pasted list splits ----
 const skill = ref('')
@@ -140,8 +171,8 @@ const ownerLabel = computed(() => job.value?.ownerId === me.value?.id ? `${me.va
         </div>
         <div class="field">
           <label for="d-desc">Description</label>
-          <textarea id="d-desc" v-model="form.description" rows="8" maxlength="20000" />
-          <span class="hint">Candidates read this on the apply page.</span>
+          <JobMarkdownEditor id="d-desc" v-model="form.description" :maxlength="20000" :disabled="archived" />
+          <span class="hint">Candidates read this on the apply page, formatted as in Preview.</span>
         </div>
         <div class="row">
           <div class="field">
@@ -169,6 +200,10 @@ const ownerLabel = computed(() => job.value?.ownerId === me.value?.id ? `${me.va
           <h2>Requirements</h2>
           <p class="muted note">Changes reach the flow when you next publish.</p>
         </div>
+        <p v-if="emptyRead.length && !archived" class="reads" role="status">
+          <Icon name="alert" :size="16" />
+          <span>Your flow reads {{ listOf(emptyRead.map(x => x.label)) }}, which {{ emptyRead.length === 1 ? 'is' : 'are' }} empty here.<template v-if="aiReads.length"> AI review scores the CV against {{ listOf(aiReads) }}.</template></span>
+        </p>
         <div class="row">
           <div class="field">
             <label for="d-years">Minimum years of experience</label>
@@ -192,12 +227,20 @@ const ownerLabel = computed(() => job.value?.ownerId === me.value?.id ? `${me.va
         </div>
         <div class="field">
           <span class="label">Salary range</span>
-          <div class="row">
+          <div class="row salary">
             <input v-model.number="form.salaryMin" type="number" min="0" aria-label="Salary minimum" placeholder="Min" :aria-invalid="!!salaryError">
             <input v-model.number="form.salaryMax" type="number" min="0" aria-label="Salary maximum" placeholder="Max" :aria-invalid="!!salaryError">
+            <input v-model="form.currency" class="cur" maxlength="3" aria-label="Currency, three letters" placeholder="EUR" autocapitalize="characters" spellcheck="false">
           </div>
           <span v-if="salaryError" class="error"><Icon name="alert" :size="14" />{{ salaryError }}</span>
-          <span class="hint"><Icon name="eye-off" :size="13" />Never shown to candidates.</span>
+          <label class="check"><input v-model="form.showSalary" type="checkbox" :disabled="form.salaryMin === '' && form.salaryMax === ''">Show the salary on the apply page</label>
+          <span class="hint"><Icon :name="form.showSalary ? 'external' : 'eye-off'" :size="13" />{{ form.showSalary ? 'Candidates see this range from the next publish.' : 'Only your team sees it.' }}</span>
+        </div>
+        <div class="field">
+          <span id="d-work" class="label">Workplace</span>
+          <div class="seg" role="radiogroup" aria-labelledby="d-work">
+            <label v-for="w in WORKPLACES" :key="w.value"><input v-model="form.workplace" type="radio" name="workplace" :value="w.value"><span>{{ w.label }}</span></label>
+          </div>
         </div>
         <div class="field">
           <label for="d-loc">Location</label>
@@ -241,4 +284,8 @@ fieldset:disabled .x { display: none; }
 .status { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); font-size: var(--t-sm); font-weight: 500; }
 .sk { padding: 20px; display: grid; gap: 16px; }
 .sk .skeleton { height: 38px; }
+.reads { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: var(--r-field); background: var(--warn-tint); color: var(--ink); font-size: var(--t-sm); text-wrap: pretty; }
+.reads svg { flex: none; margin-top: 1px; color: var(--warn); }
+.salary { grid-template-columns: 1fr 1fr 88px; }
+.cur { text-transform: uppercase; font-family: var(--mono); }
 </style>

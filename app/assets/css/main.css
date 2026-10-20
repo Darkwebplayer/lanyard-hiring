@@ -299,6 +299,17 @@
   .toast .btn { --b-bg: oklch(1 0 0 / 0.12); --b-fg: #fff; --b-ring: transparent; height: 28px; padding: 0 12px; font-size: var(--t-sm); }
   @keyframes rise { from { opacity: 0; translate: 0 8px; } }
 
+  /* rendered job descriptions (renderMarkdown): the editor preview and the apply page share it */
+  .prose { max-width: 68ch; line-height: 1.65; color: var(--ink); overflow-wrap: anywhere; }
+  .prose > * + * { margin-top: 0.85em; }
+  .prose h2, .prose h3, .prose h4 { line-height: 1.25; margin-top: 1.6em; }
+  .prose h2 { font-size: 1.25em; } .prose h3 { font-size: 1.1em; } .prose h4 { font-size: 1em; }
+  .prose > :first-child { margin-top: 0; }
+  .prose ul, .prose ol { margin-bottom: 0; padding-left: 1.3em; }
+  .prose li + li { margin-top: 0.35em; }
+  .prose li::marker { color: var(--ink-3); }
+  .prose code { padding: 1px 5px; border-radius: 5px; background: var(--sunk); }
+  .prose p { margin-bottom: 0; }
   .kbd { font: 500 var(--t-xs) var(--mono); padding: 1px 6px; border-radius: 6px; background: var(--sunk); box-shadow: inset 0 -1px 0 var(--line-2); color: var(--ink-2); }
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }

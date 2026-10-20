@@ -3,15 +3,17 @@ import { Background } from '@vue-flow/background'
 import { ConnectionMode, MarkerType, VueFlow, useVueFlow, type Connection, type Edge, type Node } from '@vue-flow/core'
 import { fieldsAvailableAt, validateVersion } from '~~/shared/workflow/graph'
 import type { ConditionConfig } from '~~/shared/workflow/rules'
-import type { Graph, GraphEdge, Issue } from '~~/shared/workflow/types'
+import type { FormField, Graph, GraphEdge, Issue } from '~~/shared/workflow/types'
 import {
-  GRID, PALETTE, type PaletteItem, type Person, type Role, branchKeys, branchLabel, cardWidth, freeSlot, issueText,
+  GRID, blankNoun, buildPalette, type PaletteItem, type Person, type Preset, type Role, branchKeys, branchLabel, cardWidth, freeSlot, issueText,
   layout, makeNode, reaches, spotBelow, summaryOf, titleOf,
 } from '~/lib/flow'
+import FlowPresetsMenu from './FlowPresetsMenu.vue'
 import StepNode, { type StepData } from './StepNode.vue'
 import StepPanel from './StepPanel.vue'
 
 const props = defineProps<{ jobId: string }>()
+const emit = defineEmits<{ edit: [], replace: [next: { form: FormField[], workflow: Graph }, name: string] }>()
 const { detail, editable, saveDraft } = useJob(() => props.jobId)
 const toast = useToast()
 const route = useRoute()
@@ -32,6 +34,66 @@ const roles = ref<Role[]>([])
 const people = ref<Person[] | null>(null)
 api<Role[]>('/api/roles').then(r => (roles.value = r)).catch(() => {})
 api<Person[]>('/api/users/assignable').then(r => (people.value = r)).catch(() => {})
+
+// ---------- palette: the company's presets, then the blank steps ----------
+const { presets, error: presetsError, refresh: refreshPresets, update: updatePreset, reorder: reorderPresets, create: createPreset, remove: removePreset } = usePresets()
+if (!presets.value) refreshPresets()
+const palette = computed(() => buildPalette(presets.value ?? []))
+// Edit mode: hide, reorder and bring back presets. Each change saves at once and reaches every job's palette.
+const editing = ref(false)
+function toggleEditing() {
+  editing.value = !editing.value
+  if (editing.value) select(null) // the palette needs its full width
+}
+const sectionPresets = (key: string) => {
+  const types = palette.value.find(g => g.key === key)!.items.map(i => i.type)
+  return (presets.value ?? []).filter(p => types.includes(p.type)).sort((a, b) => a.position - b.position)
+}
+const hiddenIn = (key: string) => sectionPresets(key).filter(p => !p.inPalette)
+async function setShown(p: { id: string, label: string }, shown: boolean, undo = true) {
+  // keyboard users keep their place: focus moves to the next row's first button (the hidden row is gone)
+  const row = document.activeElement?.closest('.pal-row')
+  const next = (row?.nextElementSibling ?? row?.previousElementSibling) as HTMLElement | null
+  try {
+    await updatePreset(p.id, { inPalette: shown })
+    await nextTick()
+    next?.querySelector<HTMLElement>('button:not(:disabled)')?.focus()
+    if (undo && !shown) toast.show(`Hid “${p.label}” from the palette`, { label: 'Undo', run: () => setShown(p, true, false) })
+  }
+  catch (e) { toast.show((e as ApiError).message) }
+}
+// Moves a visible preset past its visible neighbour; hidden presets keep their places in between.
+async function movePreset(key: string, item: PaletteItem, by: -1 | 1) {
+  const all = sectionPresets(key)
+  const shown = all.filter(p => p.inPalette)
+  const i = shown.findIndex(p => p.id === item.presetId)
+  const other = shown[i + by]
+  if (!other) return
+  const ids = all.map(p => p.id)
+  const a = ids.indexOf(item.presetId!), b = ids.indexOf(other.id)
+  ;[ids[a], ids[b]] = [ids[b]!, ids[a]!]
+  try {
+    await reorderPresets(key, ids)
+    // follow the moved row; at an edge its pressed arrow is disabled, so take the other one
+    await nextTick()
+    const moved = document.querySelector<HTMLElement>(`[data-preset="${item.presetId}"]`)
+    ;(moved?.querySelector<HTMLElement>(`button[data-dir="${by}"]:not(:disabled)`) ?? moved?.querySelector<HTMLElement>('button[data-dir]:not(:disabled)'))?.focus()
+  }
+  catch (e) { toast.show((e as ApiError).message) }
+}
+const isFirstShown = (key: string, item: PaletteItem) => sectionPresets(key).find(p => p.inPalette)?.id === item.presetId
+const isLastShown = (key: string, item: PaletteItem) => sectionPresets(key).filter(p => p.inPalette).at(-1)?.id === item.presetId
+
+// A step tuned in this flow becomes a preset for every job.
+async function saveAsPreset(key: string) {
+  const n = wf.value.nodes.find(x => x.key === key)
+  if (!n) return
+  try {
+    const p: Preset = await createPreset({ type: n.type, label: titleOf(n), config: clone(n.config) })
+    toast.show(`Saved “${p.label}”. It’s now in every job’s palette.`, { label: 'Undo', run: () => removePreset(p.id).catch(() => {}) }, 8000)
+  }
+  catch (e) { toast.show((e as ApiError).message) }
+}
 
 // ---------- validation, history, autosave: all follow the local graph ----------
 const issues = ref<Issue[]>(validateVersion(form.value, wf.value))
@@ -89,27 +151,45 @@ const saveError = ref('')
 let saveTimer: ReturnType<typeof setTimeout> | undefined
 let inFlight = false
 let again = false
+let pending: Promise<void> = Promise.resolve()
 const dirty = ref(false)
-async function save() {
+function save() {
   clearTimeout(saveTimer)
   if (inFlight) return void (again = true)
   inFlight = true
   saveState.value = 'saving'
   dirty.value = false
-  try {
-    await saveDraft({ workflow: clone(wf.value) })
-    saveState.value = 'saved'
-  }
-  catch (e) {
-    // the local graph stays as it is; Retry sends it again
-    dirty.value = true
-    saveState.value = 'error'
-    saveError.value = (e as ApiError).message ?? toApiError(e).message
-  }
-  finally {
-    inFlight = false
-    if (again) again = false, save()
-  }
+  pending = (async () => {
+    try {
+      await saveDraft({ workflow: clone(wf.value) })
+      saveState.value = 'saved'
+    }
+    catch (e) {
+      // the local graph stays as it is; Retry sends it again
+      dirty.value = true
+      saveState.value = 'error'
+      saveError.value = (e as ApiError).message ?? toApiError(e).message
+    }
+    finally {
+      inFlight = false
+      if (again) again = false, save()
+    }
+  })()
+}
+
+// Sends any pending edit now and waits for every save in flight, so the server holds exactly this graph
+// (before the page replaces the draft, or saves it as a preset). Throws if it couldn't be saved.
+async function flush() {
+  clearTimeout(historyTimer)
+  if (dirty.value && !readOnly.value) save()
+  while (inFlight) await pending
+  if (saveState.value === 'error') throw { status: 0, code: 'not_saved', message: saveError.value, issues: [] } satisfies ApiError
+  dirty.value = false // nothing left for the unmount save
+}
+defineExpose({ flush })
+const presetSource = async () => {
+  await flush()
+  return { form: clone(form.value), workflow: clone(wf.value) }
 }
 
 watch(wf, () => {
@@ -117,6 +197,7 @@ watch(wf, () => {
   validateTimer = setTimeout(() => (issues.value = validateVersion(form.value, wf.value)), 150)
   if (readOnly.value) return
   dirty.value = true
+  emit('edit')
   clearTimeout(saveTimer)
   saveTimer = setTimeout(save, 800)
   if (restoring) return void (restoring = false)
@@ -267,7 +348,7 @@ function onDragStart(e: DragEvent, item: PaletteItem) {
 }
 function onDrop(e: DragEvent) {
   const id = e.dataTransfer?.getData('application/x-step')
-  const item = PALETTE.flatMap(g => g.items).find(i => i.id === id)
+  const item = palette.value.flatMap(g => g.items).find(i => i.id === id)
   if (!item) return
   const r = canvasEl.value!.getBoundingClientRect()
   const p = project({ x: e.clientX - r.left, y: e.clientY - r.top })
@@ -410,18 +491,47 @@ function goTo(key?: string) {
 </script>
 
 <template>
-  <div ref="root" class="flow" :class="{ 'has-panel': !!selected, 'read-only': readOnly }" :style="{ height: `${height}px`, marginBottom: `${-pullUp}px` }">
-    <nav v-if="!readOnly" class="palette" aria-label="Add a step">
-      <p class="pal-hint">Click to add under the selected step, or drag onto the canvas.</p>
-      <section v-for="g in PALETTE" :key="g.group">
-        <h3 class="eyebrow">{{ g.group }}</h3>
-        <button
-          v-for="item in g.items" :key="item.id" type="button" class="pal-item" draggable="true" :title="item.label"
-          :data-slot-color="item.type === 'human_task' ? 'accent' : ['cv_parse', 'ai_review', 'send_email'].includes(item.type) ? 'ink' : item.outcome === 'hired' ? 'ok' : 'line'"
-          @click="addStep(item)" @dragstart="onDragStart($event, item)"
-        >
-          <Icon :name="item.icon" :size="16" /><span class="pal-label">{{ item.label }}</span>
+  <div ref="root" class="flow" :class="{ 'has-panel': !!selected, 'read-only': readOnly, editing }" :style="{ height: `${height}px`, marginBottom: `${-pullUp}px` }">
+    <nav v-if="!readOnly" class="palette" :class="{ editing }" aria-label="Add a step">
+      <div class="pal-top">
+        <p class="pal-hint">{{ editing ? 'Hide, reorder or add. Changes reach every job’s palette.' : 'Click to add under the selected step, or drag onto the canvas.' }}</p>
+        <button type="button" class="btn btn-sm" :class="editing ? 'btn-dark' : 'btn-quiet'" :aria-pressed="editing" @click="toggleEditing">
+          <Icon :name="editing ? 'check' : 'edit'" />{{ editing ? 'Done' : 'Edit' }}
         </button>
+      </div>
+      <p v-if="presetsError && !presets" class="pal-hint pal-err">Presets didn’t load. <button type="button" class="linkish" @click="refreshPresets">Try again</button></p>
+      <section v-for="g in palette" :key="g.key">
+        <h3 class="eyebrow">{{ g.group }}</h3>
+        <template v-for="item in g.items" :key="item.id">
+          <div v-if="editing" class="pal-row" :class="{ blank: !item.presetId }" :data-preset="item.presetId">
+            <Icon :name="item.icon" :size="16" /><span class="pal-label">{{ item.label }}</span>
+            <template v-if="item.presetId">
+              <button type="button" class="btn btn-quiet btn-icon btn-sm" :aria-label="`Move ${item.label} up`" data-dir="-1" :disabled="isFirstShown(g.key, item)" @click="movePreset(g.key, item, -1)"><Icon name="arrow-up" :size="14" /></button>
+              <button type="button" class="btn btn-quiet btn-icon btn-sm" :aria-label="`Move ${item.label} down`" data-dir="1" :disabled="isLastShown(g.key, item)" @click="movePreset(g.key, item, 1)"><Icon name="arrow-down" :size="14" /></button>
+              <button type="button" class="btn btn-quiet btn-icon btn-sm" :aria-label="`Hide ${item.label} from the palette`" title="Hide from the palette" @click="setShown({ id: item.presetId, label: item.label }, false)"><Icon name="eye-off" :size="14" /></button>
+            </template>
+            <span v-else class="always" title="Blank steps are always in the palette">Blank</span>
+          </div>
+          <button
+            v-else type="button" class="pal-item" draggable="true" :title="item.label"
+            @click="addStep(item)" @dragstart="onDragStart($event, item)"
+          >
+            <Icon :name="item.icon" :size="16" /><span class="pal-label">{{ item.label }}</span>
+          </button>
+        </template>
+        <div v-if="editing" class="pal-add">
+          <button type="button" class="btn btn-sm btn-quiet" :popovertarget="`pal-add-${g.key}`" :style="{ anchorName: `--pal-add-${g.key}` }">
+            <Icon name="plus" />{{ hiddenIn(g.key).length ? `Show hidden (${hiddenIn(g.key).length})` : 'New preset…' }}
+          </button>
+          <div :id="`pal-add-${g.key}`" popover class="menu pal-menu" :style="{ positionAnchor: `--pal-add-${g.key}` }">
+            <button v-for="p in hiddenIn(g.key)" :key="p.id" type="button" @click="setShown(p, true)"><Icon :name="nodeMeta(p.type).icon" :size="16" />{{ p.label }}</button>
+            <template v-if="hiddenIn(g.key).length"><hr></template>
+            <p v-else class="menu-note">Every {{ g.group.toLowerCase() }} preset is already in the palette. Make a new one in the step library:</p>
+            <NuxtLink v-for="t in [...new Set(g.items.map(i => i.type))]" :key="t" :to="{ path: '/library', query: { new: t } }">
+              <Icon name="plus" :size="16" />New {{ blankNoun(t) }} preset
+            </NuxtLink>
+          </div>
+        </div>
       </section>
     </nav>
 
@@ -451,6 +561,8 @@ function goTo(key?: string) {
           <span class="sep" />
           <button type="button" class="btn btn-quiet btn-icon btn-sm" :disabled="!canUndo" aria-label="Undo" title="Undo (⌘Z)" @click="undo"><Icon name="reopen" /></button>
           <button type="button" class="btn btn-quiet btn-icon btn-sm" :disabled="!canRedo" aria-label="Redo" title="Redo (⇧⌘Z)" @click="redo"><Icon name="reopen" class="flip" /></button>
+          <span class="sep" />
+          <FlowPresetsMenu :source="presetSource" :form="form" :workflow="wf" :live-version="detail?.published?.version ?? null" @replace="(next, name) => emit('replace', next, name)" />
         </template>
         <span class="sep" />
         <span v-if="readOnly" class="locked" role="status"><Icon name="lock" :size="14" />Archived: read-only</span>
@@ -482,16 +594,18 @@ function goTo(key?: string) {
       :issues="issuesBy.get(selected.key) ?? []" :key-locked="liveKeys.has(selected.key)" :read-only="readOnly"
       :job-id="jobId" :job="jobCtx"
       @rename="renameNode" @connect="(b, to) => connect(selected!.key, to, b)" @remove="removeNode(selected!.key)" @close="select(null)"
+      @save-preset="saveAsPreset(selected!.key)"
     />
   </div>
 </template>
 
 <style scoped>
 .flow {
-  display: grid; grid-template-columns: 220px minmax(0, 1fr); min-height: 560px; min-width: 0;
+  display: grid; grid-template-columns: 260px minmax(0, 1fr); min-height: 560px; min-width: 0;
   border-top: 1px solid var(--line); background: var(--surface);
 }
-.flow.has-panel { grid-template-columns: 220px minmax(0, 1fr) 380px; }
+.flow.has-panel { grid-template-columns: 260px minmax(0, 1fr) 380px; }
+/* edit mode needs room for the move and hide buttons beside each name */
 .flow.read-only { grid-template-columns: minmax(0, 1fr); }
 .flow.read-only.has-panel { grid-template-columns: minmax(0, 1fr) 380px; }
 
@@ -504,6 +618,20 @@ function goTo(key?: string) {
   background: none; text-align: left; font-weight: 500; color: var(--ink); cursor: grab;
 }
 .pal-item:hover { background: var(--hover); }
+.pal-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.pal-top .pal-hint { padding-top: 6px; }
+.pal-top .btn { flex: none; }
+.pal-err { color: var(--bad); }
+.linkish { border: 0; background: none; padding: 0; color: inherit; text-decoration: underline; cursor: pointer; font: inherit; }
+.pal-row { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 2px 2px 2px 10px; border-radius: 10px; background: var(--sunk); }
+.pal-row + .pal-row { margin-top: 2px; }
+.pal-row .pal-label { flex: 1; min-width: 0; }
+.pal-row svg { flex: none; color: var(--ink-2); }
+.pal-row.blank { background: none; }
+.always { font-size: var(--t-xs); font-weight: 600; color: var(--ink-3); padding-right: 10px; }
+.pal-add { padding-top: 4px; }
+.pal-menu { inset: auto; top: anchor(bottom); left: anchor(left); margin-top: 4px; max-width: 300px; }
+.menu-note { padding: 8px 10px; font-size: var(--t-sm); color: var(--ink-2); }
 .pal-item:active { cursor: grabbing; }
 .pal-item svg { flex: none; color: var(--ink-2); }
 /* the badge slot, turned sideways: who acts in this kind of step */

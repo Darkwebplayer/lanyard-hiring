@@ -7,6 +7,8 @@ definePageMeta({ layout: 'bare' })
 interface PublicJob {
   id: string, title: string, description: string | null, location: string | null, employmentType: string | null, closesAt: string | null
   companyName: string | null, contactEmail: string | null, minExperienceYears: number | null, mustHaveSkills: string[]
+  workplaceType: 'on_site' | 'hybrid' | 'remote' | null, openings: number, postedAt: string | null
+  salary: { min: number | null, max: number | null, currency: string | null } | null
   form: FormField[], consentText: string | null, aiNoticeText: string | null
 }
 
@@ -66,8 +68,29 @@ const meta = computed(() => {
   const j = job.value
   if (!j) return []
   const type = j.employmentType ? j.employmentType.replace(/_/g, ' ').replace(/^./, c => c.toUpperCase()) : null
-  return [j.location, type, j.closesAt ? `Applications close ${fmtDate(j.closesAt)}` : null].filter(Boolean) as string[]
+  const work = j.workplaceType ? { on_site: 'On-site', hybrid: 'Hybrid', remote: 'Remote' }[j.workplaceType] : null
+  return [j.location, work, type].filter(Boolean) as string[]
 })
+// the second line: what a candidate weighs before applying
+const facts = computed(() => {
+  const j = job.value
+  if (!j) return []
+  return [
+    j.openings > 1 ? `${j.openings} openings` : null,
+    j.postedAt ? `Posted ${fmtAgo(j.postedAt).replace(/^just now$/, 'today')}` : null,
+    j.closesAt ? `Applications close ${fmtDate(j.closesAt)}` : null,
+  ].filter(Boolean) as string[]
+})
+const salary = computed(() => {
+  const s = job.value?.salary
+  if (!s) return null
+  const fmt = (n: number) => s.currency
+    ? new Intl.NumberFormat(undefined, { style: 'currency', currency: s.currency, maximumFractionDigits: 0 }).format(n)
+    : new Intl.NumberFormat().format(n)
+  if (s.min !== null && s.max !== null) return `${fmt(s.min)} – ${fmt(s.max)}`
+  return s.min !== null ? `From ${fmt(s.min)}` : `Up to ${fmt(s.max!)}`
+})
+const descriptionHtml = computed(() => renderMarkdown(job.value?.description ?? ''))
 
 function numberHint(f: FormField) {
   if (f.min !== undefined && f.max !== undefined) return `Between ${f.min} and ${f.max}`
@@ -244,8 +267,13 @@ function focusFirst() {
           <p v-if="meta.length" class="meta">
             <span v-for="m in meta" :key="m">{{ m }}</span>
           </p>
+          <p v-if="salary" class="salary">{{ salary }}</p>
+          <p v-if="facts.length" class="meta facts">
+            <span v-for="f in facts" :key="f">{{ f }}</span>
+          </p>
         </header>
-        <div v-if="job.description" class="desc">{{ job.description }}</div>
+        <!-- renderMarkdown escapes all HTML before adding its few tags -->
+        <div v-if="job.description" class="prose desc" v-html="descriptionHtml" />
         <section v-if="job.mustHaveSkills.length || job.minExperienceYears" class="looking" aria-labelledby="look-h">
           <h2 id="look-h">What we look for</h2>
           <p v-if="job.minExperienceYears">{{ job.minExperienceYears }}+ {{ job.minExperienceYears === 1 ? 'year' : 'years' }} of relevant experience</p>
@@ -388,7 +416,9 @@ function focusFirst() {
 .meta span { white-space: nowrap; }
 /* every fact carries a dot to its left; the one that starts a line falls outside the box and is clipped */
 .meta span::before { content: "·"; display: inline-block; width: 4px; margin-left: -8px; margin-right: 4px; text-align: center; color: var(--ink-3); }
-.desc { white-space: pre-line; max-width: 65ch; font-size: var(--t-lg); line-height: 1.6; }
+.desc { font-size: var(--t-lg); }
+.salary { margin-top: 10px; font-size: var(--t-lg); font-weight: 600; font-variant-numeric: tabular-nums; }
+.facts { margin-top: 4px; font-size: var(--t-sm); }
 .post { display: grid; gap: 24px; }
 .company { font-weight: 600; color: var(--ink-2); margin-bottom: 6px; }
 h1:focus { outline: none; }

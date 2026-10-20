@@ -12,8 +12,10 @@ const props = defineProps<{
   node: GraphNode, graph: Graph, form: FormField[], roles: Role[], people: Person[] | null
   issues: Issue[], keyLocked: boolean, readOnly: boolean, jobId: string
   job: { title: string, openings: number, requirements?: object }
+  // preset: editing a library preset, not a step in a flow: no key, no connections, no delete
+  preset?: boolean
 }>()
-const emit = defineEmits<{ rename: [key: string], connect: [branch: string | undefined, to: string], remove: [], close: [] }>()
+const emit = defineEmits<{ rename: [key: string], connect: [branch: string | undefined, to: string], remove: [], close: [], savePreset: [] }>()
 
 const meta = computed(() => nodeMeta(props.node.type))
 const refHint = computed(() => `{{nodes.${props.node.key}.…}}`)
@@ -149,7 +151,10 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
       <div class="eyebrow"><Icon :name="meta.icon" :size="14" />{{ meta.noun }}</div>
       <h3>{{ titleOf(node) }}</h3>
       <div class="head-actions">
-        <button v-if="node.type !== 'application_received' && !readOnly" type="button" class="btn btn-quiet btn-icon btn-sm" aria-label="Delete step" title="Delete step" @click="emit('remove')">
+        <button v-if="!preset && node.type !== 'application_received'" type="button" class="btn btn-quiet btn-icon btn-sm" aria-label="Save as a preset in the step library" title="Save as preset (adds it to every job’s palette)" @click="emit('savePreset')">
+          <Icon name="library" />
+        </button>
+        <button v-if="!preset && node.type !== 'application_received' && !readOnly" type="button" class="btn btn-quiet btn-icon btn-sm" aria-label="Delete step" title="Delete step" @click="emit('remove')">
           <Icon name="trash" />
         </button>
         <button type="button" class="btn btn-quiet btn-icon btn-sm" aria-label="Close settings" title="Close (Esc)" @click="emit('close')">
@@ -166,10 +171,12 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
     <fieldset :disabled="readOnly" class="body">
       <section class="sec">
         <div class="field">
-          <label :for="`name-${node.key}`">Step name</label>
-          <input :id="`name-${node.key}`" v-model="label" :placeholder="derivedName">
+          <label :for="`name-${node.key}`">{{ preset ? 'Preset name' : 'Step name' }}</label>
+          <input :id="`name-${node.key}`" v-model="label" :placeholder="derivedName" :required="preset">
+          <p v-if="preset" class="hint">Steps added from this preset start with this name.</p>
         </div>
-        <div class="field">
+        <slot name="extra" />
+        <div v-if="!preset" class="field">
           <label :for="`key-${node.key}`">Key</label>
           <input
             :id="`key-${node.key}`" v-model.trim="keyDraft" class="mono" :disabled="keyLocked || readOnly"
@@ -237,7 +244,7 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
 
       <!-- decision -->
       <section v-else-if="node.type === 'condition'" class="sec">
-        <p v-if="!connected" class="note">Connect this step to an earlier one first; then you can pick fields from the steps before it.</p>
+        <p v-if="!connected && !preset" class="note">Connect this step to an earlier one first; then you can pick fields from the steps before it.</p>
         <p class="hint">Checked top to bottom. The first branch that matches wins.</p>
         <div v-for="(b, i) in cond.branches" :key="i" class="row-card">
           <div class="rc-head">
@@ -259,7 +266,7 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
           <p v-if="branchKeyError(b.key)" class="error">{{ branchKeyError(b.key) }}</p>
           <div class="legend sm">When</div>
           <RuleBuilder :model-value="b.rule" :fields="fields" :graph="graph" :read-only="readOnly" @update:model-value="setRule(b, $event)" />
-          <label class="goes">
+          <label v-if="!preset" class="goes">
             <span>Goes to</span>
             <select :value="goesTo(b.key)" @change="emit('connect', b.key, ($event.target as HTMLSelectElement).value)">
               <option value="">Not connected</option>
@@ -271,7 +278,7 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
         <div class="row-card">
           <div class="legend sm">Otherwise</div>
           <p class="hint">When no branch matches.</p>
-          <label class="goes">
+          <label v-if="!preset" class="goes">
             <span>Goes to</span>
             <select :value="goesTo('default')" @change="emit('connect', 'default', ($event.target as HTMLSelectElement).value)">
               <option value="">Not connected</option>
@@ -284,7 +291,7 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
             <input type="checkbox" role="switch" :checked="cond.on_missing" @change="setOnMissing(($event.target as HTMLInputElement).checked)">
             <span><b>When data is missing</b><br><span class="hint">Send applications with a missing answer or score down their own branch, so no decision is made on data you don’t have.</span></span>
           </label>
-          <label v-if="cond.on_missing" class="goes">
+          <label v-if="cond.on_missing && !preset" class="goes">
             <span>Goes to</span>
             <select :value="goesTo('missing')" @change="emit('connect', 'missing', ($event.target as HTMLSelectElement).value)">
               <option value="">Not connected</option>
@@ -425,7 +432,7 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
       </section>
 
       <!-- the one way out, for steps that have one -->
-      <section v-if="node.type !== 'condition' && node.type !== 'end'" class="sec">
+      <section v-if="!preset && node.type !== 'condition' && node.type !== 'end'" class="sec">
         <label class="field">
           <span class="legend">Next step</span>
           <select :value="goesTo()" @change="emit('connect', undefined, ($event.target as HTMLSelectElement).value)">

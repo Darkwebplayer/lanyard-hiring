@@ -10,9 +10,11 @@ export interface PipelineState { rows: Ref<PipelineRow[] | null>, error: Ref<str
 
 <script setup lang="ts">
 import type { Issue } from '~~/shared/workflow/types'
+import { issueText } from '~/lib/flow'
 import type { JobStatus } from '~/composables/useJob'
 
 const route = useRoute()
+const router = useRouter()
 const id = route.params.id as string
 const { detail, error, refresh } = useJob(id)
 const job = computed(() => detail.value?.job)
@@ -61,20 +63,34 @@ const checking = ref(false)
 const publishing = ref(false)
 const publishError = ref<string | null>(null)
 
-async function startPublish() {
+// Runs the publish checks and shows what blocks; null if the check itself failed.
+async function check() {
   checking.value = true
   publishError.value = null
   try {
     const { issues } = await api<{ issues: Issue[] }>(`/api/jobs/${id}/validate`, { method: 'POST' })
-    if (issues.length) panel.value = { kind: 'issues', issues }
-    else {
-      panel.value = null
-      confirmDlg.value?.showModal()
-    }
+    panel.value = issues.length ? { kind: 'issues', issues } : null
+    return issues
   }
-  catch (e) { publishError.value = toApiError(e).message }
+  catch (e) {
+    publishError.value = toApiError(e).message
+    return null
+  }
   finally { checking.value = false }
 }
+async function startPublish() {
+  const issues = await check()
+  if (issues && !issues.length) confirmDlg.value?.showModal()
+}
+// ?check=1: a preset was just loaded (new job or replaced draft), so show what it left to fix, on any tab.
+watch(() => route.query.check, async (c) => {
+  if (!c) return
+  await check()
+  router.replace({ query: { ...route.query, check: undefined } })
+}, { immediate: true })
+// people and earlier versions are only checked once the flow itself is sound (versionIssues)
+const LATE = new Set(['bad_assignee', 'bad_role', 'not_enough_assignees', 'node_type_changed', 'field_type_changed'])
+const moreLater = computed(() => panel.value?.kind === 'issues' && panel.value.issues.some(i => !LATE.has(i.code)))
 async function publish() {
   publishing.value = true
   publishError.value = null
@@ -93,6 +109,18 @@ async function publish() {
   finally { publishing.value = false }
 }
 
+// The server names people, roles and keys as data; say what to do instead (these come up after loading a preset).
+const ASSIGNEE_TEXT: Record<string, string> = {
+  bad_assignee: 'Assigned to someone who can’t sign in any more. Pick someone else, or the job owner.',
+  bad_role: 'Assigned to a role that was deleted. Pick another role.',
+}
+function assigneeText(i: Issue) {
+  const [need, have] = i.code === 'not_enough_assignees' ? i.message.match(/\d+/g) ?? [] : []
+  if (need) return `Needs ${plural(+need, 'scorecard')}, but only ${plural(+(have ?? 0), 'person', 'people')} can be assigned. Add people or a role.`
+  const changed = i.code.endsWith('_type_changed') && /^(\S+) was (\w+) in an earlier version; use a new key for a (\w+)$/.exec(i.message)
+  if (changed) return `“${changed[1]!.split('.').at(-1)}” was ${changed[2]} in an earlier version. Give the ${changed[3]} a new key.`
+  return ASSIGNEE_TEXT[i.code]
+}
 // Issues grouped by the step or field they belong to, each linking to where it's fixed.
 const FORM_CODES = new Set(['invalid_form', 'duplicate_field', 'enum_without_options', 'min_gt_max', 'field_type_changed'])
 const issueGroups = computed(() => {
@@ -108,7 +136,7 @@ const issueGroups = computed(() => {
     else if (FORM_CODES.has(i.code) || i.message.startsWith('form')) g = { id: 'form', title: 'Application form', to: `${base}/form` }
     else g = { id: 'flow', title: 'The flow as a whole', to: `${base}/flow` }
     if (!groups.has(g.id)) groups.set(g.id, { ...g, items: [] })
-    groups.get(g.id)!.items.push(i.message)
+    groups.get(g.id)!.items.push(assigneeText(i) ?? issueText(i, { nodes, edges: [] }))
   }
   return [...groups.values()]
 })
@@ -195,6 +223,7 @@ function askArchive() {
               <ul><li v-for="(m, i) in g.items" :key="i">{{ m }}</li></ul>
             </li>
           </ul>
+          <p v-if="moreLater" class="faint later">Assignees and earlier versions are checked once these are fixed.</p>
         </section>
 
         <section v-else-if="panel?.kind === 'done'" class="panel result done" aria-labelledby="done-h">
@@ -269,6 +298,7 @@ function askArchive() {
 .group-link:hover { color: var(--accent-ink); }
 .group-link code { color: var(--ink-3); font-weight: 400; }
 .groups ul { margin: 4px 0 0; padding-left: 20px; color: var(--ink-2); }
+.later { font-size: var(--t-sm); }
 .form-error { margin-bottom: 16px; }
 .form-error .btn { margin-left: auto; }
 .tab-n { min-width: 20px; padding: 0 6px; border-radius: var(--r-pill); background: var(--sunk); font-size: var(--t-xs); line-height: 20px; text-align: center; color: var(--ink-2); font-variant-numeric: tabular-nums; }
