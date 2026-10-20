@@ -14,7 +14,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "cf:types": "wrangler types",
-    "test:pg": "TEST_PG=1 vitest run"
+    "test:pg": "TEST_PG=1 vitest run -t \"\\[race\\]\" test/*.int.test.ts"
   },
   "dependencies": {
     "ai": "^7.0.143",

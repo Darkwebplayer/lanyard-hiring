@@ -1,11 +1,13 @@
 import { sql } from 'drizzle-orm'
 import {
-  boolean, date, index, integer, jsonb, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid,
+  bigint, boolean, check, date, index, integer, jsonb, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid,
 } from 'drizzle-orm/pg-core'
 
 const id = () => uuid('id').primaryKey().defaultRandom()
 const createdAt = () => timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 const ts = (name: string) => timestamp(name, { withTimezone: true })
+// created_at is the transaction start, so rows written in one transaction tie; seq gives their real order
+const seq = () => bigint('seq', { mode: 'number' }).generatedAlwaysAsIdentity()
 
 // ---------- auth (Better Auth core tables, plus role_id and active on user) ----------
 
@@ -65,7 +67,7 @@ export const verification = pgTable('verification', {
   expiresAt: ts('expires_at').notNull(),
   createdAt: createdAt(),
   updatedAt: ts('updated_at').notNull().defaultNow(),
-})
+}, t => [index('verification_identifier_idx').on(t.identifier)])
 
 export const invites = pgTable('invites', {
   email: text('email').primaryKey(), // lowercase
@@ -79,7 +81,7 @@ export const settings = pgTable('settings', {
   replyToEmail: text('reply_to_email'),
   consentText: text('consent_text'),
   aiNoticeText: text('ai_notice_text'),
-})
+}, t => [check('settings_single_row', sql`${t.id} = 1`)])
 
 // ---------- jobs ----------
 
@@ -106,6 +108,7 @@ export const jobVersions = pgTable('job_versions', {
   status: versionStatus('status').notNull().default('draft'),
   form: jsonb('form').notNull().default([]),
   workflow: jsonb('workflow').notNull().default({ nodes: [], edges: [] }),
+  requirements: jsonb('requirements').notNull().default({}), // job requirements frozen at publish
   publishedAt: ts('published_at'),
   createdAt: createdAt(),
 }, t => [
@@ -150,6 +153,7 @@ export const runStatus = pgEnum('run_status', [
 
 export const nodeRuns = pgTable('node_runs', {
   id: id(),
+  seq: seq(),
   applicationId: uuid('application_id').notNull().references(() => applications.id),
   nodeKey: text('node_key').notNull(),
   nodeType: text('node_type').notNull(),
@@ -189,12 +193,13 @@ export const taskAssignments = pgTable('task_assignments', {
 
 export const applicationEvents = pgTable('application_events', {
   id: id(),
+  seq: seq(),
   applicationId: uuid('application_id').notNull().references(() => applications.id),
   type: text('type').notNull(),
   actorId: text('actor_id').references(() => user.id),
   data: jsonb('data').notNull().default({}),
   createdAt: createdAt(),
-}, t => [index('application_events_app_idx').on(t.applicationId, t.createdAt)])
+}, t => [index('application_events_app_idx').on(t.applicationId, t.seq)])
 
 export const reminderLog = pgTable('reminder_log', {
   runId: uuid('run_id').notNull().references(() => nodeRuns.id),

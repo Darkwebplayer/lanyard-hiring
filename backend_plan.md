@@ -326,6 +326,29 @@ Routes under `/api/jobs` (manager+). `DomainError` maps to HTTP through `domain(
 
 Verified by `test/jobs.int.test.ts`, on PGlite and on Neon.
 
+### Review round 1 (2026-10-19)
+Three independent reviewers looked at phases 0–1, 2 and 3. Every confirmed defect is fixed and has a regression test.
+
+| Area | Fix |
+|---|---|
+| Rules | ISO-only dates, shared by evaluation and validation (`toDate`) · `in`/`nin`/`between` need literals and never throw · value-less operators refuse values · `between` needs lo ≤ hi · `[]` counts as missing |
+| Conditions | A missing branch only diverts when the missing data is in a branch *before* the first match. `exists`/`is_true`/`is_false` refs don't count as missing data |
+| AI input | `cv_text_ref` can't point at protected fields or node copies (only cv_parse text or non-protected form text) |
+| Forms and templates | Required lists of blanks fail · numbers accept decimal strings only · unknown `{{tags}}` and file refs in templates are publish errors · scorecard min ≤ max |
+| Outputs | Handler outputs are normalised to their declared types (`"85"` → 85) before they're stored |
+| Versions | Key types are checked against **every** published version, node output keys included · job requirements are **frozen into the version** at publish (`job_versions.requirements`), so editing a job never changes live decisions |
+| Jobs | Status transitions under the job lock (archived is final; open needs a publish) · an empty PATCH is a 400 · `getJob` reads one repeatable-read snapshot |
+| Auth | Refused sign-ins carry an error code, so the OAuth callback redirects instead of showing raw JSON · session cookie refresh is forwarded · missing `ADMIN_EMAIL` fails fast · `verification` index · `settings` single-row check |
+| Workers | DOCX zip-bomb cap (`document.xml` ≤ 5MB, sniffing reads only the directory) · per-request db client closed after the response · numeric entities and `<w:br/>` in DOCX text |
+| Tests | `.env` optional (CI) · `test:pg` refuses any database not named `*_test` |
+
+### Phase 4 status (2026-10-19)
+`server/engine/engine.ts`: `startApplication`, `activate` (walks instant nodes inside one transaction), `executeAutoRun` (idempotent claim, `claimed_at` fencing token, handler outside the transaction, completion and successor in one transaction under the application lock), `recordFailure` (backoff 30s/2m/10m, then `failed`), `submitTask` (blind panel aggregation), `reassignTask`, `moveApplication` (cancel + jump/close/reopen), `retryRun` (latest run only, failed or stale `running`) and `sweep`. Context lives in `server/engine/context.ts`. The queue consumer and cron are wired in `server/engine/worker.ts`; real handlers come in phase 5.
+
+`node_runs.seq` and `application_events.seq` give the true order inside one transaction, where `created_at` ties.
+
+Verified by `test/engine.int.test.ts`, which covers cases 1–4, 6, 7, 9–14, 19–21, 23, 24 and 28–35 on PGlite and on Neon. Cases 5, 8 and 15–17 are covered by the phase 2 units and the phase 5 handlers. Case 22 ("blocked" in the inbox) and 25 (reminders) are phase 7.
+
 ## 9. Still open
 1. AI provider and model: pick by screening quality on about 20 real CVs, with zero data retention.
 2. Email: mocked for now. Going live means a Resend account and a verified sending domain.

@@ -1,0 +1,1 @@
+ALTER TABLE "job_versions" ADD COLUMN "requirements" jsonb DEFAULT '{}'::jsonb NOT NULL;

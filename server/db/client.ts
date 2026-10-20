@@ -12,3 +12,5 @@ export function createDb(connectionString: string): Db {
   const client = postgres(connectionString, { max: 5, fetch_types: false, prepare: true })
   return Object.assign(drizzle(client, { schema }), { close: () => client.end() })
 }
+
+export type Tx = Parameters<Parameters<Db['transaction']>[0]>[0]

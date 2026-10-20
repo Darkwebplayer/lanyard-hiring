@@ -78,7 +78,8 @@ function answerSchema(f: FormField): z.ZodType {
     case 'string': return len(z.string().trim().max(f.max ?? 500))
     case 'text': return len(z.string().trim().max(f.max ?? 10_000))
     case 'number': {
-      let n = z.coerce.number().refine(Number.isFinite, 'not a number')
+      // decimal strings only: z.coerce would accept '0x10' and true
+      let n = z.preprocess(v => typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v.trim()) ? Number(v) : v, z.number().refine(Number.isFinite, 'not a number'))
       if (f.min !== undefined) n = n.refine(v => v >= f.min!, `min ${f.min}`)
       if (f.max !== undefined) n = n.refine(v => v <= f.max!, `max ${f.max}`)
       return n
@@ -86,7 +87,11 @@ function answerSchema(f: FormField): z.ZodType {
     case 'boolean': return z.preprocess(v => v === 'true' || v === 'on' || v === '1' ? true : v === 'false' || v === '0' ? false : v, z.boolean())
     case 'enum': return z.enum(f.options as [string, ...string[]])
     case 'date': return z.iso.date()
-    case 'list': return z.preprocess(v => asArray(v).map(x => typeof x === 'string' ? x.trim() : x).filter(x => x !== ''), len(z.array(z.string().max(200)).max(f.max ?? 50)))
+    case 'list': {
+      // blank items are dropped first, so a required list of only blanks fails
+      const items = len(z.array(z.string().max(200)).max(f.max ?? 50))
+      return z.preprocess(v => asArray(v).map(x => typeof x === 'string' ? x.trim() : x).filter(x => x !== ''), f.required ? items.min(Math.max(1, f.min ?? 1)) : items)
+    }
     case 'file': return fileMetaSchema
   }
 }

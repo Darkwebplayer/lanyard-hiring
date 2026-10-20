@@ -5,12 +5,12 @@ import type { HumanTaskConfig } from '../../shared/workflow/registry'
 import { REGISTRY } from '../../shared/workflow/registry'
 import { STANDARD_HIRE } from '../../shared/workflow/templates'
 import type { FormField, Graph, Issue } from '../../shared/workflow/types'
-import type { Db } from '../db/client'
+import type { Db, Tx } from '../db/client'
 import { jobs, jobVersions, roles, user } from '../db/schema'
 import { accessLevel } from './access'
 import { DomainError } from './errors'
 
-type Tx = Parameters<Parameters<Db['transaction']>[0]>[0]
+
 type Version = typeof jobVersions.$inferSelect
 
 const BLANK: { form: FormField[], workflow: Graph } = {
@@ -59,15 +59,18 @@ async function lockJob(tx: Tx, jobId: string) {
 }
 
 export async function getJob(db: Db, jobId: string) {
-  const job = await db.query.jobs.findFirst({ where: eq(jobs.id, jobId) })
-  if (!job) throw new DomainError(404, 'job_not_found')
-  const versions = await db.select().from(jobVersions)
-    .where(and(eq(jobVersions.jobId, jobId), sql`(${jobVersions.status} = 'draft' or ${jobVersions.id} = ${job.publishedVersionId})`))
-  return {
-    job,
-    draft: versions.find(v => v.status === 'draft') ?? null,
-    published: versions.find(v => v.id === job.publishedVersionId) ?? null,
-  }
+  // one snapshot, so a concurrent publish can't give a stale published version with no draft
+  return db.transaction(async (tx) => {
+    const job = await tx.query.jobs.findFirst({ where: eq(jobs.id, jobId) })
+    if (!job) throw new DomainError(404, 'job_not_found')
+    const versions = await tx.select().from(jobVersions)
+      .where(and(eq(jobVersions.jobId, jobId), sql`(${jobVersions.status} = 'draft' or ${jobVersions.id} = ${job.publishedVersionId})`))
+    return {
+      job,
+      draft: versions.find(v => v.status === 'draft') ?? null,
+      published: versions.find(v => v.id === job.publishedVersionId) ?? null,
+    }
+  }, { isolationLevel: 'repeatable read' })
 }
 
 // Drafts may be invalid; only the shape is checked (by the route). Editing a published job opens draft N+1.
@@ -84,6 +87,21 @@ export async function saveDraft(db: Db, jobId: string, body: { form: unknown[], 
   })
 }
 
+// draft → open happens only by publishing. archived is final.
+const TRANSITIONS: Record<string, string[]> = { draft: ['archived'], open: ['closed', 'archived'], closed: ['open', 'archived'], archived: [] }
+
+export async function updateJob(db: Db, jobId: string, input: Partial<Pick<typeof jobs.$inferInsert, 'title' | 'description' | 'requirements' | 'openings' | 'closesAt' | 'ownerId' | 'status'>>) {
+  return db.transaction(async (tx) => {
+    const job = await lockJob(tx, jobId)
+    if (job.status === 'archived') throw new DomainError(409, 'job_archived')
+    if (input.status && input.status !== job.status && !TRANSITIONS[job.status]!.includes(input.status)) {
+      throw new DomainError(409, input.status === 'open' ? 'publish_first' : `cannot_go_from_${job.status}_to_${input.status}`)
+    }
+    const [updated] = await tx.update(jobs).set(input).where(eq(jobs.id, jobId)).returning()
+    return updated!
+  })
+}
+
 // Everything that blocks publish: pure validation, key compatibility, and assignees that must exist now.
 export async function versionIssues(db: Db | Tx, job: typeof jobs.$inferSelect, draft: Version, adminEmail: string): Promise<Issue[]> {
   const issues = validateVersion(draft.form, draft.workflow)
@@ -91,10 +109,9 @@ export async function versionIssues(db: Db | Tx, job: typeof jobs.$inferSelect, 
 
   const form = draft.form as FormField[]
   const workflow = draft.workflow as Graph
-  if (job.publishedVersionId) {
-    const prev = await db.query.jobVersions.findFirst({ where: eq(jobVersions.id, job.publishedVersionId) })
-    issues.push(...checkVersionCompat({ form: prev!.form as FormField[], workflow: prev!.workflow as Graph }, { form, workflow }))
-  }
+  const previous = await db.select({ form: jobVersions.form, workflow: jobVersions.workflow }).from(jobVersions)
+    .where(and(eq(jobVersions.jobId, job.id), eq(jobVersions.status, 'published'))).orderBy(jobVersions.version)
+  issues.push(...checkVersionCompat(previous as { form: FormField[], workflow: Graph }[], { form, workflow }))
   issues.push(...await assigneeIssues(db, workflow, job.ownerId, adminEmail))
   return issues
 }
@@ -151,7 +168,8 @@ export async function publish(db: Db, jobId: string, adminEmail: string) {
     if (!draft) throw new DomainError(409, 'no_draft')
     const issues = await versionIssues(tx, job, draft, adminEmail)
     if (issues.length) throw new DomainError(422, 'invalid_version', issues)
-    const [published] = await tx.update(jobVersions).set({ status: 'published', publishedAt: new Date() })
+    // requirements are frozen with the version: editing the job later never changes live decisions
+    const [published] = await tx.update(jobVersions).set({ status: 'published', publishedAt: new Date(), requirements: job.requirements })
       .where(eq(jobVersions.id, draft.id)).returning()
     await tx.update(jobs).set({ publishedVersionId: draft.id, status: job.status === 'draft' ? 'open' : job.status })
       .where(eq(jobs.id, jobId))

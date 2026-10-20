@@ -9,6 +9,8 @@ import * as schema from '../db/schema'
 import { accessLevel, atLeastManager, gateNewUser, type Level } from '../domain/access'
 
 export function createAuth(env: AppEnv, db: Db) {
+  // without it nobody could ever get in, so fail loudly instead of silently refusing everyone
+  if (!env.ADMIN_EMAIL?.trim()) throw new Error('ADMIN_EMAIL is not set')
   return betterAuth({
     secret: env.BETTER_AUTH_SECRET,
     baseURL: env.BETTER_AUTH_URL,
@@ -30,7 +32,7 @@ export function createAuth(env: AppEnv, db: Db) {
           before: async (u) => {
             const invite = await db.query.invites.findFirst({ where: eq(schema.invites.email, u.email.toLowerCase()) })
             const gate = gateNewUser(u, env.ADMIN_EMAIL, invite)
-            if (!gate.ok) throw new APIError('FORBIDDEN', { message: gate.reason })
+            if (!gate.ok) throw new APIError('FORBIDDEN', { code: gate.reason.toUpperCase(), message: gate.reason })
             return { data: { ...u, email: gate.email, roleId: gate.roleId, active: true } }
           },
           after: async (u) => {
@@ -42,7 +44,7 @@ export function createAuth(env: AppEnv, db: Db) {
         create: {
           // Every sign-in: deactivated or role-less users get no session.
           before: async (s) => {
-            if (!(await loadAccess(db, env, s.userId))) throw new APIError('FORBIDDEN', { message: 'no_access' })
+            if (!(await loadAccess(db, env, s.userId))) throw new APIError('FORBIDDEN', { code: 'NO_ACCESS', message: 'no_access' })
           },
         },
       },
@@ -73,7 +75,9 @@ export interface Actor {
 
 export async function requireUser(event: H3Event): Promise<Actor> {
   if (event.context.actor) return event.context.actor
-  const s = await useAuth(event).api.getSession({ headers: event.headers })
+  // forward Set-Cookie, so the session's sliding expiry also refreshes on plain API calls
+  const { headers, response: s } = await useAuth(event).api.getSession({ headers: event.headers, returnHeaders: true })
+  for (const cookie of headers.getSetCookie()) appendResponseHeader(event, 'set-cookie', cookie)
   if (!s) throw createError({ statusCode: 401, message: 'unauthenticated' })
   // checked on every request, so deactivation and role changes apply at once
   const access = await loadAccess(useDb(event), useEnv(event), s.user.id)

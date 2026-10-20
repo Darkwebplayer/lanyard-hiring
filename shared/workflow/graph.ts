@@ -72,7 +72,7 @@ function dominators(order: string[], edges: Graph['edges'], trigger: string) {
 
 const outputsOf = (p: Parsed): Field[] =>
   p.def && p.config !== undefined
-    ? p.def.outputs(p.config).map(o => ({ path: `nodes.${p.node.key}.${o.key}`, type: o.type, label: `${p.node.label ?? p.node.key}: ${o.label}` }))
+    ? p.def.outputs(p.config).map(o => ({ path: `nodes.${p.node.key}.${o.key}`, type: o.type, label: `${p.node.label ?? p.node.key}: ${o.label}`, nodeType: p.node.type }))
     : []
 
 const baseFields = (form: FormField[]) => [...CORE_FIELDS, ...formFields(form), ...JOB_FIELDS]
@@ -176,22 +176,28 @@ export function validateVersion(form: unknown, graph: unknown): Issue[] {
   return [...formIssues, ...validateGraph(g.data, formOk.success ? formOk.data : [])]
 }
 
-// Keys are immutable across versions: a key may disappear, but never come back with another type.
-// (Reports and timelines compare answers and node outputs by key across versions.)
-export function checkVersionCompat(
-  prev: { form: FormField[], workflow: Graph },
-  next: { form: FormField[], workflow: Graph },
-): Issue[] {
-  const issues: Issue[] = []
-  const prevFields = new Map(prev.form.map(f => [f.key, f.type]))
-  for (const f of next.form) {
-    const was = prevFields.get(f.key)
-    if (was && was !== f.type) issues.push({ code: 'field_type_changed', message: `form field "${f.key}" was ${was}; use a new key for a ${f.type}` })
+// Keys are immutable across versions: a form field, node, or node output key may disappear and
+// come back, but always with the type it first had. Reports and timelines compare by key across
+// versions, and in-flight applications on old versions hold values of the old type.
+function keyTypes(v: { form: FormField[], workflow: Graph }) {
+  const types = new Map<string, { type: string, node?: string }>()
+  for (const f of v.form) types.set(`form.${f.key}`, { type: f.type })
+  for (const p of parseNodes(v.workflow).values()) {
+    types.set(`node:${p.node.key}`, { type: p.node.type, node: p.node.key })
+    for (const f of outputsOf(p)) types.set(f.path, { type: f.type, node: p.node.key })
   }
-  const prevNodes = new Map(prev.workflow.nodes.map(n => [n.key, n.type]))
-  for (const n of next.workflow.nodes) {
-    const was = prevNodes.get(n.key)
-    if (was && was !== n.type) issues.push({ node: n.key, code: 'node_type_changed', message: `node "${n.key}" was a ${was}; use a new key for a ${n.type}` })
+  return types
+}
+
+export function checkVersionCompat(previous: { form: FormField[], workflow: Graph }[], next: { form: FormField[], workflow: Graph }): Issue[] {
+  const history = new Map<string, string>()
+  for (const v of previous) for (const [k, t] of keyTypes(v)) if (!history.has(k)) history.set(k, t.type)
+  const issues: Issue[] = []
+  for (const [k, t] of keyTypes(next)) {
+    const was = history.get(k)
+    if (!was || was === t.type) continue
+    const name = k.startsWith('node:') ? `node "${k.slice(5)}"` : `"${k}"`
+    issues.push({ node: t.node, code: k.startsWith('form.') ? 'field_type_changed' : 'node_type_changed', message: `${name} was ${was} in an earlier version; use a new key for a ${t.type}` })
   }
   return issues
 }

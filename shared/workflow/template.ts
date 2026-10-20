@@ -4,6 +4,9 @@ const TAG = /\{\{\s*([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+)\s*\}\}/g
 
 export const refsInTemplate = (tpl: string) => [...new Set([...tpl.matchAll(TAG)].map(m => m[1]!))]
 
+// {{…}} that isn't a valid ref would otherwise go out literally (e.g. {{Candidate.name}})
+export const badTagsIn = (tpl: string) => [...tpl.matchAll(/\{\{[^}]*\}\}/g)].map(m => m[0]).filter(t => !new RegExp(TAG.source).test(t))
+
 export class MissingRefError extends Error {
   constructor(readonly refs: string[]) { super(`missing_ref: ${refs.join(', ')}`) }
 }

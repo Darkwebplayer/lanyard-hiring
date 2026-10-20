@@ -15,6 +15,27 @@
       "when": 1792427288433,
       "tag": "0001_seed_roles",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792431137182,
+      "tag": "0002_run_event_seq",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792431354127,
+      "tag": "0003_version_requirements",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792431399929,
+      "tag": "0004_auth_indexes",
+      "breakpoints": true
     }
   ]
 }

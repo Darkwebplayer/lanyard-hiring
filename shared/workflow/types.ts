@@ -9,6 +9,7 @@ export interface Field {
   label: string
   options?: string[] // enum
   protected?: boolean // never sent to AI
+  nodeType?: string // for nodes.* fields: the type of the node that produced it
 }
 
 export interface FormField {

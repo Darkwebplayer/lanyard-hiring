@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { answersSchema, validateForm } from '../shared/workflow/form'
 import { fieldsAvailableAt, validateGraph, validateVersion } from '../shared/workflow/graph'
-import { aggregateScorecard, REGISTRY, runSetVariable, scorecardSchema } from '../shared/workflow/registry'
+import { aggregateScorecard, normalizeOutput, REGISTRY, runSetVariable, scorecardSchema } from '../shared/workflow/registry'
 import { checkRule, evaluate, pickBranch, type Rule } from '../shared/workflow/rules'
 import { MissingRefError, render } from '../shared/workflow/template'
 import { STANDARD_HIRE } from '../shared/workflow/templates'
@@ -241,5 +241,102 @@ describe('graph validation', () => {
     expect(paths('rejection_email')).not.toContain('nodes.interview.hire')
     expect(paths('decision')).toEqual(expect.arrayContaining(['nodes.interview.hire', 'nodes.interview.hire_any', 'form.cv', 'job.title']))
     expect(paths('start')).not.toContain('nodes.cv.text')
+  })
+})
+
+// Regressions from the phase 2 review: each of these was reproduced before the fix.
+describe('review regressions', () => {
+  const fields = new Map<string, Field>([
+    ['form.start', { path: 'form.start', type: 'date', label: '' }],
+    ['form.city', { path: 'form.city', type: 'string', label: '' }],
+    ['form.home', { path: 'form.home', type: 'string', label: '' }],
+    ['form.yrs', { path: 'form.yrs', type: 'number', label: '' }],
+  ])
+  const check = (rule: Rule) => codes(checkRule(rule, fields, 'n'))
+
+  it('non-ISO dates are rejected at publish (they used to compare as strings)', () => {
+    expect(check({ ref: 'form.start', op: 'lt', value: '01/15/2025' })).toEqual(['bad_value'])
+    expect(check({ ref: 'form.start', op: 'gt', value: '1' })).toEqual(['bad_value'])
+    expect(check({ ref: 'form.start', op: 'gt', value: '2025-01-15' })).toEqual([])
+  })
+
+  it('in/nin/between need literals, and never throw at runtime', () => {
+    expect(check({ ref: 'form.city', op: 'in', valueRef: 'form.home' })).toEqual(['bad_value'])
+    expect(check({ ref: 'form.yrs', op: 'between', valueRef: 'form.yrs' })).toEqual(['bad_value'])
+    expect(evaluate({ ref: 'form.city', op: 'in', valueRef: 'form.home' }, { form: { city: 'a', home: 'a' } }).result).toBe(false)
+  })
+
+  it('value-less operators refuse values; a stray valueRef is ignored at runtime', () => {
+    expect(check({ ref: 'form.yrs', op: 'exists', valueRef: 'nodes.nope.x' })).toEqual(['bad_value'])
+    expect(evaluate({ ref: 'form.yrs', op: 'exists', valueRef: 'nodes.nope.x' }, { form: { yrs: 3 } }).result).toBe(true)
+  })
+
+  it('between needs lo <= hi', () => {
+    expect(check({ ref: 'form.yrs', op: 'between', value: [10, 1] })).toEqual(['bad_value'])
+  })
+
+  it('missing data only diverts when it is in a branch before the first match', () => {
+    const config = {
+      branches: [
+        { key: 'strong', label: 'S', rule: { ref: 'a', op: 'gte', value: 80 } as Rule },
+        { key: 'opt', label: 'O', rule: { ref: 'opt', op: 'gt', value: 1 } as Rule },
+      ],
+      on_missing: true,
+    }
+    expect(pickBranch(config, { a: 95 }).branch).toBe('strong')
+    expect(pickBranch(config, { a: 50 }).branch).toBe('missing') // can't rule out "opt"
+    expect(pickBranch(config, {}).branch).toBe('missing')
+    // exists tests presence itself, so a missing value there is an answer, not missing data
+    const presence = { branches: [{ key: 'has', label: 'H', rule: { ref: 'opt', op: 'exists' } as Rule }], on_missing: true }
+    expect(pickBranch(presence, {}).branch).toBe('default')
+  })
+
+  it('a required list of blanks fails; [] counts as missing', () => {
+    const s = answersSchema([{ key: 'skills', label: 'S', type: 'list', required: true }])
+    expect(s.safeParse({ skills: ['', ' '] }).success).toBe(false)
+    expect(evaluate({ ref: 'x', op: 'exists' }, { x: [] }).result).toBe(false)
+  })
+
+  it('numbers accept decimal strings only', () => {
+    const s = answersSchema([{ key: 'n', label: 'N', type: 'number', required: true }])
+    expect(s.safeParse({ n: '0x10' }).success).toBe(false)
+    expect(s.safeParse({ n: true }).success).toBe(false)
+    expect(s.parse({ n: '-2.5' })).toEqual({ n: -2.5 })
+  })
+
+  const issuesFor = (mutate: (g: Graph, form: typeof STANDARD_HIRE.form) => void) => {
+    const t = clone()
+    mutate(t.workflow, t.form)
+    return codes(validateGraph(t.workflow, t.form))
+  }
+  const node = (g: Graph, key: string) => g.nodes.find(n => n.key === key)!
+
+  it('protected fields and node copies cannot be sent to the AI', () => {
+    expect(issuesFor((g, form) => {
+      form.push({ key: 'gender', label: 'G', type: 'string', required: false, protected: true })
+      ;(node(g, 'ai').config as any).cv_text_ref = 'form.gender'
+    })).toEqual(['ai_input_not_allowed'])
+    expect(issuesFor((g) => {
+      g.nodes.push({ key: 'v', type: 'set_variable', config: { fields: [{ key: 't', type: 'text', source: { kind: 'ref', ref: 'nodes.cv.text' } }] } })
+      g.edges = g.edges.filter(e => e.from !== 'cv')
+      g.edges.push({ from: 'cv', to: 'v' }, { from: 'v', to: 'ai' })
+      ;(node(g, 'ai').config as any).cv_text_ref = 'nodes.v.t'
+    })).toEqual(['ai_input_not_allowed'])
+  })
+
+  it('scorecard min > max is caught', () => {
+    expect(issuesFor((g) => {
+      (node(g, 'interview').config as any).scorecard[0] = { key: 'technical', label: 'T', type: 'number', required: true, min: 5, max: 1 }
+    })).toContain('min_gt_max')
+  })
+
+  it('templates: bad tags and file refs are caught', () => {
+    expect(issuesFor(g => { (node(g, 'offer_email').config as any).body = 'Hi {{Candidate.first_name}}' })).toEqual(['bad_tag'])
+    expect(issuesFor(g => { (node(g, 'offer_email').config as any).body = 'Your cv {{form.cv}}' })).toEqual(['type_mismatch'])
+  })
+
+  it('handler outputs are normalized to declared types', () => {
+    expect(normalizeOutput(REGISTRY.cv_parse!.outputs({ file_field: 'cv' }), { years_experience: '6', skills: 'Go' }))
+      .toMatchObject({ years_experience: 6, skills: ['Go'] })
   })
 })

@@ -1,0 +1,2 @@
+CREATE INDEX "verification_identifier_idx" ON "verification" USING btree ("identifier");--> statement-breakpoint
+ALTER TABLE "settings" ADD CONSTRAINT "settings_single_row" CHECK ("settings"."id" = 1);

@@ -4,7 +4,7 @@ import { STANDARD_HIRE } from '../shared/workflow/templates'
 import type { Graph } from '../shared/workflow/types'
 import * as s from '../server/db/schema'
 import { DomainError } from '../server/domain/errors'
-import { createJob, getJob, pickerFields, publish, saveDraft, validateDraft } from '../server/domain/jobs'
+import { createJob, getJob, pickerFields, publish, saveDraft, updateJob, validateDraft } from '../server/domain/jobs'
 import { testDb } from './db'
 
 let db: Awaited<ReturnType<typeof testDb>>
@@ -79,9 +79,42 @@ describe('jobs and versions', () => {
     await publish(db, job.id, ADMIN)
     const t = structuredClone(STANDARD_HIRE)
     t.form.find(f => f.key === 'linkedin')!.type = 'number'
-    t.workflow.nodes.find(n => n.key === 'hired')!.type = 'end' // same type is fine
     await saveDraft(db, job.id, t)
     expect((await validateDraft(db, job.id, ADMIN)).map(i => i.code)).toEqual(['field_type_changed'])
+  })
+
+  it('a key that was dropped cannot come back with another type, including node outputs', async () => {
+    const { job } = await createJob(db, ownerId, input, { kind: 'standard_hire' })
+    await publish(db, job.id, ADMIN) // v1: linkedin is a string
+    const v2 = structuredClone(STANDARD_HIRE)
+    v2.form = v2.form.filter(f => f.key !== 'linkedin')
+    await saveDraft(db, job.id, v2)
+    await publish(db, job.id, ADMIN)
+    const v3 = structuredClone(STANDARD_HIRE)
+    v3.form.find(f => f.key === 'linkedin')!.type = 'number'
+    const card = (v3.workflow.nodes.find(n => n.key === 'interview')!.config as any).scorecard
+    card.find((f: any) => f.key === 'notes').type = 'number' // nodes.interview.notes was text
+    await saveDraft(db, job.id, v3)
+    expect((await validateDraft(db, job.id, ADMIN)).map(i => i.code).sort()).toEqual(['field_type_changed', 'node_type_changed'])
+  })
+
+  it('status transitions: archived is final, open needs a publish', async () => {
+    const { job } = await createJob(db, ownerId, input, { kind: 'standard_hire' })
+    await rejects(updateJob(db, job.id, { status: 'open' }), 409, 'publish_first')
+    await rejects(updateJob(db, job.id, { status: 'closed' }), 409)
+    await publish(db, job.id, ADMIN)
+    expect((await updateJob(db, job.id, { status: 'closed' })).status).toBe('closed')
+    expect((await updateJob(db, job.id, { status: 'open' })).status).toBe('open')
+    await updateJob(db, job.id, { status: 'archived' })
+    await rejects(updateJob(db, job.id, { title: 'x' }), 409, 'job_archived')
+  })
+
+  it('requirements are frozen into the version at publish', async () => {
+    const { job } = await createJob(db, ownerId, input, { kind: 'standard_hire' })
+    const v1 = await publish(db, job.id, ADMIN)
+    await updateJob(db, job.id, { requirements: { min_experience_years: 10 } })
+    expect(v1.requirements).toEqual({ min_experience_years: 3 })
+    expect((await db.query.jobVersions.findFirst({ where: eq(s.jobVersions.id, v1.id) }))!.requirements).toEqual({ min_experience_years: 3 })
   })
 
   it('assignees must exist, and a panel needs enough people', async () => {
@@ -106,7 +139,8 @@ describe('jobs and versions', () => {
     await rejects(createJob(db, ownerId, input, { kind: 'job', jobId: crypto.randomUUID() }), 404, 'source_job_not_found')
   })
 
-  it('concurrent saves on a published job open exactly one draft', async () => {
+  // PGlite runs transactions one at a time, so only `pnpm test:pg` really races these
+  it('[race] concurrent saves on a published job open exactly one draft', async () => {
     const { job } = await createJob(db, ownerId, input, { kind: 'standard_hire' })
     await publish(db, job.id, ADMIN)
     await Promise.all([saveDraft(db, job.id, STANDARD_HIRE), saveDraft(db, job.id, STANDARD_HIRE), saveDraft(db, job.id, STANDARD_HIRE)])

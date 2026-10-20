@@ -37,7 +37,17 @@ export function resolvePath(ctx: unknown, path: string): unknown {
   return cur
 }
 
-export const isMissing = (v: unknown) => v === undefined || v === null || v === ''
+export const isMissing = (v: unknown) => v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0)
+
+// Dates are ISO strings (YYYY-MM-DD…). One parser for evaluation and validation, so they agree.
+export function toDate(v: unknown): number | undefined {
+  if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}/.test(v)) return undefined
+  const ms = Date.parse(v)
+  return Number.isNaN(ms) ? undefined : ms
+}
+
+// Operators that test presence or truth and take no value
+export const VALUELESS: readonly Op[] = ['exists', 'is_true', 'is_false']
 
 export interface TraceEntry {
   ref: string
@@ -49,8 +59,8 @@ export interface TraceEntry {
 }
 
 const norm = (v: unknown) => typeof v === 'string' ? v.trim().toLowerCase() : v
-// dates are ISO strings; compare as timestamps
-const ord = (v: unknown) => typeof v === 'string' && !Number.isNaN(Date.parse(v)) && /^\d{4}-\d{2}-\d{2}/.test(v) ? Date.parse(v) : v as number
+// order: ISO dates as timestamps, everything else as-is (numbers)
+const ord = (v: unknown) => toDate(v) ?? v as number
 
 function compare(op: Op, actual: unknown, expected: unknown): boolean {
   switch (op) {
@@ -64,11 +74,12 @@ function compare(op: Op, actual: unknown, expected: unknown): boolean {
     case 'lt': return ord(actual) < ord(expected)
     case 'lte': return ord(actual) <= ord(expected)
     case 'between': {
-      const [lo, hi] = expected as [unknown, unknown]
+      if (!Array.isArray(expected) || expected.length !== 2) return false
+      const [lo, hi] = expected
       return ord(actual) >= ord(lo) && ord(actual) <= ord(hi)
     }
-    case 'in': return (expected as unknown[]).some(e => compare('eq', actual, e))
-    case 'nin': return !compare('in', actual, expected)
+    case 'in': return Array.isArray(expected) && expected.some(e => compare('eq', actual, e))
+    case 'nin': return Array.isArray(expected) && !compare('in', actual, expected)
     case 'contains':
       if (Array.isArray(actual)) return actual.some(a => norm(a) === norm(expected))
       return String(norm(actual)).includes(String(norm(expected)))
@@ -84,21 +95,24 @@ export function evaluate(rule: Rule, ctx: unknown, trace: TraceEntry[] = []): { 
   else if ('not' in rule) result = !evaluate(rule.not, ctx, trace).result
   else {
     const actual = resolvePath(ctx, rule.ref)
-    const expected = rule.valueRef ? resolvePath(ctx, rule.valueRef) : rule.value
-    const missing = isMissing(actual) || (rule.valueRef !== undefined && isMissing(expected))
+    const valueless = VALUELESS.includes(rule.op)
+    const expected = valueless ? undefined : rule.valueRef ? resolvePath(ctx, rule.valueRef) : rule.value
+    const missing = isMissing(actual) || (!valueless && rule.valueRef !== undefined && isMissing(expected))
     result = !missing && compare(rule.op, actual, expected)
     trace.push({ ref: rule.ref, op: rule.op, expected, actual, result, ...(missing && { missing: true as const }) })
   }
   return { result, trace }
 }
 
-export function refsInRule(rule: Rule, out: string[] = []): string[] {
-  if ('all' in rule) rule.all.forEach(r => refsInRule(r, out))
-  else if ('any' in rule) rule.any.forEach(r => refsInRule(r, out))
-  else if ('not' in rule) refsInRule(rule.not, out)
-  else {
+// `dataOnly` skips refs of exists/is_true/is_false: those test presence themselves,
+// so a missing value there is an answer, not missing data.
+export function refsInRule(rule: Rule, out: string[] = [], dataOnly = false): string[] {
+  if ('all' in rule) rule.all.forEach(r => refsInRule(r, out, dataOnly))
+  else if ('any' in rule) rule.any.forEach(r => refsInRule(r, out, dataOnly))
+  else if ('not' in rule) refsInRule(rule.not, out, dataOnly)
+  else if (!(dataOnly && VALUELESS.includes(rule.op))) {
     out.push(rule.ref)
-    if (rule.valueRef) out.push(rule.valueRef)
+    if (rule.valueRef && !VALUELESS.includes(rule.op)) out.push(rule.valueRef)
   }
   return out
 }
@@ -110,7 +124,7 @@ const compatible = (a: FieldType, b: FieldType) => a === b || (textLike.has(a) &
 
 function valueOk(type: FieldType, v: unknown) {
   if (type === 'number') return typeof v === 'number' && Number.isFinite(v)
-  if (type === 'date') return typeof v === 'string' && !Number.isNaN(Date.parse(v))
+  if (type === 'date') return toDate(v) !== undefined
   return typeof v === 'string' && v.length > 0
 }
 
@@ -125,10 +139,19 @@ export function checkRule(rule: Rule, fields: Map<string, Field>, node: string, 
     if (!OPS_BY_TYPE[f.type].includes(rule.op)) {
       return issues.push({ node, code: 'bad_operator', message: `"${rule.op}" does not work on ${f.type} field "${rule.ref}"` }), issues
     }
-    const noValue = rule.op === 'exists' || rule.op === 'is_true' || rule.op === 'is_false'
-    if (noValue) return issues
+    if (VALUELESS.includes(rule.op)) {
+      if (rule.value !== undefined || rule.valueRef !== undefined) {
+        issues.push({ node, code: 'bad_value', message: `"${rule.op}" takes no value` })
+      }
+      return issues
+    }
     // contains on a list compares against one item (string)
     const itemType: FieldType = f.type === 'list' ? 'string' : f.type
+    const listOp = rule.op === 'between' || rule.op === 'in' || rule.op === 'nin'
+    if (rule.valueRef !== undefined && listOp) {
+      issues.push({ node, code: 'bad_value', message: `"${rule.op}" needs literal values, not another field` })
+      return issues
+    }
     if (rule.valueRef !== undefined) {
       const g = fields.get(rule.valueRef)
       if (!g) issues.push({ node, code: 'unknown_ref', message: `"${rule.valueRef}" is not available here` })
@@ -144,6 +167,9 @@ export function checkRule(rule: Rule, fields: Map<string, Field>, node: string, 
         ? Array.isArray(v) && v.length > 0 && v.every(x => valueOk(itemType, x))
         : valueOk(itemType, v)
     if (!ok) issues.push({ node, code: 'bad_value', message: `"${rule.ref}" ${rule.op}: value does not fit a ${f.type} field` })
+    if (ok && rule.op === 'between' && ord((v as unknown[])[0]) > ord((v as unknown[])[1])) {
+      issues.push({ node, code: 'bad_value', message: `"${rule.ref}" between: the lower bound is above the upper bound` })
+    }
     if (ok && f.type === 'enum' && f.options) {
       const vals = (Array.isArray(v) ? v : [v]) as string[]
       const bad = vals.filter(x => !f.options!.includes(x))
@@ -172,12 +198,17 @@ export interface ConditionEvaluation {
   branches: { key: string, result: boolean, trace: TraceEntry[] }[]
 }
 
-// Missing data first (if a missing branch exists), then the first matching branch, then default.
+// Branches in order. With on_missing, a branch whose data is missing stops the walk at the missing
+// branch, so a decision is never made by skipping over data we don't have. Missing data in branches
+// after the first match doesn't matter. No match → default.
 // The returned evaluation is stored on the run: it is the "why" behind every decision.
 export function pickBranch(config: ConditionConfig, ctx: unknown): ConditionEvaluation {
-  const refs = [...new Set(config.branches.flatMap(b => refsInRule(b.rule)))]
-  const missing = refs.filter(r => isMissing(resolvePath(ctx, r)))
+  const missingIn = (rule: Rule) => [...new Set(refsInRule(rule, [], true))].filter(r => isMissing(resolvePath(ctx, r)))
   const branches = config.branches.map(b => ({ key: b.key, ...evaluate(b.rule, ctx) }))
-  if (config.on_missing && missing.length) return { branch: MISSING_BRANCH, missing, branches }
-  return { branch: branches.find(b => b.result)?.key ?? DEFAULT_BRANCH, missing, branches }
+  const missing = [...new Set(config.branches.flatMap(b => missingIn(b.rule)))]
+  for (const [i, b] of config.branches.entries()) {
+    if (config.on_missing && missingIn(b.rule).length) return { branch: MISSING_BRANCH, missing, branches }
+    if (branches[i]!.result) return { branch: b.key, missing, branches }
+  }
+  return { branch: DEFAULT_BRANCH, missing, branches }
 }

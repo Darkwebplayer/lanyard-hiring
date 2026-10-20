@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { type ConditionConfig, checkRule, conditionBranchKeys, DEFAULT_BRANCH, MISSING_BRANCH, resolvePath, ruleSchema } from './rules'
-import { refsInTemplate } from './template'
+import { badTagsIn, refsInTemplate } from './template'
 import { type Field, type FieldType, type Issue, KEY_RE } from './types'
 
 // trigger: entry point · instant: runs inside the engine transaction · auto: queued handler
@@ -38,8 +38,14 @@ const checkRef = (path: string, available: Map<string, Field>, node: string, acc
   return []
 }
 
+const TEMPLATE_TYPES: FieldType[] = ['string', 'text', 'number', 'boolean', 'enum', 'date', 'list'] // not file
 const checkTemplates = (tpls: (string | undefined)[], available: Map<string, Field>, node: string) =>
-  tpls.flatMap(t => (t ? refsInTemplate(t) : []).flatMap(r => checkRef(r, available, node)))
+  tpls.flatMap(t => !t
+    ? []
+    : [
+        ...badTagsIn(t).map(tag => ({ node, code: 'bad_tag', message: `${tag} is not a valid field reference` })),
+        ...refsInTemplate(t).flatMap(r => checkRef(r, available, node, TEMPLATE_TYPES)),
+      ])
 
 // ---------- application_received ----------
 
@@ -90,10 +96,17 @@ const aiReview: NodeDef<{
     { key: 'overall', type: 'number', label: 'Overall score (0–100)' },
     { key: 'summary', type: 'text', label: 'AI summary' },
   ],
-  check: (c, available, node) => [
-    ...uniqueKeys(c.criteria, node, 'criterion', AI_RESERVED),
-    ...(c.cv_text_ref ? checkRef(c.cv_text_ref, available, node, ['text', 'string']) : []),
-  ],
+  check: (c, available, node) => {
+    const issues = uniqueKeys(c.criteria, node, 'criterion', AI_RESERVED)
+    if (!c.cv_text_ref) return issues
+    const ref = checkRef(c.cv_text_ref, available, node, ['text', 'string'])
+    const f = available.get(c.cv_text_ref)
+    // the AI only ever sees CV text or non-protected form text, never copies made by other nodes
+    if (!ref.length && (f!.protected || (f!.nodeType && f!.nodeType !== 'cv_parse'))) {
+      ref.push({ node, code: 'ai_input_not_allowed', message: `"${c.cv_text_ref}" cannot be sent to the AI` })
+    }
+    return [...issues, ...ref]
+  },
 }
 
 // ---------- set_variable ----------
@@ -209,6 +222,8 @@ const humanTask: NodeDef<HumanTaskConfig> = {
   check: (c, available, node) => [
     // compare generated output keys, so "x_any" can't collide with a boolean "x"
     ...uniqueKeys(humanTask.outputs(c), node, 'scorecard field'),
+    ...c.scorecard.filter(f => f.min !== undefined && f.max !== undefined && f.min > f.max)
+      .map(f => ({ node, code: 'min_gt_max', message: `scorecard field "${f.key}": min > max` })),
     ...checkTemplates([c.title, c.instructions], available, node),
   ],
 }
@@ -306,6 +321,18 @@ const end: NodeDef<{ outcome: typeof OUTCOMES[number] }> = {
   label: 'End',
   config: z.object({ outcome: z.enum(OUTCOMES) }).strict(),
   outputs: () => [],
+}
+
+// Handlers (LLM JSON especially) may return "5" for a number or "a" for a list; store declared types.
+export function normalizeOutput(fields: OutputField[], output: Record<string, unknown>) {
+  const out = { ...output }
+  for (const f of fields) {
+    const v = out[f.key]
+    if (f.type === 'number' && typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v.trim())) out[f.key] = Number(v)
+    else if (f.type === 'list' && typeof v === 'string') out[f.key] = v.trim() ? [v.trim()] : []
+    else if (f.type === 'boolean' && (v === 'true' || v === 'false')) out[f.key] = v === 'true'
+  }
+  return out
 }
 
 export const REGISTRY: Record<string, NodeDef> = Object.fromEntries(
