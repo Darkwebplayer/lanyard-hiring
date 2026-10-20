@@ -9,4 +9,7 @@ export type AppEnv = Env & {
   GOOGLE_CLIENT_SECRET: string
   TURNSTILE_SECRET: string
   DISABLED_NODE_TYPES?: string
+  AI_MODEL?: string // gateway model id, e.g. anthropic/claude-sonnet-5-5
+  AI_GATEWAY_API_KEY?: string
+  AI_MOCK?: string // '1' = deterministic mock AI (dev only)
 }

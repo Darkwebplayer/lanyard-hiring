@@ -1,14 +1,20 @@
 import { createDb, type Db } from '../db/client'
+import { settings } from '../db/schema'
 import type { AppEnv } from '../env'
-import { type AutoHandler, type EngineDeps, executeAutoRun, sweep } from './engine'
-
-// Real handlers (cv_parse, ai_review, send_email) arrive in phase 5. Until then auto runs fail with no_handler.
-const handlers: Record<string, AutoHandler> = {}
+import { createAi } from './ai'
+import { sendEmail } from './email'
+import { type EngineDeps, executeAutoRun, sweep } from './engine'
+import { createHandlers } from './handlers'
 
 export function engineDeps(env: AppEnv, db: Db): EngineDeps {
   return {
     db,
-    handlers,
+    handlers: createHandlers({
+      bucket: env.CV_BUCKET,
+      ai: createAi(env),
+      sendEmail: (key, email) => sendEmail(env, key, email),
+      replyTo: async () => (await db.select({ r: settings.replyToEmail }).from(settings))[0]?.r ?? null,
+    }),
     adminEmail: env.ADMIN_EMAIL,
     disabledTypes: new Set((env.DISABLED_NODE_TYPES ?? '').split(',').map(s => s.trim()).filter(Boolean)),
     enqueue: async (items) => {

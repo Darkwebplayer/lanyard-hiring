@@ -2,7 +2,7 @@ import { and, desc, eq, inArray, isNull, lt, lte, max, or, sql } from 'drizzle-o
 import { aggregateScorecard, type HumanTaskConfig, normalizeOutput, REGISTRY, runSetVariable, scorecardSchema } from '../../shared/workflow/registry'
 import { type ConditionConfig, pickBranch } from '../../shared/workflow/rules'
 import { render } from '../../shared/workflow/template'
-import type { Context, Graph, GraphNode } from '../../shared/workflow/types'
+import type { Context, FormField, Graph, GraphNode } from '../../shared/workflow/types'
 import type { Db, Tx } from '../db/client'
 import { applicationEvents, applications, jobs, jobVersions, nodeRuns, roles, taskAssignments, user } from '../db/schema'
 import { accessLevel } from '../domain/access'
@@ -23,6 +23,7 @@ export interface AutoHandlerArgs {
   node: GraphNode
   config: any
   ctx: Context
+  form: FormField[] // the pinned form definition (labels, protected and file flags)
   application: Application
 }
 // Returns the node's output (and optionally an audit `input`, e.g. hashes of what was sent to the AI).
@@ -71,10 +72,11 @@ async function lockApplication(tx: Tx, applicationId: string) {
   return app
 }
 
-async function loadGraph(tx: Db | Tx, jobVersionId: string) {
-  const [v] = await tx.select({ workflow: jobVersions.workflow }).from(jobVersions).where(eq(jobVersions.id, jobVersionId))
-  return v!.workflow as Graph
+async function loadVersion(tx: Db | Tx, jobVersionId: string) {
+  const [v] = await tx.select({ workflow: jobVersions.workflow, form: jobVersions.form }).from(jobVersions).where(eq(jobVersions.id, jobVersionId))
+  return { graph: v!.workflow as Graph, form: v!.form as FormField[] }
 }
+const loadGraph = async (tx: Db | Tx, jobVersionId: string) => (await loadVersion(tx, jobVersionId)).graph
 
 const findNode = (graph: Graph, key: string) => {
   const node = graph.nodes.find(n => n.key === key)
@@ -215,12 +217,12 @@ export async function executeAutoRun(deps: EngineDeps, runId: string): Promise<E
 
   let result: Awaited<ReturnType<AutoHandler>>
   try {
-    const graph = await loadGraph(db, application!.jobVersionId)
+    const { graph, form } = await loadVersion(db, application!.jobVersionId)
     const node = findNode(graph, run.nodeKey)
     const handler = deps.handlers[run.nodeType]
     if (!handler) throw new HandlerError('no_handler', false, run.nodeType)
     const config = configOf(node)
-    result = await handler({ run, node, config, ctx: await buildContext(db, run.applicationId), application: application! })
+    result = await handler({ run, node, config, form, ctx: await buildContext(db, run.applicationId), application: application! })
     result = { ...result, output: normalizeOutput(REGISTRY[node.type]!.outputs(config), result.output) }
   }
   catch (e) {

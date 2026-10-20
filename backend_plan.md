@@ -349,6 +349,19 @@ Three independent reviewers looked at phases 0–1, 2 and 3. Every confirmed def
 
 Verified by `test/engine.int.test.ts`, which covers cases 1–4, 6, 7, 9–14, 19–21, 23, 24 and 28–35 on PGlite and on Neon. Cases 5, 8 and 15–17 are covered by the phase 2 units and the phase 5 handlers. Case 22 ("blocked" in the inbox) and 25 (reminders) are phase 7.
 
+### Phase 5 status (2026-10-20)
+- `server/engine/ai.ts` holds one `Ai` interface (`parseCv`, `review`).
+  - The real model runs through the AI SDK 7 gateway (`AI_MODEL`, `AI_GATEWAY_API_KEY`) with `Output.object` and `maxRetries: 0`, because the engine owns retries.
+  - `AI_MOCK=1` gives a deterministic dev mock. With neither set, AI steps fail visibly with `ai_not_configured` and never guess.
+- `server/engine/handlers/index.ts`:
+  - `cv_parse` gets the file from R2 and checks its sha256 against the answer. It extracts text: a corrupt file, or less than 50 characters of text, fails with `unreadable_cv` and no retry. The AI then pulls out the facts.
+  - `ai_review` uses `aiReviewInput`, which sends job requirements, non-protected non-file answers by label, and the CV text. It never sends name, email, phone or files. `overall` is the **mean of the criteria**, so it's explainable and stable. The audit stores model, prompt version and `input_sha256`.
+  - `send_email` uses strict templates (`missing_ref`, no retry), the candidate as recipient, the settings reply-to, and the run id as the idempotency key.
+- Wired in `worker.ts`. The worker bundle is 941 kB gzipped.
+- **Production must not set `AI_MOCK`.** The local `.env` has `AI_MOCK=1`.
+
+Verified by `test/handlers.int.test.ts`: per-handler cases, a leak test on the AI input, and an end-to-end flow from a real PDF to the interview task.
+
 ## 9. Still open
 1. AI provider and model: pick by screening quality on about 20 real CVs, with zero data retention.
 2. Email: mocked for now. Going live means a Resend account and a verified sending domain.
