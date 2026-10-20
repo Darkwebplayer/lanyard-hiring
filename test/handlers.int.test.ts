@@ -95,10 +95,23 @@ describe('ai_review', () => {
     for (const leak of ['Jane', 'Doe', 'jane@example.test', '123', 'female', '"k"']) expect(json).not.toContain(leak)
   })
 
+  it('review round 2: identity is redacted from CV text; refs outside form/CV text are ignored', () => {
+    const cv = 'Jane Doe\njane@example.test | +44 7700 900123 | 123\nJanet Smith, 2015 - 2020 at Doe Corp? no: DoeCorp\nContact: other.person@mail.example'
+    const input = aiReviewInput(ctx({ nodes: { cv: { text: cv } } }), form, 'nodes.cv.text')
+    expect(input.cv_text).toBe('[redacted] [redacted]\n[email] | [phone] | [redacted]\nJanet Smith, 2015 - 2020 at [redacted] Corp? no: DoeCorp\nContact: [email]')
+    for (const ref of ['candidate.email', 'job.title', 'form.gender', 'nodes.cv']) expect(aiReviewInput(c, form, ref).cv_text).toBeUndefined()
+  })
+
+  it('review round 2: the audit hash covers the criteria and instructions actually sent', async () => {
+    const a = await handlers().ai_review!(args({ config, ctx: c, form }))
+    const b = await handlers().ai_review!(args({ config: { ...config, instructions: 'Prefer Rust' }, ctx: c, form }))
+    expect(a.input).not.toEqual(b.input)
+  })
+
   it('scores per criterion, overall is their mean, and the audit records model and input hash', async () => {
     const { output, input } = await handlers().ai_review!(args({ config, ctx: c, form }))
     expect(output).toMatchObject({ skills: 50, exp: 50, overall: 50 })
-    expect(input).toMatchObject({ model: 'mock', prompt_version: 'v1', input_sha256: expect.stringMatching(/^[0-9a-f]{64}$/) })
+    expect(input).toMatchObject({ model: 'mock', prompt_version: 'v2', input_sha256: expect.stringMatching(/^[0-9a-f]{64}$/) })
     const again = await handlers().ai_review!(args({ config, ctx: c, form }))
     expect(again.input).toEqual(input) // same input, same hash
   })

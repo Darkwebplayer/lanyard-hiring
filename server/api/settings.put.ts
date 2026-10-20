@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { settings } from '../db/schema'
 
 const body = z.object({
+  companyName: z.string().trim().max(200).nullable(),
   replyToEmail: z.email().nullable(),
   consentText: z.string().max(5000).nullable(),
   aiNoticeText: z.string().max(5000).nullable(),

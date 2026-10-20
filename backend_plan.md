@@ -221,7 +221,7 @@ Every state change runs **in one transaction**, and queue sends happen **after c
 40. The same candidate applies to the same job twice: 409 (unique index). The same email on another job reuses the `candidates` row.
 41. The email is lowercased before upsert.
 42. Turnstile fails: 400, and nothing is written.
-43. A file is the wrong type by magic bytes, or over 10 MB: 400.
+43. A file is the wrong type by magic bytes, or over 10 MB: 422 `invalid_application`, with an issue per field.
 44. R2 upload succeeds but the DB transaction fails: the R2 object is deleted on a best-effort basis. Orphans are harmless.
 45. AI input never includes protected fields, files, name or email. The input builder is a whitelist and has its own test.
 
@@ -400,6 +400,49 @@ Verified:
   - It skips assignees who already submitted and users who can no longer sign in.
 - Tests: `test/ops.int.test.ts` (7). Totals: 113 passing on PGlite; typecheck clean. I checked that the blind-panel test fails when the blind check is removed.
 - Verified in workerd: both crons run against Neon dev, and the new routes return 401 without a session. Signed-in HTTP checks need the Google credentials.
+
+### Review round 2 (2026-10-20): phases 5–7
+Three fresh reviewers, one per phase. Every confirmed finding is fixed, with a regression test marked "review round 2".
+
+**Phase 5 (handlers):**
+- **High:** `cv_text_ref` could point at `candidate.email` or `job.*`, which sent identity to the AI. Fixed in two places:
+  - Validation allows only a non-protected `form.*` text field or a `cv_parse` output.
+  - `aiReviewInput` repeats the check.
+- CV text sent to the AI (review and CV parse) has the candidate's name, email and phone redacted, plus email and phone patterns. Phone redaction needs 9 or more digits, so year ranges survive.
+  - ponytail: exact and pattern redaction only; postal addresses still get through.
+- `input_sha256` now hashes exactly what the model receives: system prompt, criteria, instructions and the truncated CV. `PROMPT_VERSION` is now `v2`, and there is a prompt-injection line.
+- DOCX is now read by a streaming inflate that stops at 5 MB. The zip directory's size field is not trusted. A 60–200 MB bomb that claims to be 1 KB is refused in about 0.1 s.
+- Sniffing requires `[Content_Types].xml`, and CV text is capped at 100k characters.
+- The queue `max_batch_size` is now 1, so each run gets its own CPU budget.
+- Non-retryable AI SDK `APICallError`s become `ai_error`, which is not retried. A `ZodError` (a config that doesn't parse) becomes `invalid_config`, also not retried.
+
+**Phase 6 (apply):**
+- **Candidate details are never overwritten** by a later application. Emails are unverified, so this blocked renaming someone else's record. Trade-off: a genuine change of phone number isn't picked up.
+- `Content-Length` is required (otherwise 411), which also refuses chunked bodies.
+- The Turnstile token now comes in the **`cf-turnstile-response` header** and is checked before the body is read. The frontend must send it there.
+- Turnstile now also checks the hostname (skipped for Cloudflare's test secrets) and has a 5 s timeout.
+- The job is re-checked inside the transaction (`FOR SHARE`). Uploads sit inside the cleanup `try`.
+- The sweeper continues past an application that fails to start.
+
+**Phase 7 (operations):**
+- **High:** protected answers reached employees through run `input`, `output` and `evaluation`, the task title and reminders. Fixed two ways:
+  - Employees no longer get run data; they still see the path, statuses and scorecards.
+  - Human-task titles and instructions can't reference protected fields (`protected_ref`).
+- Blind panels now hold across attempts. Any run of a node you still have to score hides others' scorecards.
+- Closing an already-closed application returns 409 `already_closed`; changing an outcome requires a reopen first.
+- Reassign:
+  - It returns 422 `below_min_submissions` if a removal would strand the task.
+  - Only assignees actually removed are logged.
+- Reminders:
+  - They skip pairs already reminded that day, run in batches of 500, and a failed release no longer aborts the batch.
+  - ponytail: a Worker that dies between the claim and the send loses that day's reminder.
+- `server/api/_spike/` is deleted; it had unauthenticated writes.
+
+**Not fixed:**
+- Email is still the mock, so the "no double send" claim for case 8 is unproven until Resend is wired up.
+- Salary requirements are still sent to the AI.
+- Totals: 128 tests passing; typecheck clean.
+- **Workerd check:** no token → 400; chunked body → 411; a DOCX application → 201, which ran CV parse → AI (hash recorded) → screen → interview waiting.
 
 ## 9. Still open
 1. AI provider and model: pick by screening quality on about 20 real CVs, with zero data retention.

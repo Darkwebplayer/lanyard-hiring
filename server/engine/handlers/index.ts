@@ -2,7 +2,7 @@ import type { FileMeta } from '../../../shared/workflow/form'
 import { MissingRefError, render } from '../../../shared/workflow/template'
 import type { Context, FormField } from '../../../shared/workflow/types'
 import type { Ai, Criterion, ReviewInput } from '../ai'
-import { PROMPT_VERSION } from '../ai'
+import { PROMPT_VERSION, reviewMessages } from '../ai'
 import type { Email } from '../email'
 import { EmailError } from '../email'
 import { type AutoHandler, HandlerError } from '../engine'
@@ -22,15 +22,39 @@ const requireAi = (ai: Ai | null) => {
   return ai
 }
 
-// Input minimisation: job requirements, non-protected non-file answers by label, and the CV text.
-// Never candidate.*, protected fields or files. The input hash is stored as the audit trail.
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const EMAIL_RE = /[\w.+-]+@[\w-]+(\.[\w-]+)+/g
+const PHONE_RE = /\+?\d[\d\s().-]{7,}\d/g
+
+// CVs open with the candidate's name, email and phone; the AI needs none of them.
+// ponytail: exact-match and pattern redaction; addresses and photos' alt text still get through.
+export function redactIdentity(text: string, c: Context['candidate']) {
+  let out = text.replace(EMAIL_RE, '[email]')
+    .replace(PHONE_RE, m => (m.replace(/\D/g, '').length >= 9 ? '[phone]' : m)) // year ranges have 8 digits
+  for (const v of [c.email, c.phone, c.first_name, c.last_name]) {
+    if (v && v.trim().length >= 2) out = out.replace(new RegExp(`(?<![\\p{L}\\p{N}])${escapeRe(v.trim())}(?![\\p{L}\\p{N}])`, 'giu'), '[redacted]')
+  }
+  return out
+}
+
+// The only refs the AI may read as CV text: a non-protected form text field, or a CV parse output.
+// Validation enforces the same; this is the backstop.
+function cvTextFrom(ctx: Context, form: FormField[], ref?: string) {
+  const [root, key, leaf, ...rest] = ref?.split('.') ?? []
+  if (root === 'form' && key && !leaf && form.some(f => f.key === key && !f.protected && f.type !== 'file')) return ctx.form[key]
+  if (root === 'nodes' && key && leaf === 'text' && !rest.length) return ctx.nodes[key]?.text
+  return undefined
+}
+
+// Input minimisation: job requirements, non-protected non-file answers by label, and the CV text with
+// the candidate's identity redacted. Never candidate.*, protected fields or files.
 export function aiReviewInput(ctx: Context, form: FormField[], cvTextRef?: string): ReviewInput {
   const { openings: _, title, ...requirements } = ctx.job
   const answers = form
     .filter(f => !f.protected && f.type !== 'file' && ctx.form[f.key] !== undefined)
     .map(f => ({ label: f.label, value: ctx.form[f.key] }))
-  const cv = cvTextRef ? cvTextRef.split('.').reduce<any>((o, k) => o?.[k], ctx) : undefined
-  return { job: { title, requirements }, answers, ...(typeof cv === 'string' && cv && { cv_text: cv }) }
+  const cv = cvTextFrom(ctx, form, cvTextRef)
+  return { job: { title, requirements }, answers, ...(typeof cv === 'string' && cv && { cv_text: redactIdentity(cv, ctx.candidate) }) }
 }
 
 export function createHandlers(deps: HandlerDeps): Record<string, AutoHandler> {
@@ -47,7 +71,7 @@ export function createHandlers(deps: HandlerDeps): Record<string, AutoHandler> {
       // a corrupt file won't parse any better on retry
       const text = await extractCvText(bytes, mime).catch((e: Error) => { throw new HandlerError('unreadable_cv', false, e.message) })
       if (text.replace(/\s/g, '').length < MIN_CV_TEXT) throw new HandlerError('unreadable_cv', false, 'no text layer (scanned?)')
-      const facts = await requireAi(deps.ai).parseCv(text)
+      const facts = await requireAi(deps.ai).parseCv(redactIdentity(text, ctx.candidate))
       return { output: { text, ...facts, file_sha256: meta.sha256 } }
     },
 
@@ -60,7 +84,8 @@ export function createHandlers(deps: HandlerDeps): Record<string, AutoHandler> {
       const overall = Math.round(criteria.reduce((sum, c) => sum + scores[c.key]!, 0) / criteria.length)
       return {
         output: { ...scores, overall, summary },
-        input: { model: ai.model, prompt_version: PROMPT_VERSION, input_sha256: await sha256Hex(new TextEncoder().encode(JSON.stringify(input))) },
+        // the hash covers exactly what the model was sent (system prompt, criteria, instructions, truncated CV)
+        input: { model: ai.model, prompt_version: PROMPT_VERSION, input_sha256: await sha256Hex(new TextEncoder().encode(JSON.stringify(reviewMessages(input, criteria, config.instructions)))) },
       }
     },
 

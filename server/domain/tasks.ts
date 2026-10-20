@@ -6,7 +6,7 @@ import { applications, candidates, jobs, jobVersions, nodeRuns, reminderLog, rol
 import type { Email } from '../engine/email'
 import { LOST_PENDING_MS, STALE_RUNNING_MS } from '../engine/engine'
 import { accessLevel, atLeastManager } from './access'
-import { isOverdue, visibleAssignments, type Viewer } from './applications'
+import { blindNodes, isOverdue, visibleAssignments, type Viewer } from './applications'
 import { DomainError } from './errors'
 
 const runRows = (db: Db) => db.select({
@@ -91,14 +91,18 @@ export async function getTask(db: Db, viewer: Viewer, runId: string, now: Date) 
   const config = (await humanConfigs(db, [row.jobVersionId]))(row.jobVersionId, row.nodeKey)
   return {
     ...view(row, now),
+    instructions: (row.input as { instructions?: string } | null)?.instructions ?? null,
     scorecard: config.scorecard,
     minSubmissions: config.min_submissions,
     canSubmit: row.status === 'waiting_on_human' && !!mine && !mine.closedAt && !mine.submittedAt,
-    assignments: visibleAssignments(row.status, assignments, viewer),
+    assignments: visibleAssignments(row.nodeKey, assignments, viewer, await blindNodes(db, viewer, row.applicationId)),
   }
 }
 
 // Daily cron: one reminder per open assignee per overdue task per (UTC) day. Never moves the flow.
+// Already-reminded pairs are excluded up front, so a rerun continues where a capped batch stopped.
+// ponytail: a claim whose Worker dies before the send loses that day's reminder; tomorrow's still goes.
+const REMINDER_BATCH = 500 // stays under the Workers subrequest limit (paid plan)
 export async function sendReminders(db: Db, adminEmail: string, appUrl: string, now: Date, send: (key: string, email: Email) => Promise<unknown>) {
   const day = now.toISOString().slice(0, 10)
   const due = await db.select({
@@ -107,7 +111,10 @@ export async function sendReminders(db: Db, adminEmail: string, appUrl: string, 
   }).from(taskAssignments)
     .innerJoin(nodeRuns, eq(nodeRuns.id, taskAssignments.runId))
     .innerJoin(user, eq(user.id, taskAssignments.userId)).leftJoin(roles, eq(roles.id, user.roleId))
-    .where(and(eq(nodeRuns.status, 'waiting_on_human'), lt(nodeRuns.dueAt, now), isNull(taskAssignments.closedAt), isNull(taskAssignments.submittedAt)))
+    .where(and(eq(nodeRuns.status, 'waiting_on_human'), lt(nodeRuns.dueAt, now), isNull(taskAssignments.closedAt), isNull(taskAssignments.submittedAt),
+      sql`not exists (select 1 from ${reminderLog} l where l.run_id = ${nodeRuns.id} and l.user_id = ${user.id} and l.day = ${day})`))
+    .orderBy(asc(nodeRuns.dueAt))
+    .limit(REMINDER_BATCH)
 
   let sent = 0
   for (const r of due) {
@@ -125,9 +132,10 @@ export async function sendReminders(db: Db, adminEmail: string, appUrl: string, 
       sent++
     }
     catch (e) {
+      console.error('[reminders] send failed', r.runId, r.userId, e)
       // release the claim so a rerun can try again; the provider's idempotency key stops a double send
       await db.delete(reminderLog).where(and(eq(reminderLog.runId, r.runId), eq(reminderLog.userId, r.userId), eq(reminderLog.day, day)))
-      console.error('[reminders] send failed', r.runId, r.userId, e)
+        .catch(e2 => console.error('[reminders] release failed', r.runId, r.userId, e2))
     }
   }
   return { due: due.length, sent }

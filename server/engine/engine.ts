@@ -7,6 +7,7 @@ import type { Db, Tx } from '../db/client'
 import { applicationEvents, applications, jobs, jobVersions, nodeRuns, roles, taskAssignments, user } from '../db/schema'
 import { accessLevel } from '../domain/access'
 import { DomainError } from '../domain/errors'
+import { ZodError } from 'zod'
 import { buildContext } from './context'
 
 // State lives in node_runs. Every state change is one transaction; queue sends happen after commit.
@@ -157,7 +158,8 @@ async function activateHumanTask(w: Walk, node: GraphNode, config: HumanTaskConf
   }
   const dueAt = config.due_days !== undefined ? new Date(t.getTime() + config.due_days * 86_400_000) : null
   const title = render(config.title, w.ctx)
-  const [run] = await tx.insert(nodeRuns).values({ ...base, status: 'waiting_on_human', dueAt, input: { title } }).returning()
+  const instructions = config.instructions ? render(config.instructions, w.ctx) : undefined
+  const [run] = await tx.insert(nodeRuns).values({ ...base, status: 'waiting_on_human', dueAt, input: { title, instructions } }).returning()
   await tx.insert(taskAssignments).values(assignees.map(userId => ({ runId: run!.id, userId })))
   await event(tx, app.id, 'task_assigned', { node: node.key, runId: run!.id, assignees })
 }
@@ -247,7 +249,9 @@ export async function executeAutoRun(deps: EngineDeps, runId: string): Promise<E
 }
 
 async function recordFailure(deps: EngineDeps, run: Run, claimedAt: Date, e: unknown): Promise<ExecuteResult> {
-  const err = e instanceof HandlerError ? e : new HandlerError('error', true, e instanceof Error ? e.message : String(e))
+  const err = e instanceof HandlerError ? e
+    : e instanceof ZodError ? new HandlerError('invalid_config', false, e.message) // a node config that no longer parses
+      : new HandlerError('error', true, e instanceof Error ? e.message : String(e))
   const fenced = and(eq(nodeRuns.id, run.id), eq(nodeRuns.status, 'running'), eq(nodeRuns.claimedAt, claimedAt))
   const t = now(deps)
   if (err.retryable && run.retries < MAX_RETRIES) {
@@ -325,11 +329,21 @@ export async function reassignTask(deps: EngineDeps, runId: string, change: { ad
       await tx.insert(taskAssignments).values(usable.map(userId => ({ runId, userId })))
         .onConflictDoUpdate({ target: [taskAssignments.runId, taskAssignments.userId], set: { closedAt: null }, setWhere: isNull(taskAssignments.submittedAt) })
     }
-    if (change.remove.length) {
-      await tx.update(taskAssignments).set({ closedAt: now(deps) })
-        .where(and(eq(taskAssignments.runId, runId), inArray(taskAssignments.userId, change.remove), isNull(taskAssignments.submittedAt)))
+    const removed = change.remove.length
+      ? (await tx.update(taskAssignments).set({ closedAt: now(deps) })
+          .where(and(eq(taskAssignments.runId, runId), inArray(taskAssignments.userId, change.remove), isNull(taskAssignments.submittedAt), isNull(taskAssignments.closedAt)))
+          .returning({ userId: taskAssignments.userId })).map(r => r.userId)
+      : []
+    if (removed.length) {
+      // a removal may not strand the task: submissions plus open assignees who can sign in must still reach the minimum
+      const config = configOf(findNode(await loadGraph(tx, app.jobVersionId), run!.nodeKey)) as HumanTaskConfig
+      const rows = await tx.select({ submittedAt: taskAssignments.submittedAt, closedAt: taskAssignments.closedAt, email: user.email, active: user.active, level: roles.level })
+        .from(taskAssignments).innerJoin(user, eq(user.id, taskAssignments.userId)).leftJoin(roles, eq(roles.id, user.roleId))
+        .where(eq(taskAssignments.runId, runId))
+      const reachable = rows.filter(r => r.submittedAt || (!r.closedAt && accessLevel(r, r.level, deps.adminEmail))).length
+      if (reachable < config.min_submissions) throw new DomainError(422, 'below_min_submissions')
     }
-    await event(tx, app.id, 'task_reassigned', { runId, ...change }, actorId)
+    await event(tx, app.id, 'task_reassigned', { runId, add: change.add, remove: removed }, actorId)
     return tx.select().from(taskAssignments).where(eq(taskAssignments.runId, runId))
   })
 }
@@ -343,6 +357,8 @@ export async function moveApplication(deps: EngineDeps, applicationId: string, t
     const app = await lockApplication(tx, applicationId)
     const graph = await loadGraph(tx, app.jobVersionId)
     if ('node' in target) findNode(graph, target.node) // 422 before changing anything
+    // changing a recorded outcome goes through a reopen, so a hire can't flip with a single call
+    else if (app.status === 'closed') throw new DomainError(409, 'already_closed')
 
     const t = now(deps)
     const cancelled = await tx.update(nodeRuns).set({ status: 'cancelled', completedAt: t, error: 'manual_move' })
@@ -399,12 +415,16 @@ export async function sweep(deps: EngineDeps) {
 
   const dead = await deps.db.select().from(nodeRuns)
     .where(and(eq(nodeRuns.status, 'running'), lt(nodeRuns.claimedAt, new Date(t - STALE_RUNNING_MS)))).limit(500)
-  for (const run of dead) await recordFailure(deps, run, run.claimedAt!, new HandlerError('worker_lost', true))
+  // one bad row must not stop the rest; each failure is logged and the next sweep tries again
+  const each = async <T>(rows: T[], fn: (row: T) => Promise<unknown>) => {
+    for (const row of rows) await fn(row).catch(e => console.error('[engine] sweep item failed', row, e))
+  }
+  await each(dead, run => recordFailure(deps, run, run.claimedAt!, new HandlerError('worker_lost', true)))
 
   // applications committed but never started (the apply request died after its commit)
   const unstarted = await deps.db.select({ id: applications.id }).from(applications)
     .where(and(eq(applications.status, 'active'), lt(applications.createdAt, new Date(t - LOST_PENDING_MS)),
       sql`not exists (select 1 from ${nodeRuns} r where r.application_id = ${applications.id})`)).limit(500)
-  for (const a of unstarted) await startApplication(deps, a.id)
+  await each(unstarted, a => startApplication(deps, a.id))
   return { requeued: lost.length, recovered: dead.length, started: unstarted.length }
 }

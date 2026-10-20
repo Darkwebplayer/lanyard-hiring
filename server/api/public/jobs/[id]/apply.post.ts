@@ -6,20 +6,26 @@ import { engineDeps } from '../../../../engine/worker'
 
 const MAX_BODY = 25 * 1024 * 1024 // a few 10 MB files plus fields
 
-// Multipart: core fields, answers keyed by form field key, files for file fields, Turnstile token.
+// Multipart: core fields, answers keyed by form field key, files for file fields.
+// The Turnstile token comes in the `cf-turnstile-response` header so it is checked before the body is read.
 // Responds once the application is committed; the workflow runs in the background.
 export default defineEventHandler(async (event) => {
   const { id } = await getValidatedRouterParams(event, z.object({ id: z.uuid() }).parse)
-  if (Number(getRequestHeader(event, 'content-length') ?? 0) > MAX_BODY) throw createError({ statusCode: 413, message: 'too_large' })
+  // workerd enforces Content-Length, so requiring it caps what readFormData buffers (chunked bodies are refused)
+  const length = Number(getRequestHeader(event, 'content-length'))
+  if (!Number.isFinite(length) || length <= 0) throw createError({ statusCode: 411, message: 'length_required' })
+  if (length > MAX_BODY) throw createError({ statusCode: 413, message: 'too_large' })
   const env = useEnv(event)
 
-  const body = await readFormData(event).catch(() => { throw createError({ statusCode: 400, message: 'expected_multipart' }) })
-  const human = await verifyTurnstile(env.TURNSTILE_SECRET, body.get('cf-turnstile-response')?.toString(), getRequestHeader(event, 'cf-connecting-ip'))
+  // Cloudflare's dummy test secrets don't report our hostname, so the hostname check is skipped for them
+  const testSecret = /^[123]x0+AA$/.test(env.TURNSTILE_SECRET ?? '')
+  const human = await verifyTurnstile(env.TURNSTILE_SECRET, getRequestHeader(event, 'cf-turnstile-response'), getRequestHeader(event, 'cf-connecting-ip'), fetch,
+    testSecret ? undefined : new URL(env.BETTER_AUTH_URL).hostname)
   if (!human) throw createError({ statusCode: 400, message: 'turnstile_failed' })
 
+  const body = await readFormData(event).catch(() => { throw createError({ statusCode: 400, message: 'expected_multipart' }) })
   const sub: Submission = { fields: {}, files: {} }
   for (const [name, value] of body.entries()) {
-    if (name === 'cf-turnstile-response') continue
     if (typeof value === 'string') {
       const prev = sub.fields[name]
       sub.fields[name] = prev === undefined ? value : [...(Array.isArray(prev) ? prev : [prev]), value]

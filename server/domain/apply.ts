@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm'
+import { and, eq, gt, isNull, or, sql } from 'drizzle-orm'
 import { answersSchema, coreSchema, FILE_MIMES, type FileMeta, MAX_FILE_BYTES } from '../../shared/workflow/form'
 import type { FormField, Issue } from '../../shared/workflow/types'
 import type { Db } from '../db/client'
@@ -29,8 +29,13 @@ export async function publicJob(db: Db, jobId: string, now: Date) {
     id: job.id,
     title: job.title,
     description: job.description,
+    companyName: s?.companyName ?? null,
+    // candidates reach the team by replying, so the reply-to address is already theirs to see
+    contactEmail: s?.replyToEmail ?? null,
     location: req.location ?? null,
     employmentType: req.employment_type ?? null,
+    minExperienceYears: req.min_experience_years ?? null,
+    mustHaveSkills: req.must_have_skills ?? [],
     closesAt: job.closesAt,
     form: (version.form as FormField[]).map(({ key, label, type, required, min, max, options }) => ({ key, label, type, required, min, max, options })),
     consentText: s?.consentText ?? null,
@@ -84,14 +89,19 @@ export async function submitApplication(db: Db, bucket: Bucket, jobId: string, s
   if (!answers.success) issues.push(...answers.error.issues.filter(i => !refused.has(String(i.path[0]))).map(i => issue(i.path.join('.'), i.message)))
   if (issues.length) throw new DomainError(422, 'invalid_application', issues)
 
-  await Promise.all(uploads.map(u => bucket.put(u.meta.key, u.bytes, { httpMetadata: { contentType: u.meta.mime }, sha256: u.meta.sha256 })))
   try {
+    await Promise.all(uploads.map(u => bucket.put(u.meta.key, u.bytes, { httpMetadata: { contentType: u.meta.mime }, sha256: u.meta.sha256 })))
     await db.transaction(async (tx) => {
+      // the job may have closed while the files uploaded; this read also blocks a concurrent close until commit
+      const [still] = await tx.select({ id: jobs.id }).from(jobs)
+        .where(and(eq(jobs.id, job.id), eq(jobs.status, 'open'), or(isNull(jobs.closesAt), gt(jobs.closesAt, now)))).for('share')
+      if (!still) throw new DomainError(404, 'job_not_open')
       const c = core.data!
-      // one candidate per email; the latest application refreshes their details
+      // One candidate per email. Existing details are never overwritten: emails aren't verified, so
+      // anyone could otherwise rename someone else's candidate record by applying with their address.
       const [candidate] = await tx.insert(candidates)
         .values({ email: c.email, firstName: c.first_name, lastName: c.last_name, phone: c.phone ?? null })
-        .onConflictDoUpdate({ target: candidates.email, set: { firstName: c.first_name, lastName: c.last_name, phone: c.phone ?? null } })
+        .onConflictDoUpdate({ target: candidates.email, set: { email: sql`excluded.email` } })
         .returning()
       await tx.insert(applications).values({
         id: applicationId, jobId: job.id, candidateId: candidate!.id, jobVersionId: version.id, answers: answers.data,
@@ -99,7 +109,7 @@ export async function submitApplication(db: Db, bucket: Bucket, jobId: string, s
     })
   }
   catch (e) {
-    // best effort: an orphaned object is harmless, but don't keep files for an application that doesn't exist
+    // best effort (also covers a partly failed upload): orphans are harmless, but don't keep files for an application that doesn't exist
     await Promise.allSettled(uploads.map(u => bucket.delete(u.meta.key)))
     if (pgCode(e) === '23505') throw new DomainError(409, 'already_applied')
     throw e

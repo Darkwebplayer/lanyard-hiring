@@ -8,7 +8,7 @@ import { DomainError } from '../server/domain/errors'
 import { createJob, publish, saveDraft } from '../server/domain/jobs'
 import { getTask, listTasks, sendReminders } from '../server/domain/tasks'
 import type { Email } from '../server/engine/email'
-import { type AutoHandler, type EngineDeps, type Enqueued, executeAutoRun, HandlerError, moveApplication, startApplication, submitTask } from '../server/engine/engine'
+import { type AutoHandler, type EngineDeps, type Enqueued, executeAutoRun, HandlerError, moveApplication, reassignTask, startApplication, submitTask } from '../server/engine/engine'
 import { testDb } from './db'
 
 // Phase 7: inbox, task view (blind panels), timeline access, pipeline, hire report, reminders.
@@ -43,7 +43,7 @@ async function panelJob(openings = 1) {
   const tpl = structuredClone(STANDARD_HIRE)
   tpl.form.push({ key: 'gender', label: 'Gender', type: 'string', required: false, protected: true })
   const node = tpl.workflow.nodes.find(n => n.key === 'interview')!
-  node.config = { ...(node.config as object), assignees: { users: [], roles: [role], job_owner: false }, min_submissions: 2 }
+  node.config = { ...(node.config as object), instructions: 'Ask {{candidate.first_name}} about on-call', assignees: { users: [], roles: [role], job_owner: false }, min_submissions: 2 }
   const { job } = await createJob(db, 'owner', { title: `Engineer ${++n}`, description: '', requirements: {}, openings, closesAt: null }, { kind: 'blank' })
   await saveDraft(db, job.id, tpl)
   await publish(db, job.id, ADMIN)
@@ -99,7 +99,7 @@ describe('panel through the inbox', () => {
     await submitTask(deps(), run.id, 'i1', score)
     // i2 hasn't submitted: blind to i1's scorecard; i1 and the manager see it
     const forI2 = await getTask(db, emp('i2'), run.id, t)
-    expect(forI2).toMatchObject({ canSubmit: true, minSubmissions: 2, scorecard: expect.any(Array) })
+    expect(forI2).toMatchObject({ canSubmit: true, minSubmissions: 2, scorecard: expect.any(Array), instructions: 'Ask Jane about on-call' })
     expect(forI2.assignments.find(a => a.userId === 'i1')).toMatchObject({ submittedAt: expect.any(Date), values: null })
     expect((await getTask(db, emp('i1'), run.id, t)).assignments.find(a => a.userId === 'i1')!.values).toEqual(score)
     expect((await getTask(db, emp('i1'), run.id, t)).canSubmit).toBe(false)
@@ -255,11 +255,74 @@ describe('pipeline and hire report', () => {
       [hired, 'closed', 'hired', expect.any(String), 'completed'],
     ])
     expect(list[0]!.candidate).toMatchObject({ firstName: 'Jane' })
+    // who holds the waiting candidate, and by when; a closed application holds nobody
+    expect(list[0]!.assignees.map(a => [a.name, a.submitted])).toEqual([['I1', false], ['I2', false], ['I3', false]])
+    expect(new Date(list[0]!.dueAt!).getTime()).toBe(t.getTime() + 5 * day)
+    expect(list[1]!.assignees).toEqual([])
     await rejects(pipeline(db, crypto.randomUUID()), 404, 'job_not_found')
 
     const report = await hireReport(db)
     expect(report.jobs.find(j => j.id === job.id)).toMatchObject({ openings: 2, applications: 2, hired: 1, fillRate: 0.5 })
     expect(report.totals.hires).toBe(report.jobs.reduce((n, j) => n + j.hired, 0))
     expect(report.totals.jobs).toBe(report.jobs.length)
+  })
+})
+
+describe('review round 2', () => {
+  it('employees get no run data (it can carry protected answers); managers do', async () => {
+    const id = await apply(await panelJob())
+    const forI1 = await timeline(db, emp('i1'), id, t)
+    for (const r of forI1.runs) {
+      expect(r).not.toHaveProperty('input')
+      expect(r).not.toHaveProperty('output')
+      expect(r).not.toHaveProperty('evaluation')
+    }
+    expect(forI1.runs.find(r => r.nodeKey === 'screen')!.branchTaken).toBe('shortlist') // the path is still visible
+    expect((await timeline(db, owner, id, t)).runs.find(r => r.nodeKey === 'screen')).toHaveProperty('evaluation')
+  })
+
+  it('blind panel holds across attempts: a re-opened interview hides the earlier scores', async () => {
+    const id = await apply(await panelJob())
+    const first = await taskOf(id)
+    await submitTask(deps(), first.id, 'i1', score)
+    await moveApplication(deps(), id, { node: 'interview' }, 'redo interview', 'owner')
+    const second = await taskOf(id)
+    expect(second.id).not.toBe(first.id)
+    const i1Old = (await timeline(db, emp('i2'), id, t)).runs.find(r => r.id === first.id)
+    // i2 lost access to attempt 1 when it was cancelled, but still sees it in the timeline: values must stay hidden
+    expect(i1Old!.assignments.find(a => a.userId === 'i1')!.values).toBeNull()
+    await submitTask(deps(), second.id, 'i2', score)
+    expect((await timeline(db, emp('i2'), id, t)).runs.find(r => r.id === first.id)!.assignments.find(a => a.userId === 'i1')!.values).toEqual(score)
+  })
+
+  it('closing a closed application is refused; the outcome changes only through a reopen', async () => {
+    const id = await apply(await panelJob())
+    await moveApplication(deps(), id, { close: 'rejected' }, 'not a fit', 'owner')
+    await rejects(moveApplication(deps(), id, { close: 'hired' }, 'oops', 'owner'), 409, 'already_closed')
+    expect(await db.query.applications.findFirst({ where: eq(s.applications.id, id) })).toMatchObject({ outcome: 'rejected' })
+  })
+
+  it('reassign cannot strand a task below min_submissions; unknown removals are not recorded', async () => {
+    const id = await apply(await panelJob())
+    const run = await taskOf(id)
+    await rejects(reassignTask(deps(), run.id, { add: [], remove: ['i1', 'i2', 'i3'] }, 'owner'), 422, 'below_min_submissions')
+    expect((await db.select().from(s.taskAssignments).where(eq(s.taskAssignments.runId, run.id))).every(a => !a.closedAt)) // rolled back
+    await reassignTask(deps(), run.id, { add: [], remove: ['i3', 'nobody'] }, 'owner')
+    const [ev] = await db.select().from(s.applicationEvents).where(and(eq(s.applicationEvents.applicationId, id), eq(s.applicationEvents.type, 'task_reassigned')))
+    expect(ev!.data).toMatchObject({ remove: ['i3'] })
+  })
+
+  it('a node config that no longer parses fails at once with invalid_config', async () => {
+    const job = await panelJob()
+    const [c] = await db.insert(s.candidates).values({ email: `c${++n}@example.test`, firstName: 'Jane', lastName: 'Doe' }).returning()
+    const [a] = await db.insert(s.applications).values({ jobId: job.id, candidateId: c!.id, jobVersionId: job.publishedVersionId!, answers: {} }).returning()
+    await startApplication(deps(), a!.id) // cv queued
+    const [v] = await db.select().from(s.jobVersions).where(eq(s.jobVersions.id, job.publishedVersionId!))
+    const graph = v!.workflow as typeof STANDARD_HIRE.workflow
+    graph.nodes.find(n => n.key === 'cv')!.config = { file_field: 42 }
+    await db.update(s.jobVersions).set({ workflow: graph }).where(eq(s.jobVersions.id, v!.id))
+    await drain()
+    expect(await taskOf(a!.id)).toMatchObject({ nodeKey: 'cv', status: 'failed', retries: 0 })
+    expect((await taskOf(a!.id)).error).toMatch(/^invalid_config/)
   })
 })

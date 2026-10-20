@@ -11,7 +11,7 @@
   "r2_buckets": [{ "binding": "CV_BUCKET", "bucket_name": "hiring-app-cvs" }],
   "queues": {
     "producers": [{ "binding": "ENGINE", "queue": "hiring-app-engine" }],
-    "consumers": [{ "queue": "hiring-app-engine", "max_batch_size": 10, "max_retries": 3 }]
+    "consumers": [{ "queue": "hiring-app-engine", "max_batch_size": 1, "max_retries": 3 }]
   },
   "triggers": { "crons": ["*/5 * * * *", "0 8 * * *"] }
 }

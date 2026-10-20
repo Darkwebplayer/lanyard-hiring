@@ -1,0 +1,877 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta name="report-kind" content="design-decisions">
+<title>Lanyard design decisions</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<!--
+  Written with the human-touch skill. How to write this page: references/report.md.
+  The page reads like a product landing page, top to bottom, as one story:
+    hero (the answer, the product, up to four numbers) → the short version (every chapter's claim)
+    → chapters, each one claim with one visual, ending in a bridge line into the next
+    → the session (the turn: what review changed, then the proof)
+    → For you to decide, the closing ask → Assumed.
+  Each chapter: an eyebrow (the number and the key word), a headline that states the claim, a lede line,
+  one dominant visual of its own kind, one to three lines of so-what, the reference folded in one details element,
+  and a bridge sentence that hands the reader to the next chapter.
+  Keep the structure: coverage.py reads the h2/h3 headings (the key word sits first, inside .key, then the claim),
+  the list items whose bold label ends in a colon, and the table rows, folded or not. Guidance lives in comments;
+  comments never count as filled. One file: inline CSS, one script (the motion loop at the end), no web font except the product's own.
+  Interaction is radios, :has(), :hover and details only. Captures sit beside this file, linked by relative path.
+  Quote attributes, close every element, escape & < >.
+  Write every word of this page in ASD-STE100, about 80% strict; see "Every word in Simplified Technical English" in references/report.md.
+-->
+<style>
+/* Report theme: the page wears the product it reports on, so every project gets its own report. Fill these from the chosen direction
+   (the same values as dir-1 under "Product values" at the end); everything else derives from them, the greys included.
+   --brand: the product's accent, used for fills and strokes only, never for text. --brand-on: text on it, from the product.
+   --font / --display: the product's body and heading faces (link its web font above, if it has one). --mono: its code face, if any.
+   --r-s / --r-m: the product's small and large radius. --tint: how far the greys lean toward the brand's hue (0 = pure grey, about .08 = clearly toward the brand, cool or warm).
+   --hl: the verdict's highlighter, the brand by default; set it to a second product colour if the brand is dark.
+   Red (--flag) stays the one colour that means "needs you": if the product's accent is red, set --flag to a hue the product does not use. */
+:root{--brand:oklch(0.55 0.21 352);--brand-on:#fff;--font:"Instrument Sans",system-ui,sans-serif;--display:var(--font);--mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace;--r-s:10px;--r-m:20px;--tint:.03;--flag:oklch(0.52 0.19 27);
+--accent:var(--brand);--accent-on:var(--brand-on);--accent-line:var(--accent);
+--bg:oklch(0.985 0 0);--fg:oklch(0.2 0 0);--mute:oklch(0.46 0 0);--faint:oklch(0.64 0 0);--line:oklch(0.9 0 0);--card:oklch(0.955 0 0);--band:oklch(0.965 0 0);--flag:oklch(0.5 0.19 27);--measure:62ch;
+--t-xs:.75rem;--t-s:.875rem;--t-m:1rem;--t-l:1.125rem;--t-xl:1.3rem}
+/* Light by default; the Dark checkbox switches, no script. A dark-first product: add checked to the switch, so the report opens in its scheme. */
+:root:has(#dark:checked){color-scheme:dark;--bg:oklch(0.17 0 0);--fg:oklch(0.93 0 0);--mute:oklch(0.72 0 0);--faint:oklch(0.55 0 0);--line:oklch(0.3 0 0);--card:oklch(0.22 0 0);--band:oklch(0.2 0 0);--flag:oklch(0.72 0.15 25)}
+/* The greys take the brand's hue; in dark, the accent is lifted so it still reads (a neutral ink to near-white, a vivid hue to at least 0.72). Engines without relative colour keep the plain greys above. */
+@supports (color:oklch(from red l c h)){
+/* --accent-line: strokes and bars, darkened in light so a pale accent (a yellow) still reads as a line */
+:root{--accent-line:oklch(from var(--brand) min(l,0.7) c h);--bg:oklch(from var(--brand) 0.985 calc(c*var(--tint)) h);--fg:oklch(from var(--brand) 0.2 calc(c*var(--tint)) h);--mute:oklch(from var(--brand) 0.46 calc(c*var(--tint)) h);--faint:oklch(from var(--brand) 0.64 calc(c*var(--tint)) h);--line:oklch(from var(--brand) 0.9 calc(c*var(--tint)) h);--card:oklch(from var(--brand) 0.955 calc(c*var(--tint)) h);--band:oklch(from var(--brand) 0.965 calc(c*var(--tint)) h)}
+:root:has(#dark:checked){--bg:oklch(from var(--brand) 0.17 calc(c*var(--tint)) h);--fg:oklch(from var(--brand) 0.93 calc(c*var(--tint)) h);--mute:oklch(from var(--brand) 0.72 calc(c*var(--tint)) h);--faint:oklch(from var(--brand) 0.55 calc(c*var(--tint)) h);--line:oklch(from var(--brand) 0.3 calc(c*var(--tint)) h);--card:oklch(from var(--brand) 0.22 calc(c*var(--tint)) h);--band:oklch(from var(--brand) 0.2 calc(c*var(--tint)) h);--accent:oklch(from var(--brand) max(l,calc(0.92 - min(c,0.2))) c h);--accent-on:oklch(0.17 0 0);--accent-line:var(--accent)}
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.55 var(--font);overflow-x:hidden;counter-reset:ch}
+main{max-width:72rem;margin:0 auto;padding:0 1.25rem 4rem}
+p,li{max-width:var(--measure)}
+a{color:inherit;text-underline-offset:.15em}
+:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
+:target{scroll-margin-top:5rem}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.note,figcaption,caption{color:var(--mute);font-size:var(--t-s)}
+.flag,.fail{color:var(--flag);font-weight:600}
+.mono{font-family:var(--mono)}
+code{font-family:var(--mono);font-size:.9em}
+
+/* Sticky bar: where you are, what needs you, the theme switch */
+.bar{position:sticky;top:0;z-index:5;background:color-mix(in oklch,var(--bg) 88%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.bar>div{max-width:72rem;margin:0 auto;padding:.55rem 1.25rem;display:flex;align-items:center;gap:1.25rem}
+.bar .name{font-weight:650;white-space:nowrap}
+.bar nav{flex:1;overflow-x:auto;scrollbar-width:none;white-space:nowrap;font-size:var(--t-s)}
+.bar nav a{display:inline-block;padding:.35rem .5rem;color:var(--mute);text-decoration:none;border-radius:var(--r-s)}
+.bar nav a:hover{color:var(--fg);background:var(--card)}
+.needs{white-space:nowrap;font-size:var(--t-s);font-weight:600;color:var(--flag);text-decoration:none;border:1px solid currentColor;border-radius:99px;padding:.25rem .7rem}
+.theme{display:inline-flex;align-items:center;gap:.35rem;font-size:var(--t-s);color:var(--mute);cursor:pointer;white-space:nowrap}
+.theme input{margin:0;accent-color:var(--fg)}
+@media (max-width:52rem){.bar nav{display:none}.bar>div{justify-content:space-between}.bar .name .note{display:none}}
+
+/* Hero: the answer first, the product under it, up to four numbers */
+.hero{padding:clamp(3rem,8vw,6rem) 0 2rem}
+.hero h1{font:600 var(--t-s)/1.4 var(--mono);letter-spacing:.04em;text-transform:uppercase;color:var(--mute);margin:0 0 1.25rem}
+.verdict{font-family:var(--display);font-size:clamp(2.1rem,5.2vw,4rem);line-height:1.04;letter-spacing:-.03em;font-weight:750;max-width:16em;margin:0 0 1.25rem}
+.verdict mark{background:linear-gradient(transparent 58%,color-mix(in oklch,var(--hl,var(--accent)) 45%,transparent) 58% 92%,transparent 92%);color:inherit;padding:0 .05em}
+.dek{font-size:clamp(1.1rem,1.6vw,1.3rem);color:var(--mute);max-width:38em;margin:0 0 2rem}
+.ctas{display:flex;flex-wrap:wrap;gap:.75rem;margin:0 0 3rem}
+.btn{display:inline-flex;align-items:center;gap:.5rem;min-height:2.75rem;padding:0 1.15rem;border-radius:var(--r-s);font-weight:600;text-decoration:none;border:1px solid var(--fg)}
+.btn.primary{background:var(--accent);color:var(--accent-on);border-color:var(--accent)}
+.btn.primary b{background:var(--flag);color:#fff;border-radius:99px;min-width:1.5rem;height:1.5rem;display:inline-grid;place-items:center;font-size:var(--t-s)}
+.shot-hero{margin:0}
+.shot-hero img{display:block;width:100%;height:auto;border-radius:var(--r-m);border:1px solid var(--line);box-shadow:0 1px 2px oklch(0 0 0/.06),0 24px 60px -24px oklch(0 0 0/.25)}
+.shot-hero figcaption{margin-top:.75rem}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(13rem,100%),1fr));gap:1.5rem 2rem;margin:3rem 0 1rem;padding:1.5rem 0 0;border-top:1px solid var(--line)}
+.stats div{display:flex;flex-direction:column-reverse;justify-content:flex-end}
+.stats dd{margin:0;font-size:clamp(2.2rem,4vw,3.2rem);font-weight:750;line-height:1;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.stats dt{color:var(--mute);font-size:var(--t-s);margin-top:.4rem;max-width:16em}
+.stats .open dd{color:var(--flag)}
+
+/* The short version: every chapter's claim; read alone it tells the story */
+.short{margin:4rem 0 0}
+.short h2{font:600 var(--t-s)/1.4 var(--mono);letter-spacing:.04em;text-transform:uppercase;color:var(--mute);margin:0 0 1rem}
+.short>ol{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(20rem,100%),1fr));gap:0 2.5rem;counter-reset:s}
+.short>ol>li{counter-increment:s;max-width:none;border-top:1px solid var(--line)}
+.short>ol>li>a{display:grid;grid-template-columns:2.2rem 1fr;gap:.25rem;padding:.85rem 0;text-decoration:none}
+.short>ol>li>a::before{content:counter(s,decimal-leading-zero);font:600 var(--t-s)/1.6 var(--mono);color:var(--faint)}
+.short>ol>li>a:hover span{text-decoration:underline}
+.short ol ol{list-style:none;margin:-.4rem 0 .8rem 2.2rem;padding:0}
+.short ol ol li{font-size:var(--t-s)}
+.short ol ol a{display:block;padding:.15rem 0;color:var(--mute)}
+
+/* Chapters: number + key word as the eyebrow, the claim as the headline, a bridge into the next */
+.chapter,.session{counter-increment:ch;padding:clamp(4rem,9vw,7rem) 0 0;scroll-margin-top:3rem}
+.chapter>h2,.session>h2,h3{font-family:var(--display)}
+.chapter>h2,.session>h2{font-size:clamp(1.75rem,3.6vw,2.9rem);line-height:1.08;letter-spacing:-.025em;font-weight:750;max-width:20em;margin:0 0 1.25rem}
+h2 .key{display:block;font:600 var(--t-s)/1.4 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--mute);margin-bottom:1rem}
+h2 .key::before{content:counter(ch,decimal-leading-zero);display:inline-block;margin-right:.75rem;padding:.1rem .4rem;border:1px solid currentColor;border-radius:var(--r-s)}
+.lede{font-size:clamp(1.1rem,1.5vw,1.25rem);color:var(--mute);max-width:40em;margin:0 0 2.5rem}
+.sowhat{font-size:var(--t-l);max-width:58ch;margin:2rem 0 0;padding-left:1rem;border-left:3px solid var(--accent-line)}
+.bridge{margin:clamp(3rem,6vw,4.5rem) 0 0;display:flex;flex-wrap:wrap;gap:.25rem 1rem;align-items:baseline;font-size:var(--t-l);max-width:none}
+.bridge::before{content:"";flex:0 0 2.5rem;border-top:1px solid var(--faint);transform:translateY(-.3em)}
+.bridge a{font-weight:600}
+/* Full-bleed bands alternate the rhythm, no extra wrappers */
+.band{background:var(--band);box-shadow:0 0 0 100vmax var(--band);clip-path:inset(0 -100vmax);padding-bottom:clamp(4rem,9vw,7rem);margin-top:clamp(4rem,9vw,7rem)}
+details{margin:2rem 0 0;border-top:1px solid var(--line);padding-top:.5rem}
+summary{cursor:pointer;color:var(--mute);font-size:var(--t-s);font-weight:600;padding:.5rem 0;min-height:2rem}
+summary:hover{color:var(--fg)}
+details[open]>summary{margin-bottom:1rem}
+h3{font-size:clamp(1.3rem,2.2vw,1.65rem);line-height:1.2;letter-spacing:-.015em;margin:clamp(3.5rem,7vw,5rem) 0 1rem;max-width:26em}
+h3 .key{display:block;font:600 var(--t-xs)/1.4 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--mute);margin-bottom:.5rem}
+details h3{font-size:var(--t-l);margin:1.5rem 0 .5rem}
+
+/* Flows: each core flow as a row of steps with arrows; the shape it beat beside it, dashed. Stacks with down arrows when narrow. */
+.flows{display:grid;gap:2.5rem}
+.flowmap{margin:0}
+.flowmap figcaption{margin:0 0 .75rem;color:var(--fg);font-size:var(--t-m)}
+.flow{list-style:none;margin:0;padding:0 2rem 0 0;display:flex;flex-wrap:wrap;gap:1rem 2.25rem;align-items:stretch}
+.flow>li{position:relative;max-width:none;flex:0 1 12rem;background:var(--bg);border:1px solid var(--line);border-radius:var(--r-m);padding:.75rem .9rem;font-size:var(--t-s);display:flex;flex-direction:column;gap:.25rem}
+.flow>li:not(:last-child)::after{content:"→";position:absolute;right:-1.7rem;top:50%;transform:translateY(-50%);color:var(--mute);font-size:1.1rem}
+.flow i{font:600 var(--t-xs)/1.4 var(--mono);font-style:normal;letter-spacing:.05em;text-transform:uppercase;color:var(--mute)}
+.flow b{font-size:var(--t-m);line-height:1.3}
+.flow span{color:var(--mute)}
+.flow .fork{border-color:var(--fg)}
+.flow .end{border:2px solid var(--accent-line);padding:calc(.75rem - 1px) calc(.9rem - 1px)}
+.flowmap.was figcaption{color:var(--mute)}
+.flowmap.was .flow>li{background:transparent;border:1px dashed var(--faint);color:var(--mute)}
+.flowmap.was .flow .cut b{text-decoration:line-through;text-decoration-color:var(--flag)}
+@media (max-width:40rem){.flow{flex-direction:column;gap:1.75rem;padding:0}.flow>li{flex:none}.flow>li:not(:last-child)::after{content:"↓";right:auto;left:1rem;top:auto;bottom:-1.6rem;transform:none}}
+/* Report motion: anywhere the content is a change over time, a glyph (.act) acts it out. See "Motion in the report" in references/report.md.
+   Every glyph sits on a scene (.scene), the one surface for motion in every chapter: the top of a flow step, a before and after pair (.pair), the top of a Life card, a motion specimen (.specimens). Same fill, corner and label everywhere, so motion is part of the page, not added to it.
+   .plays on the element whose scenes run together (a flow, a pair, a card, the specimen row). The script at the end of the page plays it in a loop while it is on screen and stops it when it is not. Without the script, with reduced motion and in print: the end state, still.
+   Each glyph is drawn for this product (inline SVG); its keyframes live under "Product values". --n: an index from 0 for glyphs that play one after another (a flow's steps, before then after); set it on the glyph or any parent. On any element inside .act: --a, its keyframes name (an element without it stays still); --at, a delay inside its beat; --d and --e, its own duration and easing (a specimen uses the product's real values). --h on .act: its height, 2rem by default; larger where the thing shown needs room to read. */
+@property --a{syntax:"*";inherits:false}
+.plays{--step:.9s}
+.act{display:block;height:var(--h,2rem);color:var(--fg)}
+.act svg{height:100%;width:auto;overflow:visible}
+.act *{transform-box:fill-box;transform-origin:center}
+.plays.on .act *{animation:var(--a,none) var(--d,var(--step)) var(--e,cubic-bezier(.2,.7,.3,1)) calc(var(--n,0) * var(--step) + var(--at,0s)) both}
+.scene{position:relative;display:grid;place-items:center;min-height:var(--scene,6rem);padding:1.6rem 1rem 1rem;background:var(--card);border-radius:var(--r-m)}
+.scene>.tag{position:absolute;left:.65rem;top:.55rem;font:600 var(--t-xs)/1 var(--mono);letter-spacing:.05em;text-transform:uppercase;color:var(--mute)}
+.flow .scene{--scene:4.5rem;margin:-.75rem -.9rem .4rem;padding:.75rem;border-radius:calc(var(--r-m) - 1px) calc(var(--r-m) - 1px) 0 0;border-bottom:1px solid var(--line)}
+.flow .end .scene{margin:calc(-.75rem + 1px) calc(-.9rem + 1px) .4rem}
+.pair{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(15rem,100%),1fr));gap:1rem;margin:1.5rem 0}
+.pair figure{margin:0}
+.pair figcaption{margin-top:.5rem;font-size:var(--t-s);color:var(--mute)}
+.pair .was .scene{background:transparent;border:1px dashed var(--faint)}
+.pair .act{--h:7rem}
+.scene.duo{grid-template-columns:1fr 1fr;gap:1rem}
+.scene.duo>.tag+.tag{left:calc(50% + .5rem)}
+.life .scene{margin:-1.25rem -1.25rem 1rem;border-radius:var(--r-m) var(--r-m) 0 0;background:color-mix(in oklch,var(--bg) 60%,var(--card))}
+.specimens{list-style:none;padding:0;margin:1rem 0 1.5rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(13rem,100%),1fr));gap:1rem}
+.specimens li{max-width:none}
+.specimens b{display:block;margin-top:.5rem}
+.specimens span:not(.act,.act *){color:var(--mute);font-size:var(--t-s)}
+@media (prefers-reduced-motion:reduce),print{.plays .act *{animation:none!important}}
+
+/* Brief: a person card */
+.pull{list-style:none;padding:0;margin:0 0 2.5rem;font-size:clamp(1.4rem,2.8vw,2.1rem);line-height:1.25;letter-spacing:-.015em;max-width:24em}
+.pull strong{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+.pull li{max-width:none}.pull li::before{content:"“"}.pull li::after{content:"”"}
+.fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(15rem,100%),1fr));gap:1.5rem 2rem;padding:0;list-style:none;margin:0}
+.fields li{max-width:none}
+.fields strong{display:block;font:600 var(--t-xs)/1.4 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--mute);margin-bottom:.35rem}
+.fields ul{padding-left:1.1rem}
+.fields.key{grid-template-columns:repeat(auto-fit,minmax(min(14rem,100%),1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r-m);overflow:hidden}
+.fields.key li{background:var(--bg);padding:1.25rem;font-size:var(--t-l);line-height:1.4}
+
+/* Direction: try each look on the same content (radios, no script). Per-direction values: see "Product values" at the end. */
+.dirs{display:grid;grid-template-columns:minmax(0,1fr) minmax(15rem,20rem);gap:1.25rem;align-items:start}
+@media (max-width:52rem){.dirs{grid-template-columns:1fr}}
+.dirs>input{position:absolute;opacity:0;pointer-events:none}
+.choices{display:grid;gap:.5rem;margin:0;padding:0;border:0;min-width:0}
+.choices legend{font-size:var(--t-s);color:var(--mute);margin-bottom:.5rem;padding:0}
+.choice{display:grid;grid-template-columns:3rem 1fr;gap:.75rem;align-items:center;padding:.6rem;border:1px dashed var(--faint);border-radius:var(--r-m);cursor:pointer;background:var(--bg)}
+.choice:hover{border-style:solid}
+.choice i{display:grid;place-items:center;height:2.25rem;border-radius:var(--sr);background:var(--sb);color:var(--sf);font:600 .9rem/1 var(--sfont);font-style:normal;box-shadow:inset 0 -5px 0 var(--sa),0 0 0 1px var(--line)}
+.choice b{display:block;font-size:var(--t-m)}
+.choice small{color:var(--mute);font-size:var(--t-xs)}
+.choice .tag{font:600 var(--t-xs) var(--mono);letter-spacing:.04em;margin-left:.4rem;color:var(--mute)}
+.dirs:has(#dir-1:focus-visible) [for="dir-1"],.dirs:has(#dir-2:focus-visible) [for="dir-2"],.dirs:has(#dir-3:focus-visible) [for="dir-3"],.dirs:has(#dir-4:focus-visible) [for="dir-4"]{outline:2px solid var(--fg);outline-offset:2px}
+.dirs:has(#dir-1:checked) [for="dir-1"],.dirs:has(#dir-2:checked) [for="dir-2"],.dirs:has(#dir-3:checked) [for="dir-3"],.dirs:has(#dir-4:checked) [for="dir-4"]{border:2px solid var(--accent-line);padding:calc(.6rem - 1px)}
+.preview{margin:0}
+.app{background:var(--t-bg);color:var(--t-fg);font-family:var(--t-font);border-radius:var(--r-m);border:1px solid var(--line);overflow:hidden;transition:background-color .26s ease-out,color .26s ease-out}
+.app header{display:flex;gap:1.25rem;align-items:center;padding:.7rem 1rem;border-bottom:1px solid var(--t-line);font-size:var(--t-s)}
+.app header b{margin-right:auto}
+.app .body{padding:1.25rem 1rem 1.5rem}
+.app .t{font-size:clamp(1.3rem,2.4vw,1.7rem);font-weight:600;line-height:1.15;margin:0}
+.app .m{color:var(--t-mute);font-size:var(--t-s);margin:.25rem 0 1rem}
+.app .row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:1.25rem}
+.app .go{display:inline-block;background:var(--t-accent);color:var(--t-on);border-radius:var(--t-radius);padding:.5rem 1rem;font-weight:600;font-size:var(--t-s)}
+.why{display:none;margin:.75rem 0 0;font-size:var(--t-s);color:var(--mute)}
+.why b{color:var(--fg)}
+.dirs:has(#dir-1:checked) .why.w1,.dirs:has(#dir-2:checked) .why.w2,.dirs:has(#dir-3:checked) .why.w3,.dirs:has(#dir-4:checked) .why.w4{display:block}
+@media (prefers-reduced-motion:reduce){.app{transition:none}}
+/* A region cropped out of a capture, at any scale: --img, the region's --x/--y/--w/--h and the capture's --iw in source px, --s the scale */
+.ph{--s:.6;display:block;flex:none;width:calc(var(--w)*1px*var(--s));height:calc(var(--h)*1px*var(--s));background:var(--img) no-repeat calc(var(--x)*-1px*var(--s)) calc(var(--y)*-1px*var(--s))/calc(var(--iw)*1px*var(--s)) auto}
+
+/* Borrowed from the product's world: source → where it lives in the UI */
+.desk{list-style:none;padding:0;margin:3.5rem 0 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(16rem,100%),1fr));gap:1rem}
+.desk li{max-width:none;background:var(--bg);border:1px solid var(--line);border-radius:var(--r-m);padding:1.25rem;display:flex;flex-direction:column;gap:.6rem}
+.desk .art{height:6.5rem;display:grid;place-items:center;background:var(--t-bg,var(--card));border-radius:var(--r-s);color:var(--t-fg,var(--fg));margin-bottom:.4rem;overflow:hidden}
+.desk .from{font:600 var(--t-xs)/1.4 var(--mono);letter-spacing:.05em;text-transform:uppercase;color:var(--mute)}
+.desk b{font-size:var(--t-l);line-height:1.25}
+.desk span:last-child{color:var(--mute);font-size:var(--t-s)}
+
+/* Design language: a style board, drawn in the product's values */
+.board{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(20rem,100%),1fr));gap:1rem}
+.board>figure{margin:0;background:var(--card);border-radius:var(--r-m);padding:1.5rem}
+.board .wide{grid-column:1/-1}
+.specimen{font-family:var(--f);font-size:var(--size);font-weight:var(--w,400);line-height:1.1;display:block;overflow-wrap:anywhere;margin-bottom:.5rem}
+.chips{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(9.5rem,100%),1fr));gap:.5rem;margin-bottom:.75rem}
+.chip{border-radius:var(--r-s);background:var(--bg);color:var(--fg);padding:0 0 .6rem;display:flex;flex-direction:column;overflow:hidden;font-size:var(--t-xs);line-height:1.35;border:1px solid var(--line)}
+.chip b{font-size:var(--t-s)}
+.chip>b,.chip>span{padding:0 .6rem}
+.chip .on{display:block;background:var(--s);color:var(--c);font:600 1.5rem/1 var(--t-font,var(--font));padding:1.1rem .6rem;margin-bottom:.5rem;border-bottom:1px solid var(--line)}
+.space{display:inline-block;height:.6rem;width:var(--s);background:var(--fg);vertical-align:middle;margin-right:.3rem}
+.radius{display:inline-block;width:2.5rem;height:2.5rem;border:3px solid var(--fg);border-right:0;border-bottom:0;border-top-left-radius:var(--r);vertical-align:middle;margin-right:.75rem}
+.ctl{display:inline-grid;place-items:center;margin:0 .4rem .6rem 0}
+.voice{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(18rem,100%),1fr));gap:1rem 2rem;margin:0 0 2rem}
+.voice div{border-top:2px solid var(--accent-line);padding-top:.75rem}
+.voice div.not{border-top-style:dashed;border-color:var(--faint)}
+.voice dt{font:600 var(--t-xs)/1.4 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--mute);margin-bottom:.5rem}
+.voice dd{margin:0 0 .5rem;font-family:var(--t-font,var(--font));font-size:var(--t-l)}
+.voice .not dd{color:var(--mute);text-decoration:line-through;text-decoration-color:var(--faint)}
+
+/* Captures: hover a note and its pin lights up, and the other way round (up to four pins per capture) */
+.annotated{display:grid;grid-template-columns:minmax(0,3fr) minmax(15rem,1fr);gap:2rem;align-items:start;margin:0}
+.annotated+.annotated{margin-top:3.5rem}
+@media (max-width:56rem){.annotated{grid-template-columns:1fr}}
+.shot{position:relative;display:block}
+.shot img{display:block;width:100%;height:auto;border:1px solid var(--line);border-radius:var(--r-s)}
+.pin{position:absolute;left:var(--x);top:var(--y);transform:translate(-50%,-50%);width:1.75rem;height:1.75rem;border-radius:50%;background:var(--accent);color:var(--accent-on);font:700 var(--t-s)/1.75rem var(--font);text-align:center;text-decoration:none;box-shadow:0 0 0 3px var(--bg);transition:transform .12s ease-out}
+.annotated figcaption>p{margin-top:0}
+.legend{margin:0;padding:0;list-style:none;counter-reset:pin var(--start,0)}
+.legend li{counter-increment:pin;display:grid;grid-template-columns:2rem 1fr;gap:.25rem;padding:.6rem .5rem;margin:0 -.5rem;border-radius:var(--r-s);color:var(--fg);font-size:var(--t-m)}
+.legend li::before{content:counter(pin);font-weight:700}
+.legend a{color:var(--mute);font:var(--t-xs) var(--mono)}
+.annotated:has(.pin:nth-of-type(1):hover) .legend li:nth-child(1),.annotated:has(.legend li:nth-child(1):hover) .legend li:nth-child(1),
+.annotated:has(.pin:nth-of-type(2):hover) .legend li:nth-child(2),.annotated:has(.legend li:nth-child(2):hover) .legend li:nth-child(2),
+.annotated:has(.pin:nth-of-type(3):hover) .legend li:nth-child(3),.annotated:has(.legend li:nth-child(3):hover) .legend li:nth-child(3),
+.annotated:has(.pin:nth-of-type(4):hover) .legend li:nth-child(4),.annotated:has(.legend li:nth-child(4):hover) .legend li:nth-child(4){background:var(--bg)}
+.annotated:has(.legend li:nth-child(1):hover) .pin:nth-of-type(1),.annotated:has(.legend li:nth-child(2):hover) .pin:nth-of-type(2),
+.annotated:has(.legend li:nth-child(3):hover) .pin:nth-of-type(3),.annotated:has(.legend li:nth-child(4):hover) .pin:nth-of-type(4),.pin:hover{transform:translate(-50%,-50%) scale(1.3);background:var(--flag);color:#fff}
+@media (prefers-reduced-motion:reduce){.pin{transition:none}}
+
+/* Session: the turn, the proof, the feel */
+.kicker{max-width:none;font:600 var(--t-xs)/1.4 var(--mono);letter-spacing:.04em;text-transform:uppercase;color:var(--mute);margin:0 0 1rem}
+.call{margin:1.5rem 0 2.5rem}
+.judge{font-size:var(--t-m);margin:0 0 1rem}
+.options{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(15rem,100%),1fr));gap:1rem}
+.opt{margin:0;border:1px dashed var(--faint);border-radius:var(--r-m);padding:.75rem;background:var(--bg)}
+.opt.picked{border:2px solid var(--accent-line)}
+.opt .stage{background:var(--t-bg,var(--card));border-radius:var(--r-s);min-height:8rem;display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:8px;overflow:hidden;padding:.75rem}
+.opt .stage img{display:block;max-width:100%;height:auto}
+.opt figcaption{margin-top:.75rem}
+.pick{font:600 var(--t-xs) var(--mono);letter-spacing:.04em;text-transform:uppercase;color:var(--fg);margin-left:.35rem}
+.badge{font:600 var(--t-xs) var(--mono);letter-spacing:.04em;border:1px solid currentColor;border-radius:var(--r-s);padding:.1rem .35rem;color:var(--mute);white-space:nowrap}
+.counts,.deltas{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(14rem,100%),1fr));gap:1rem 2rem;margin:0}
+.counts div,.deltas div{border-top:2px solid var(--accent-line);padding-top:.75rem;display:flex;flex-direction:column-reverse;justify-content:flex-end}
+.counts dd,.deltas dd{margin:0;font-size:clamp(2rem,4vw,3rem);font-weight:750;line-height:1;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.counts dt,.deltas dt{color:var(--mute);font-size:var(--t-s);margin-top:.5rem}
+.counts .open{border-color:var(--flag)}.counts .open dd{color:var(--flag)}
+.deltas dd s{color:var(--faint);font-weight:400;text-decoration-thickness:2px}
+
+/* Decisions: the bars are the index; press one to see its rows (rows carry data-l = layer number) */
+.layers{border:0;margin:0 0 1rem;padding:0;max-width:44rem;min-width:0}
+.layers legend{font-size:var(--t-s);color:var(--mute);padding:0;margin-bottom:.5rem}
+.layers input{position:absolute;opacity:0;pointer-events:none}
+.layers label{display:grid;grid-template-columns:minmax(0,11rem) 1fr 2.5rem;align-items:center;gap:.75rem;padding:.4rem .5rem;margin:0 -.5rem;border-radius:var(--r-s);font-size:var(--t-s);cursor:pointer}
+.layers label::after{content:"";order:1;height:.65rem;width:calc(var(--n) * 4.5%);min-width:3px;background:var(--accent-line);border-radius:1px}
+.layers label b{order:2;text-align:right;font-variant-numeric:tabular-nums}
+.layers label:hover,.layers label:has(:checked){background:var(--card)}
+.layers label:has(:checked){font-weight:600}
+.layers label:has(:focus-visible){outline:2px solid var(--fg)}
+.layers label.all{border-top:1px solid var(--line);border-radius:0 0 var(--r-s) var(--r-s);margin-top:.25rem}
+.layers label.all::after{visibility:hidden}
+.decisions .hint{color:var(--mute);font-size:var(--t-s);margin:.5rem 0 0}
+.decisions tbody tr{display:none}
+.decisions:has(input:checked) .hint{display:none}
+.decisions:has(#l-all:checked) tbody tr,.decisions:has(#l-1:checked) tr[data-l="1"],.decisions:has(#l-2:checked) tr[data-l="2"],.decisions:has(#l-3:checked) tr[data-l="3"],.decisions:has(#l-4:checked) tr[data-l="4"],.decisions:has(#l-5:checked) tr[data-l="5"],.decisions:has(#l-6:checked) tr[data-l="6"],.decisions tbody tr:target{display:table-row}
+.decisions table{display:none}
+.decisions:has(input:checked) table,.decisions:has(tr:target) table{display:table}
+
+/* Life: two or three moments as cards */
+.life{list-style:none;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(16rem,100%),1fr));gap:1rem}
+.life li{background:var(--card);border-radius:var(--r-m);padding:1.25rem;max-width:none}
+.life strong{display:block;font-size:var(--t-l);margin-bottom:.35rem}
+
+/* For you to decide: the closing ask, the one inverted band on the page */
+.ask{background:var(--fg);color:var(--bg);box-shadow:0 0 0 100vmax var(--fg);clip-path:inset(0 -100vmax);padding-bottom:clamp(4rem,8vw,6rem);margin-top:clamp(4rem,9vw,7rem);--line:color-mix(in oklch,var(--bg) 22%,var(--fg));--mute:color-mix(in oklch,var(--bg) 70%,var(--fg));--card:color-mix(in oklch,var(--bg) 9%,var(--fg));--flag:oklch(0.75 0.15 25)}
+:root:has(#dark:checked) .ask{--flag:oklch(0.5 0.19 27)}
+.ask h2 .key{color:var(--flag)}
+.cards{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(19rem,100%),1fr));gap:1rem;counter-reset:card}
+.cards>li{counter-increment:card;background:var(--card);border-radius:var(--r-m);padding:1.25rem;max-width:none;display:flex;flex-direction:column}
+.cards>li::before{content:counter(card);font:750 2rem/1 var(--display);margin-bottom:.75rem;color:var(--flag)}
+.cards b{display:block;font-size:var(--t-l);line-height:1.25;margin-bottom:.4rem}
+.cards a{color:var(--mute);font:var(--t-xs) var(--mono)}
+.cards>li>span:not(.alt){margin-bottom:.9rem}
+.cards .alt{display:block;margin-top:auto;padding-top:.75rem;border-top:1px solid var(--line);color:var(--mute)}
+.cards .alt::before{content:"Or: ";font-weight:600;color:var(--bg)}
+.owed{margin:0;padding:0;list-style:none;columns:2 22rem;column-gap:2.5rem}
+.owed li{padding:.6rem 0 .6rem 1.4rem;border-top:1px solid var(--line);break-inside:avoid;position:relative}
+.owed li::before{content:"○";position:absolute;left:0;color:var(--flag);font-weight:700}
+.ask h3{margin-top:3rem}
+
+/* Tables: reference, folded */
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;margin:.5rem 0;font-size:var(--t-s)}
+th,td{text-align:left;vertical-align:top;padding:.6rem .75rem .6rem 0;border-bottom:1px solid var(--line)}
+thead th{font-size:var(--t-xs);color:var(--mute);font-weight:600;position:sticky;top:0;background:var(--bg)}
+.band thead th{background:var(--band)}
+td.rejected{color:var(--mute)}
+tr[id]{scroll-margin-top:4rem}
+tr:target{outline:0;background:color-mix(in oklch,var(--flag) 12%,var(--bg))}
+.id{font:600 var(--t-xs) var(--mono);color:var(--mute);display:block}
+.superseded{text-decoration:line-through;color:var(--mute)}
+/* Motion: the duration drawn; hover or focus a row to play it */
+td:has(.dur){min-width:12rem}
+.dur{display:inline-block;height:.45rem;width:calc(var(--ms) * .2px);background:var(--accent-line);vertical-align:middle;margin-right:.4rem}
+.demo{display:inline-block;width:2rem;height:.75rem;position:relative;vertical-align:middle;margin-right:.4rem}
+.demo::after{content:"";position:absolute;left:0;top:.125rem;width:.5rem;height:.5rem;border-radius:50%;background:var(--fg);animation:run calc(var(--ms) * 1ms) var(--ease,ease) infinite alternate paused}
+tr:is(:hover,:focus-within,:focus) .demo::after{animation-play-state:running}
+.dur.loop{background:repeating-linear-gradient(90deg,var(--fg) 0 6px,transparent 6px 10px);width:3rem}
+.motion td:first-child,.motion th:first-child{position:sticky;left:0;background:var(--bg)}
+@keyframes run{to{left:1.5rem}}
+@media (prefers-reduced-motion:reduce){.demo::after{animation:none}}
+.foot{margin-top:5rem;padding-top:1.5rem;border-top:1px solid var(--line);display:flex;flex-wrap:wrap;gap:.5rem 2rem;color:var(--mute);font-size:var(--t-s)}
+
+/* Print opens every fold and shows every decision row; ::details-content is the no-script way (Chromium 131+, Safari 18.4+). Older engines print folds closed. */
+/* Icons: one stroke set, drawn with CSS masks in the text colour, so they follow the theme, dark mode and print.
+   An icon always sits beside its word and means one thing on the whole page (see "Icons" in references/report.md).
+   Chapters and their nav links get theirs from the section id; a new chapter falls back to a dot.
+   Elsewhere add a class: <h3 class="i-scale">, <div class="i-fix"> in .stats or .counts, or <span class="ic i-flag"></span> inline. */
+:root{--ic-user:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='8' r='4'/%3E%3Cpath d='M4 21a8 8 0 0 1 16 0'/%3E%3C/svg%3E");--ic-route:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='6' cy='19' r='3'/%3E%3Ccircle cx='18' cy='5' r='3'/%3E%3Cpath d='M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15'/%3E%3C/svg%3E");--ic-compass:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='m16 8-2 6-6 2 2-6z'/%3E%3C/svg%3E");--ic-palette:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22a10 10 0 1 1 10-10c0 2.8-2.2 4-4 4h-2a2 2 0 0 0-1.5 3.3A1.6 1.6 0 0 1 12 22z'/%3E%3Ccircle cx='7.5' cy='11.5' r='1'/%3E%3Ccircle cx='10.5' cy='7.5' r='1'/%3E%3Ccircle cx='15.5' cy='8.5' r='1'/%3E%3C/svg%3E");--ic-search:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m21 21-4.3-4.3'/%3E%3C/svg%3E");--ic-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='18' height='18' rx='2'/%3E%3Ccircle cx='9' cy='9' r='2'/%3E%3Cpath d='m21 15-5-5L5 21'/%3E%3C/svg%3E");--ic-history:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 12a9 9 0 1 0 3-6.7L3 8'/%3E%3Cpath d='M3 3v5h5M12 7v5l3 2'/%3E%3C/svg%3E");--ic-flag:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 22V4s1-1 4-1 5 2 8 2 4-1 4-1v11s-1 1-4 1-5-2-8-2-4 1-4 1'/%3E%3C/svg%3E");--ic-help:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01'/%3E%3C/svg%3E");--ic-scale:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3v18M7 21h10M3 7h18M6 7l-3 7a3 3 0 0 0 6 0zM18 7l-3 7a3 3 0 0 0 6 0z'/%3E%3C/svg%3E");--ic-ruler:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 17 17 3l4 4L7 21z'/%3E%3Cpath d='m7.5 12.5 2 2m1-5 2 2m1-5 2 2'/%3E%3C/svg%3E");--ic-list:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m3 7 2 2 4-4M3 17l2 2 4-4M13 6h8M13 12h8M13 18h8'/%3E%3C/svg%3E");--ic-spark:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9zM19 17v4M17 19h4'/%3E%3C/svg%3E");--ic-motion:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 12h-4l-3 9L9 3l-3 9H2'/%3E%3C/svg%3E");--ic-voice:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'/%3E%3C/svg%3E");--ic-screen:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='2' y='3' width='20' height='14' rx='2'/%3E%3Cpath d='M8 21h8M12 17v4'/%3E%3C/svg%3E");--ic-choice:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 2 22 12 12 22 2 12z'/%3E%3C/svg%3E");--ic-check:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E");--ic-x:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 6 6 18M6 6l12 12'/%3E%3C/svg%3E");--ic-alert:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 8v4M12 16h.01'/%3E%3C/svg%3E");--ic-fix:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a6 6 0 0 1-7.9 7.9l-6.9 6.9a2.1 2.1 0 0 1-3-3l6.9-6.9a6 6 0 0 1 7.9-7.9z'/%3E%3C/svg%3E");--ic-keep:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z'/%3E%3C/svg%3E");--ic-dot:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E")}
+.i-user{--i:var(--ic-user)}
+.i-route{--i:var(--ic-route)}
+.i-compass{--i:var(--ic-compass)}
+.i-palette{--i:var(--ic-palette)}
+.i-search{--i:var(--ic-search)}
+.i-image{--i:var(--ic-image)}
+.i-history{--i:var(--ic-history)}
+.i-flag{--i:var(--ic-flag)}
+.i-help{--i:var(--ic-help)}
+.i-scale{--i:var(--ic-scale)}
+.i-ruler{--i:var(--ic-ruler)}
+.i-list{--i:var(--ic-list)}
+.i-spark{--i:var(--ic-spark)}
+.i-motion{--i:var(--ic-motion)}
+.i-voice{--i:var(--ic-voice)}
+.i-screen{--i:var(--ic-screen)}
+.i-choice{--i:var(--ic-choice)}
+.i-check{--i:var(--ic-check)}
+.i-x{--i:var(--ic-x)}
+.i-alert{--i:var(--ic-alert)}
+.i-fix{--i:var(--ic-fix)}
+.i-keep{--i:var(--ic-keep)}
+.i-dot{--i:var(--ic-dot)}
+#brief,.bar a[href="#brief"]{--i:var(--ic-user)}
+#flows,.bar a[href="#flows"]{--i:var(--ic-route)}
+#direction,.bar a[href="#direction"]{--i:var(--ic-compass)}
+#language,.bar a[href="#language"]{--i:var(--ic-palette)}
+#audit,.bar a[href="#audit"]{--i:var(--ic-search)}
+#captures,.bar a[href="#captures"]{--i:var(--ic-image)}
+#decide,.bar a[href="#decide"]{--i:var(--ic-flag)}
+#assumed,.bar a[href="#assumed"]{--i:var(--ic-help)}
+[id^="session-"],.bar a[href^="#session-"]{--i:var(--ic-history)}
+.ic,h2 .key::after,h3[class*="i-"] .key::after,.bar nav a::before,.stats [class*="i-"] dt::before,.counts [class*="i-"] dt::before,.counts .open dt::before,.stats .open dt::before,.flow i::before,.owed li::before,.pick::before,.choice .tag::before,.voice dt::before{content:"";display:inline-block;width:1.15em;height:1.15em;vertical-align:-.2em;flex:none;background:currentColor;-webkit-mask:var(--i,var(--ic-dot)) center/contain no-repeat;mask:var(--i,var(--ic-dot)) center/contain no-repeat;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+h2 .key,h3 .key{display:flex;align-items:center;gap:.5rem}h2 .key::before{order:-2;margin-right:.25rem}h2 .key::after,h3 .key::after{order:-1}
+.bar nav a::before{margin-right:.35rem;opacity:.7}.stats dt::before,.counts dt::before{margin-right:.4rem}.flow i::before{margin-right:.35rem}.pick::before,.choice .tag::before{width:1em;height:1em;margin-right:.2rem}
+.flow li{--i:var(--ic-screen)}.flow .fork{--i:var(--ic-choice)}.flow .end{--i:var(--ic-flag)}.pick,.choice .tag,.voice div{--i:var(--ic-check)}.voice .not{--i:var(--ic-x)}.owed li{--i:var(--ic-alert)}.counts .open dt::before,.stats .open dt::before{color:var(--flag)}.counts .open,.stats .open{--i:var(--ic-alert)}
+@media print{:root,:root:has(#dark:checked){color-scheme:light;--accent:var(--brand);--accent-on:var(--brand-on);--accent-line:var(--brand);--bg:#fff;--fg:oklch(0.2 0 0);--mute:oklch(0.4 0 0);--faint:oklch(0.6 0 0);--line:oklch(0.85 0 0);--card:oklch(0.96 0 0);--band:#fff}
+.bar,.ctas,.bridge,.choices,.layers,.hint{display:none}.ask{background:#fff;color:var(--fg);box-shadow:none;--flag:oklch(0.5 0.19 27);--card:oklch(0.96 0 0);--mute:oklch(0.4 0 0);--line:oklch(0.85 0 0)}.cards .alt::before{color:var(--fg)}
+details::details-content{content-visibility:visible;display:block}summary{list-style:none;color:var(--fg)}summary::-webkit-details-marker{display:none}
+.decisions table{display:table}.decisions tbody tr{display:table-row}.chapter,.session{padding-top:2.5rem}.band{padding-bottom:0}h2,h3{break-after:avoid}figure,tr,.cards>li{break-inside:avoid}thead th{position:static}.demo{display:none}}
+
+/* Product values: with the Report theme at the top, the only product-specific CSS. Fill these from the directions sampled, real values only.
+   .preview takes the chosen direction's values (dir-1); each rule below restyles the preview when another direction is picked.
+   --t-bg, --t-fg, --t-mute, --t-line, --t-accent, --t-on (text on the accent), --t-font, --t-radius. Delete rules for directions you did not sample. */
+.preview{--t-bg:oklch(0.974 0.004 330);--t-fg:oklch(0.24 0.018 330);--t-mute:oklch(0.46 0.016 330);--t-line:oklch(0.912 0.008 330);--t-accent:oklch(0.55 0.21 352);--t-on:#fff;--t-font:"Instrument Sans",system-ui;--t-radius:20px}
+.dirs:has(#dir-2:checked) .preview{--t-bg:#0e0f14;--t-fg:#e8e8ef;--t-mute:#8b8d9a;--t-line:#23252e;--t-accent:#7c6cf2;--t-on:#fff;--t-font:Inter,system-ui;--t-radius:8px}
+.dirs:has(#dir-3:checked) .preview{--t-bg:#f6f0e4;--t-fg:#2b2620;--t-mute:#6e655a;--t-line:#ddd2bf;--t-accent:#7a2e1f;--t-on:#fff;--t-font:Georgia,serif;--t-radius:2px}
+.dirs:has(#dir-4:checked) .preview{--t-bg:#fbfcfd;--t-fg:#1d2733;--t-mute:#5d6b7a;--t-line:#dfe5eb;--t-accent:#1f8a5b;--t-on:#fff;--t-font:system-ui;--t-radius:12px}
+/* Flow life: one @keyframes per glyph motion, written from its start state; the element's own styles are its end state. Delete these if no flow acts. */
+@keyframes act-pop{from{transform:scale(.6);opacity:0}}
+@keyframes act-draw{from{stroke-dashoffset:1}}
+</style>
+</head>
+<body>
+<div class="bar"><div>
+<span class="name">Lanyard <span class="note">· design decisions</span></span>
+<nav aria-label="Chapters"><a href="#brief">Brief</a><a href="#flows">Flows</a><a href="#direction">Direction</a><a href="#language">Design language</a><a href="#captures">In the product</a><a href="#session-2026-10-20">What changed</a><a href="#assumed">Assumed</a></nav>
+<a class="needs" href="#decide">5 need you</a>
+<label class="theme"><input type="checkbox" id="dark"> Dark</label>
+</div></div>
+<main>
+<header class="hero" id="top">
+<h1>Lanyard design decisions</h1>
+<p class="verdict">A hiring tool for in-house recruiters, made like <mark>a new hire’s ID badge</mark>: the slot on each card shows who acts next.</p>
+<p class="dek">The owner asked for a fresh, slick look instead of the sage-and-black reference. We chose warm paper, one magenta accent and round, lit cards over the usual dark violet console, because recruiters work in it all day and must see whose turn it is.</p>
+<div class="ctas"><a class="btn primary" href="#decide"><b>5</b> choices need your call</a><a class="btn" href="#brief">Read the story ↓</a></div>
+<figure class="shot-hero"><img src="design-captures/cand-hired.png" alt="The hired candidate as an ID badge beside the Why card" width="1440" height="900"><figcaption>The candidate page at 1440 px after a hire: the header is the ID badge, and the Why card explains the decision.</figcaption></figure>
+<dl class="stats">
+<div class="i-list"><dt>decisions, each with its reason and the default it beat</dt><dd>78</dd></div>
+<div class="i-compass"><dt>directions tried on the same content</dt><dd>5</dd></div>
+<div class="i-search"><dt>critique findings, 22 closed</dt><dd>27</dd></div>
+<div class="open"><dt>choices waiting for you</dt><dd>5</dd></div>
+</dl>
+<p class="note">Latest session <time datetime="2026-10-20">2026-10-20</time>. Coverage: <a href="design-coverage.html">design-coverage.html</a></p>
+<nav class="short" aria-labelledby="short-h">
+<h2 id="short-h">The short version</h2>
+<ol>
+<li><a href="#brief"><span>An in-house recruiter, between two calls, clearing tasks and explaining decisions</span></a></li>
+<li><a href="#flows"><span>The inbox is home; a scorecard ends by opening the next task</span></a></li>
+<li><a href="#direction"><span>Badge day, not the dark console, because the badge slot can show who acts</span></a></li>
+<li><a href="#language"><span>Warm paper, plum greys, one magenta accent, round pills</span></a></li>
+<li><a href="#captures"><span>Your tasks come first, and the slot shows who acts</span></a></li>
+<li><a href="#session-2026-10-20"><span>A new frontend in 5 chunks on one system, then two review rounds</span></a>
+<ol><li><a href="#critique-2026-10-20">Critique caught: 22 fixed, 5 kept, 0 open</a></li><li><a href="#decisions-2026-10-20">Decisions: 78, most of them in structure and colour</a></li></ol></li>
+<li><a href="#decide"><span>For you to decide: 5 choices, 1 things owed</span></a></li>
+<li><a href="#assumed"><span>Assumed: 4 guesses, the riskiest is that recruiters use a laptop, not a phone</span></a></li>
+</ol>
+</nav>
+</header>
+
+<section class="chapter" id="brief">
+<h2><span class="key">Brief<span class="vh">:</span></span> An in-house recruiter, between two calls, clearing tasks and explaining decisions</h2>
+<ul class="pull">
+<li><strong>Character:</strong> The front desk on a new hire’s first day: the badge is printed, the desk is ready, and every step is accounted for.</li>
+</ul>
+<ul class="fields key">
+<li><strong>For:</strong> In-house recruiters at a growing company (level manager or admin), who build the hiring flow and work it. Interviewers (level employee) who only get tasks.</li>
+<li><strong>Job:</strong> Clear the task inbox, keep candidates moving, and explain any decision (“why was this person rejected?”).</li>
+<li><strong>Moment:</strong> At a laptop between calls and interviews, with many tabs open. Interviewers fill a scorecard right after the interview, while it is fresh.</li>
+<li><strong>Feel:</strong> First second: bright, crisp, calm. Using it says: this company hires with care and can show why.</li>
+</ul>
+<details>
+<summary>The rest of the brief</summary>
+<ul class="fields">
+<li><strong>Who sets the look:</strong> Open. The owner asked to reimagine a frontend built from the theme-reference images, but the repo had no frontend (only the Nuxt welcome page), so there was no existing UI to audit. The owner chose to build it fresh here, and the reference look is set aside on purpose.</li>
+<li><strong>Scope:</strong> product: every screen in docs/backend.md: sign-in, inbox and scorecards, jobs, job hub (pipeline, flow canvas, form, details), candidate page, hires report, team, settings, public apply page.</li>
+<li><strong>Screens:</strong> Recruiter app 960 px to 2560 px, laptop and desktop, no phone; the shell sets a 960 px minimum width. Apply page 360 px and up, because candidates apply on phones. Source: assumed.</li>
+<li><strong>Genre:</strong> Applicant tracking system plus a workflow builder. Kept conventions: a left navigation, data tables, a list beside its detail, tabs on the job, a node canvas with handles.</li>
+<li><strong>Richness:</strong> Work surfaces (inbox, tables, forms) stay calm and fairly dense, because recruiters work in them for hours. The candidate page and the canvas carry more (score bars, decision traces, step cards), because people show them to hiring managers.</li>
+<li><strong>Identity:</strong> Provisional, for the owner: the name “Lanyard”, a dark badge mark with a magenta slot, magenta oklch(.55 .21 352), Instrument Sans with JetBrains Mono.</li>
+<li><strong>Core copy:</strong> “Submit scorecard”, “Move to…”, “Close as rejected”, “Publish v3”, “Send application”. Likeliest error: “Stopped: the CV can’t be read. It may be a scan. Move it to a manual review.”</li>
+<li><strong>First value:</strong> A new job starts with the Standard hire flow already wired (CV read, AI review, shortlist, interview, offer), so the first thing a recruiter does is see a complete flow on the canvas and publish it.</li>
+<li><strong>Signature moment:</strong> Submitting a scorecard: the next task opens by itself. Second: the “Why” card on the candidate page, which turns the decision trace into plain words.</li>
+<li><strong>Ending:</strong> Scorecard sent: the next task opens (quiet). Job published: “v4 is live” with the apply link and Copy. Candidate hired: the header becomes an ID badge (the one Moment). Application sent: a real confirmation page.</li>
+<li><strong>Flow shape:</strong> Scorecard: one page beside the list, not steps, because interviewers know the questions and fill them in one go. Apply: one page, because a CV form has few decisions. New job: one small dialog, then the hub. Rejected: a multi-step job wizard, because the Standard hire flow removes most of the decisions.</li>
+<li><strong>Map:</strong> Job has a form, a flow (draft and published versions) and many applications. Application has one candidate, many steps, events and files. Task is a person step on an application. User has a role. Navigation: flat sections in a labelled rail (Inbox, Jobs, Hires, Team, Settings); networked links between task, candidate and job. Rejected: a top bar, because the canvas and tables need the full height and the rail keeps labels. Hand-offs: task → candidate; candidate → job pipeline; new job → details; publish → apply link; stopped step → retry in place.</li>
+<li><strong>Fixed:</strong> Nuxt 4 and Vue 3, the backend API, Vue Flow for the canvas (the owner asked for it).</li>
+<li><strong>Constraints:</strong> Sign-in is Google only, so reviews use a faked API. No new dependencies other than Vue Flow.</li>
+</ul>
+</details>
+<p class="bridge">A recruiter between two calls needs to see whose turn it is at once. <a href="#flows">So the flows start from the inbox →</a></p>
+</section>
+
+<section class="chapter band" id="flows">
+<h2><span class="key">Flows<span class="vh">:</span></span> The inbox is home; a scorecard ends by opening the next task</h2>
+<p class="lede">The inbox is home. Every task, candidate and job links to the things it relates to.</p>
+<div class="flows"><figure class="flowmap">
+<figcaption><b>Clear a task</b> one page; from the inbox to the next task</figcaption>
+<ol class="flow">
+<li><i>screen</i><b>Inbox</b><span>picks the first task, earliest due</span></li>
+<li><i>screen</i><b>Scorecard</b><span>rates and answers yes or no, beside the list</span></li>
+<li class="end"><i>ending</i><b>Next task opens</b><span>the next task replaces the sent one; with no tasks left, a clear inbox</span></li>
+</ol>
+</figure>
+<figure class="flowmap">
+<figcaption><b>Explain a decision</b> one page; from any task or pipeline row</figcaption>
+<ol class="flow">
+<li><i>screen</i><b>Pipeline or task</b><span>opens the candidate by name</span></li>
+<li><i>screen</i><b>Candidate</b><span>reads the Why card at the top</span></li>
+<li class="fork"><i>choice</i><b>Agree?</b><span>yes → done; no → Move to… or Reopen…</span></li>
+</ol>
+</figure>
+<figure class="flowmap was">
+<figcaption><b>Not:</b> a job wizard of five steps, because the Standard hire flow already holds most of the answers</figcaption>
+<ol class="flow">
+<li><i>screen</i><b>Title</b></li>
+<li class="cut"><i>screen</i><b>Pick each step</b></li>
+<li class="cut"><i>screen</i><b>Write each email</b></li>
+<li class="end"><i>ending</i><b>Publish</b></li>
+</ol>
+</figure></div>
+<p class="sowhat">The recruiter never goes back to a list to find the next thing. It costs one surprise: the next task replaces the one they just sent, so the page announces it.</p>
+<p class="bridge">The paths are set. <a href="#direction">Next: what it looks like, and why →</a></p>
+</section>
+
+<section class="chapter" id="direction">
+<h2><span class="key">Direction<span class="vh">:</span></span> Badge day, not the dark console, because the badge slot can show who acts</h2>
+<p class="lede">We tried 4 directions and 1 rolled candidate on the same task. Pick one to see it.</p>
+<div class="dirs">
+<input type="radio" name="dir" id="dir-1" checked aria-label="Badge day"><input type="radio" name="dir" id="dir-2" aria-label="Midnight console"><input type="radio" name="dir" id="dir-3" aria-label="Offer letter"><input type="radio" name="dir" id="dir-4" aria-label="Debrief room">
+<figure class="preview">
+<div class="app" aria-hidden="true">
+<header><b>Lanyard</b><span>Inbox</span><span>Jobs</span></header>
+<div class="body">
+<p class="t">Interview Maya Okafor</p>
+<p class="m">Senior Product Designer · due tomorrow · 1 of 2 scorecards in</p>
+<span class="go">Submit scorecard</span>
+</div>
+</div>
+<figcaption>
+<p class="why w1"><b>Chosen: Badge day.</b> Cool plum-tinted paper, plum greys, one magenta accent, round pills, lit cards, a neutral grotesk. The badge slot shows who acts. About 8% typical.</p>
+<p class="why w2"><b>Lost: Midnight console.</b> Dark, violet accent, Inter. This is the usual answer to “slick and modern”, about 45% typical. Long work days on a dark screen also tire recruiters.</p>
+<p class="why w3"><b>Lost: Offer letter.</b> Cream paper and a serif. It is the usual way to avoid the techy look, about 25% typical, and it slows scanning in dense tables.</p>
+<p class="why w4"><b>Lost: Debrief room.</b> Whiteboard and marker colours. The marker colours fight the status colours, about 20% typical.</p>
+</figcaption>
+</figure>
+<fieldset class="choices">
+<legend>The directions</legend>
+<label class="choice" for="dir-1"><i style="--sb:oklch(0.972 0.006 60);--sf:oklch(0.24 0.018 330);--sa:oklch(0.55 0.21 352);--sfont:Instrument Sans;--sr:20px">Aa</i><span><b>Badge day<span class="tag">CHOSEN</span></b><small>the new hire’s ID badge · 8%</small></span></label>
+<label class="choice" for="dir-2"><i style="--sb:#0e0f14;--sf:#e8e8ef;--sa:#7c6cf2;--sfont:Inter;--sr:8px">Aa</i><span><b>Midnight console</b><small>lost on typicality · 45%</small></span></label>
+<label class="choice" for="dir-3"><i style="--sb:#f6f0e4;--sf:#2b2620;--sa:#7a2e1f;--sfont:Georgia;--sr:2px">Aa</i><span><b>Offer letter</b><small>lost on scanning speed · 25%</small></span></label>
+<label class="choice" for="dir-4"><i style="--sb:#fbfcfd;--sf:#1d2733;--sa:#1f8a5b;--sfont:system-ui;--sr:12px">Aa</i><span><b>Debrief room</b><small>lost on status clarity · 20%</small></span></label>
+<p class="note">The rejected directions are reconstructions, not renders. “Typical” is our estimate of how often a model gives that direction for this brief.</p>
+</fieldset>
+</div>
+<p class="sowhat">The badge ties the product to its result: a person who starts work. The slot on each card says who acts, so a recruiter can read a flow or an inbox at a glance. It costs some familiarity: there is no dark mode and no violet.</p>
+<ul class="desk" aria-label="Borrowed from the product’s world">
+<li><span class="art"><svg viewBox="0 0 40 48" width="34" height="40" aria-hidden="true"><rect x="2" y="2" width="36" height="44" rx="9" fill="oklch(0.24 0.018 330)"/><rect x="13" y="8" width="14" height="4" rx="2" fill="oklch(0.55 0.21 352)"/></svg></span><span class="from">The slot punched in an ID badge →</span><b>A short pill at the top of a card</b><span>Its colour says who acts: magenta for a person, ink for the system, green for hired, red for stopped. On step cards, task headers and report cards.</span></li>
+<li><span class="art"><svg viewBox="0 0 60 20" width="60" height="20" aria-hidden="true"><rect x="22" y="14" width="16" height="5" rx="2.5" fill="oklch(0.55 0.21 352)"/></svg></span><span class="from">The same slot →</span><b>The current tab and nav item</b><span>The current place carries the slot, so “where am I” uses the same mark as “who acts”.</span></li>
+<li><span class="art"><svg viewBox="0 0 40 48" width="34" height="40" aria-hidden="true"><rect x="2" y="2" width="36" height="44" rx="9" fill="#fff" stroke="oklch(0.5 0.12 155)"/><rect x="13" y="8" width="14" height="4" rx="2" fill="oklch(0.5 0.12 155)"/><circle cx="20" cy="26" r="7" fill="oklch(0.955 0.04 155)"/></svg></span><span class="from">The badge on the first day →</span><b>The hired candidate’s header</b><span>When a recruiter closes a candidate as hired, the header becomes a badge. It is the one Moment in the product.</span></li>
+</ul>
+<details>
+<summary>How it was chosen: obvious ideas, the default to beat, the product’s world, samples, the roll</summary>
+<ul class="fields">
+<li><strong>Obvious ideas set aside:</strong> Zinc neutrals with an indigo accent and white cards; the dark Linear-style console with violet and Inter; the pastel sage dashboard with black pills from the theme-reference images; and the predictable opposite, cream paper with a serif.</li>
+<li><strong>Default to beat:</strong> Background #f8fafc, text #0f172a, accent indigo #4f46e5, Inter, 8 px radius, left sidebar with icons and labels, uppercase grey table labels. From the direction ledger: sage-tinted paper, a near-black primary and Atkinson Hyperlegible (an earlier hiring tool for the same owner).</li>
+<li><strong>The product’s world:</strong> The CV, the calendar invite, the interview room booking, the scorecard, the shortlist, the debrief, the offer letter, the reference call, the notice period in weeks, the closing date, the ID badge and its lanyard, the desk set up for the first day, the welcome coffee.</li>
+<li><strong>Directions sampled:</strong> Badge day · airy, near stark, warm saturated accent, layered, bare, round, neutral type · the ID badge and its slot · 8%. Midnight console · packed, stark, cool violet, flat, bare, medium radius, neutral type · 45%, dropped as the most typical. Offer letter · airy, soft, warm muted, flat, decorated, sharp, serif · the letter · 25%. Debrief room · medium, soft, multi-hue markers, flat, decorated, round · the whiteboard · 20%.</li>
+<li><strong>Rolled candidate:</strong> Rolled axes: density near airy, contrast near stark, colour far warm and saturated, depth far layered, ornament far bare, geometry far round, type far neutral. Rolled domain 8, print and editorial: sidenotes beside the text became the decision trace beside its step. The roll gave the values of Badge day; the badge slot came from the product’s world, the mutation that combined the two.</li>
+<li><strong>Chosen:</strong> Badge day. It makes “who acts next” readable at a glance, which is the core of an inbox and a flow. It fits a calm, careful company. It costs the familiarity of a dark console.</li>
+<li><strong>Motif:</strong> The badge slot: a 30 × 5 px pill at the top centre of a card, coloured by who acts.</li>
+<li><strong>Placements:</strong> Step cards on the canvas (who acts in each step); the task header and the current tab (where you are and whose turn it is); the hired candidate’s badge (the ending).</li>
+<li><strong>Style tile:</strong> The tile showed the slot reads at 30 × 5 px and the magenta stays on actions. The warm paper read slightly pink; we kept it, because it sets the tool apart from grey dashboards and the plum greys match it.</li>
+<li><strong>Default check (after layer 4):</strong> Against the default to beat: background changed (cool plum paper, not slate); accent changed (magenta, not indigo); type changed (Instrument Sans, not Inter); radius logic changed (pills and 20 px cards, not 8 px); labels changed (sentence-case table headers). Still equal: a left navigation, kept because the canvas and tables need the full height (d-2).</li>
+</ul>
+</details>
+<p class="bridge">A direction is only words until it has values. <a href="#language">Here are the values →</a></p>
+</section>
+
+<section class="chapter band" id="language">
+<h2><span class="key">Design language<span class="vh">:</span></span> Warm paper, plum greys, one magenta accent, round pills</h2>
+<p class="lede">Magenta means “act here”. Everything else is ink on warm paper, so the one action per view is easy to find.</p>
+<div class="board">
+<figure class="wide"><span class="specimen" style="--f:'Instrument Sans';--size:clamp(2rem,5vw,3.25rem);--w:600">Why was Dario rejected?</span><figcaption>Instrument Sans 400, 500, 600, 700; JetBrains Mono for keys. Scale 12, 13, 14, 16, 20, 26, 36 px.</figcaption></figure>
+<figure class="wide"><div class="chips">
+<span class="chip" style="--c:#fff;--s:oklch(0.55 0.21 352)"><span class="on">Aa</span><b>accent</b><span>oklch(.55 .21 352); 4.9:1 with white ✓</span></span>
+<span class="chip" style="--c:oklch(0.24 0.018 330);--s:oklch(0.972 0.006 60)"><span class="on">Aa</span><b>ink</b><span>oklch(.24 .018 330); 14.6:1 on paper ✓</span></span>
+<span class="chip" style="--c:oklch(0.46 0.016 330);--s:oklch(1 0 0)"><span class="on">Aa</span><b>ink-2</b><span>oklch(.46 .016 330); 7.2:1 on white ✓</span></span>
+<span class="chip" style="--c:oklch(0.5 0.12 155);--s:oklch(0.955 0.04 155)"><span class="on">Aa</span><b>ok</b><span>5.0:1 on its tint ✓</span></span>
+<span class="chip" style="--c:oklch(0.52 0.19 27);--s:oklch(0.958 0.03 27)"><span class="on">Aa</span><b>bad</b><span>4.6:1 on its tint ✓</span></span>
+<span class="chip" style="--c:oklch(0.5 0.1 70);--s:oklch(0.962 0.05 85)"><span class="on">Aa</span><b>warn</b><span>4.9:1 on its tint ✓</span></span>
+</div><figcaption>One accent for action and “a person acts”. Status colours only for status, always with a word.</figcaption></figure>
+<figure><span class="radius" style="--r:20px"></span><span class="space" style="--s:8px"></span><span class="space" style="--s:16px"></span><span class="space" style="--s:32px"></span><figcaption>Cards 20 px, panels 14 px, fields 10 px, buttons and chips full pills. 4 px spacing base.</figcaption></figure>
+<figure><span class="ctl" style="background:oklch(0.55 0.21 352);color:#fff;height:38px;padding:0 18px;border-radius:999px;font:600 14px 'Instrument Sans'">Submit scorecard</span><figcaption>Primary button: 38 px high, 18 px inset, 14 px at 600.</figcaption></figure>
+</div>
+<p class="note">This is a first version. Later layers change it. Write the reason for each change in the log. Source is “given”, “existing”, or “decided” (decided here, with a practical or felt reason).</p>
+<details>
+<summary>Token table: values, sources and reasons</summary>
+<div class="scroll"><table>
+<thead><tr><th scope="col">Token</th><th scope="col">Value</th><th scope="col">Source</th><th scope="col">Because</th></tr></thead>
+<tbody>
+<tr><th scope="row">Voice</th><td>colleague to colleague; see Voice below</td><td>decided</td><td>Recruiters talk about people and steps, not system states.</td></tr>
+<tr><th scope="row">Type</th><td>Instrument Sans 400–700; JetBrains Mono for keys and {{refs}}; 12/13/14/16/20/26/36</td><td>decided</td><td>A crisp grotesk without the default feel of Inter; mono only where people type references, so underscores and l/1 are clear.</td></tr>
+<tr><th scope="row">Space and density</th><td>4 px base: 4, 8, 12, 16, 20, 24, 32, 48; body 14 px</td><td>decided</td><td>Recruiters scan long lists for hours; 14 px body keeps rows dense without small text.</td></tr>
+<tr><th scope="row">Colour roles</th><td>paper oklch(.972 .006 60); ink oklch(.24 .018 330); accent magenta oklch(.55 .21 352); ok, warn, bad for status only</td><td>decided</td><td>One saturated accent means “act here, a person acts”. Magenta sits far from the red, amber and green of status.</td></tr>
+<tr><th scope="row">Shape and depth</th><td>buttons and chips pills; fields 10 px; panels 14 px; cards 20 px with a two-layer plum shadow and a lit top edge</td><td>decided</td><td>Round geometry and lit cards came from the rolled axes and give the slick, modern feel the owner asked for.</td></tr>
+<tr><th scope="row">Motif</th><td>the badge slot, 30 × 5 px, top centre, coloured by who acts</td><td>decided</td><td>The product ends with a person who gets a badge; the slot answers “whose turn is it?”.</td></tr>
+<tr><th scope="row">Controls (named sizes: height, inset, radius, type each)</th><td>sm 30 px, 12 px inset, pill, 13 px; md 38 px, 18 px inset, pill, 14 px; lg 46 px, 24 px, pill, 16 px; fields 38 px, 12 px inset, 10 px radius; focus ring 2 px accent, 2 px offset</td><td>decided</td><td>One height family, so a field and its button line up; the ring passes 3:1 on paper and white.</td></tr>
+<tr><th scope="row">Mechanics (where each kind of style goes, and what it wins over)</th><td>main.css: tokens and element defaults in @layer base, shared classes in @layer components; scoped component styles are unlayered and win over both; Vue Flow CSS is unlayered, so its overrides are unlayered too</td><td>decided, verified</td><td>A kitchen-sink page showed a scoped height of 50 px beat .btn 38 px, and a scoped radius of 2 px beat the base 10 px.</td></tr>
+<tr><th scope="row">Motion</th><td>ease-out cubic-bezier(.2,.8,.2,1); micro 140 ms; transition 220 ms; one Moment with overshoot</td><td>decided</td><td>A calm, fast work tool; the only flourish is the hire badge.</td></tr>
+</tbody></table></div>
+</details>
+<h3 class="i-voice"><span class="key">Voice</span> colleague to colleague, people before states</h3>
+<dl class="voice">
+<div><dt>Sounds like</dt><dd>Interview Maya Okafor</dd></div><div class="not"><dt>Not</dt><dd>Human task pending</dd></div><div><dt>Sounds like</dt><dd>Stopped: the CV can’t be read</dd></div><div class="not"><dt>Not</dt><dd>Run failed (unreadable_cv)</dd></div><div><dt>Sounds like</dt><dd>Move to…</dd></div><div class="not"><dt>Not</dt><dd>Manual transition</dd></div><div><dt>Sounds like</dt><dd>This Google account hasn’t been invited. Ask your admin to invite the address you signed in with.</dd></div><div class="not"><dt>Not</dt><dd>Error: NOT_INVITED</dd></div>
+</dl>
+<ul class="fields">
+<li><strong>For:</strong> recruiters and interviewers at work; plain work English</li>
+<li><strong>This, not that:</strong> “Interview Maya Okafor”, not “Human task pending”; “Stopped: the CV can’t be read”, not “Run failed (unreadable_cv)”; “Move to…”, not “Manual transition”.</li>
+<li><strong>Terms:</strong> node → step; workflow → flow; run → step; published and open → live; human task → task; users → team. Rejected: node, run, workflow, entity, pipeline stage.</li>
+<li><strong>Address, length, capitals:</strong> “you”; buttons are a verb and an object; sentence case; curly apostrophes; an ellipsis on buttons that ask for more; no exclamation marks.</li>
+<li><strong>Tone shifts:</strong> Errors say what happened and what to do, plainly. Archive and deactivate name the object and the result. The hire ending is warm but short. No jokes near a rejection.</li>
+</ul>
+<p class="bridge">The values are on a board. <a href="#captures">Next: the values with real content →</a></p>
+</section>
+
+<section class="chapter band" id="captures">
+<h2><span class="key">Captures<span class="vh">:</span></span> Your tasks come first, and the slot shows who acts</h2>
+<p class="lede">Hover a note to find it on the screen.</p>
+<figure class="annotated"><span class="shot"><img src="design-captures/inbox.png" alt="The inbox with a task open" width="1440" height="900" loading="lazy"><a class="pin" href="#d-4" style="--x:8%;--y:12%">1</a><a class="pin" href="#d-24" style="--x:20%;--y:30%">2</a><a class="pin" href="#d-9" style="--x:65%;--y:11%">3</a><a class="pin" href="#d-28" style="--x:40%;--y:82%">4</a></span><figcaption><p>The inbox at 1440 px, light scheme.</p><ol class="legend"><li><span>The rail count says there is work before you open the inbox. <a href="#d-4">d-4</a></span></li><li><span>Your own tasks come first; team problems sit behind the switch. <a href="#d-24">d-24</a></span></li><li><span>The slot on the task header says a person acts here. <a href="#d-9">d-9</a></span></li><li><span>The submit hint says the scorecard can’t change later. <a href="#d-28">d-28</a></span></li></ol></figcaption></figure>
+<p class="bridge">The first version was different. <a href="#session-2026-10-20">What review changed →</a></p>
+</section>
+
+<section id="sessions">
+<article class="session" id="session-2026-10-20">
+<h2><span class="key">Session 2026-10-20<span class="vh">:</span></span> A new frontend in 5 chunks on one system, then two review rounds</h2>
+<p class="kicker">Reimagine, product scope · the owner asked for a fresh, slick, modern frontend</p>
+<p class="lede">The repo had a finished backend and no frontend. The coordinator built the shared system and checked it on a kitchen-sink page; five agents then built the screens on it. Review found that magenta and the slot meant too many things, and that the pipeline and canvas read generic. We gave each colour one job, put stopped candidates first, and redrew the hired header as a real ID badge.</p>
+
+<h3 class="i-list" id="chunks-2026-10-20"><span class="key">Chunks</span> 6 chunks, shared work first</h3>
+<div class="scroll"><table>
+<thead><tr><th scope="col">Chunk</th><th scope="col">Files it owns</th><th scope="col">Built by</th><th scope="col">Checks</th><th scope="col">Result</th></tr></thead>
+<tbody>
+<tr><td>0 Shared system</td><td>nuxt.config.ts, app/assets/css/main.css, app/utils/*, app/composables/*, app/components/{Icon,Avatar,RunStatus,DueChip,Toasts}.vue, app/layouts/*, app/pages/login.vue, app/lib/flow.ts (moved)</td><td>coordinator</td><td>kitchen sink, style tile, typecheck, check.py, render_check.py, 128 tests</td><td>done</td></tr>
+<tr><td>A Inbox and scorecards</td><td>app/pages/inbox.vue, app/pages/inbox/*, app/components/inbox/*</td><td>agent</td><td>captures at 960/1440/1920, typecheck, check.py</td><td>done</td></tr>
+<tr><td>B Candidate page</td><td>app/pages/candidates/[id].vue, app/components/candidate/*</td><td>agent</td><td>captures in 10 states, typecheck, check.py</td><td>done</td></tr>
+<tr><td>C Jobs and job hub</td><td>app/pages/jobs/index.vue, app/pages/jobs/[id].vue, app/pages/jobs/[id]/{index,details,form}.vue, app/components/job/*</td><td>agent</td><td>captures, typecheck, check.py</td><td>done</td></tr>
+<tr><td>D Flow canvas</td><td>app/pages/jobs/[id]/flow.vue, app/components/flow/*</td><td>agent</td><td>captures, a Playwright run of add, connect, autosave, delete and undo, typecheck</td><td>done</td></tr>
+<tr><td>E Hires, team, settings, apply</td><td>app/pages/{hires,team,settings}.vue, app/pages/apply/[id].vue, app/components/apply/*</td><td>agent</td><td>captures at 375 to 1920, typecheck, check.py</td><td>done</td></tr>
+</tbody></table></div>
+
+<h3 class="i-search" id="critique-2026-10-20"><span class="key">Critique caught</span> 22 fixed, 5 kept with evidence, 0 open</h3>
+<dl class="counts">
+<div class="i-fix"><dt>fixed, each linked to the row it changed</dt><dd>22</dd></div>
+<div class="i-keep"><dt>kept, with the evidence for keeping</dt><dd>5</dd></div>
+<div class="open"><dt>open</dt><dd>0</dd></div>
+</dl>
+<p class="sowhat">The first round found that magenta and the slot meant too many things. Now magenta means “act here” and the slot means who acts, how it ended, or where you are.</p>
+<details>
+<summary>Every finding and its outcome</summary>
+<div class="scroll"><table>
+<thead><tr><th scope="col">Found</th><th scope="col">By</th><th scope="col">Outcome</th></tr></thead>
+<tbody>
+<tr><td>Accent had 5+ meanings: avatars, “With a person” chips, links, nav, actions</td><td>critique round 1</td><td>fixed: avatars and the waiting chip are neutral (d-59, d-60)</td></tr>
+<tr><td>The slot carried 6+ meanings, including decoration on login, hires and publish-done</td><td>critique round 1</td><td>fixed: slot only for who acts, how it ended, where you are (d-61)</td></tr>
+<tr><td>Publish problems were amber in the panel and red on the steps</td><td>critique round 1</td><td>fixed: the panel slot is red (d-61)</td></tr>
+<tr><td>Palette side bars were a second motif doing the slot’s job</td><td>critique round 1</td><td>fixed: removed (d-61)</td></tr>
+<tr><td>Pipeline: identical magenta chips were the loudest thing; stopped rows sat at the bottom</td><td>critique round 1</td><td>fixed: stopped first, counts per step, waiting chip quiet (d-62)</td></tr>
+<tr><td>Canvas cards about 11 px at load zoom</td><td>critique round 1</td><td>fixed: load zoom at least 90%, duplicate type word hidden (d-63)</td></tr>
+<tr><td>The hired badge barely read as a badge</td><td>critique round 1</td><td>fixed: ink band, punched slot, avatar over the edge (d-64)</td></tr>
+<tr><td>Step-name field showed its value in placeholder grey</td><td>critique round 1</td><td>fixed (d-65)</td></tr>
+<tr><td>Inbox empty state said two things</td><td>critique round 1</td><td>fixed: one message (d-65)</td></tr>
+<tr><td>“Admin · set by the server” is system talk</td><td>critique round 1</td><td>fixed: “Admin · can’t be changed here”</td></tr>
+<tr><td>Native “Choose File / No file chosen” on the phone apply page</td><td>critique round 1</td><td>fixed: a drop area that names the file (d-66)</td></tr>
+<tr><td>Warm paper repeats the ledger habit</td><td>critique round 1</td><td>fixed: cool plum-tinted paper (d-67)</td></tr>
+<tr><td>Team switch on was green, another meaning for ok</td><td>critique round 1</td><td>fixed: ink</td></tr>
+<tr><td>Scorecard hand-off has no motion</td><td>critique round 1</td><td>kept: the detail already rises 8 px in 220 ms on arrival (.arrived in inbox/[runId].vue); stills cannot show it</td></tr>
+<tr><td>Team problems should auto-open the first item</td><td>critique round 1</td><td>kept: stopped rows are acted on in place (Retry), and they have no scorecard to open</td></tr>
+<tr><td>Uppercase eyebrows contradict the rejected uppercase table labels</td><td>critique round 1</td><td>kept: table headers are sentence case; the eyebrows are short labels above a title</td></tr>
+<tr><td>Green means hired, live, done, ready</td><td>critique round 1</td><td>kept: green is one family, a good or finished state; red stays the only “needs you”</td></tr>
+<tr><td>Apply page never names the employer</td><td>critique round 1</td><td>fixed: the backend now sends it, and the screen shows it</td></tr>
+<tr><td>Pipeline rows have no assignee or due date</td><td>critique round 1</td><td>fixed: the backend now sends it, and the screen shows it</td></tr>
+<tr><td>Jobs list has no candidate counts</td><td>critique round 1</td><td>fixed: the backend now sends it, and the screen shows it</td></tr>
+<tr><td>The Why card stretched to the badge height, so its headline floated</td><td>critique round 2</td><td>fixed: align-content start</td></tr>
+<tr><td>The apply meta line still left a dot at a line start</td><td>critique round 2</td><td>fixed: each dot sits outside the box at a line start and is clipped</td></tr>
+<tr><td>At 90% zoom the canvas showed three boxes in a line and hid the decision</td><td>critique round 2</td><td>fixed: back to 80%, which shows the decision and its branches</td></tr>
+<tr><td>Stopped step counts used colour alone</td><td>critique round 2</td><td>fixed: a stop icon and hidden text “some stopped”</td></tr>
+<tr><td>Event dots on the timeline were magenta decoration</td><td>critique round 2</td><td>fixed: grey</td></tr>
+<tr><td>The form preview showed the native file button</td><td>critique round 2</td><td>fixed: the same drop area as the apply page</td></tr>
+<tr><td>The settings preview shows a second magenta button</td><td>critique round 2</td><td>kept: it is the candidate’s real button, inside a preview frame</td></tr>
+</tbody></table></div>
+</details>
+
+<h3 class="i-ruler" id="measured-2026-10-20"><span class="key">Measured</span> render_check errors from 7 to 0 on shipped pages</h3>
+<dl class="deltas"><div><dt>render_check errors on shipped pages (the Nuxt DevTools frame exists only in dev)</dt><dd><s>7</s> → 0</dd></div>
+<div><dt>Smallest text contrast (--ink-3 on white)</dt><dd><s>4.29:1</s> → ≥ 4.6:1</dd></div>
+<div><dt>Step-name helpers</dt><dd><s>3</s> → 1</dd></div></dl>
+<details>
+<summary>Every measure</summary>
+<table class="delta">
+<thead><tr><th scope="col">Measure</th><th scope="col">Before</th><th scope="col">After</th><th scope="col">Change</th></tr></thead>
+<tbody>
+<tr><td>render_check errors on shipped pages (the Nuxt DevTools frame exists only in dev)</td><td>7</td><td>0</td><td>fixed 7</td></tr>
+<tr><td>Smallest text contrast (--ink-3 on white)</td><td>4.29:1</td><td>≥ 4.6:1</td><td>token darkened</td></tr>
+<tr><td>Step-name helpers</td><td>3</td><td>1</td><td>one face per step</td></tr>
+<tr><td>check.py</td><td>0 errors, 3 asks</td><td>0 errors, 3 asks kept with evidence</td><td>same</td></tr>
+<tr><td>Typecheck errors in app/</td><td>1</td><td>0</td><td>fixed</td></tr>
+</tbody>
+</table>
+</details>
+
+<h3 class="i-list" id="decisions-2026-10-20"><span class="key">Decisions</span> 78, most of them in structure and colour</h3>
+<div class="decisions">
+<fieldset class="layers">
+<legend>Press a layer to see its decisions</legend>
+<label style="--n:25"><input type="radio" name="layer" id="l-1">1 Bare structure <b>25</b></label>
+<label style="--n:6"><input type="radio" name="layer" id="l-2">2 Direction <b>6</b></label>
+<label style="--n:10"><input type="radio" name="layer" id="l-3">3 Type and space <b>10</b></label>
+<label style="--n:22"><input type="radio" name="layer" id="l-4">4 Colour and surface <b>22</b></label>
+<label style="--n:9"><input type="radio" name="layer" id="l-5">5 Use over time <b>9</b></label>
+<label style="--n:6"><input type="radio" name="layer" id="l-6">6 Motion and detail <b>6</b></label>
+<label class="all"><input type="radio" name="layer" id="l-all" checked>All, in order <b>78</b></label>
+</fieldset>
+<p class="hint">Each row: the decision, why, and the default it rejected.</p>
+<div class="scroll"><table>
+<thead><tr><th scope="col">Element</th><th scope="col">Decision</th><th scope="col">Because (content, user or moment)</th><th scope="col">Rejected default or kept convention</th><th scope="col">Layer</th></tr></thead>
+<tbody>
+<tr id="d-1" data-l="1"><td><span class="id">d-1</span> App shell</td><td>SPA (ssr: false) for the whole app</td><td>Every recruiter page sits behind a session cookie; reviews can fake the API in the browser.</td><td class="rejected">SSR for all pages</td><td>1 Bare structure</td></tr>
+<tr id="d-2" data-l="1"><td><span class="id">d-2</span> Navigation</td><td>A labelled rail of 88 px: Inbox, Jobs, Hires, Team, Settings, shown by level</td><td>Map: flat sections; the canvas and tables need full height and width; labels stay visible.</td><td class="rejected">Top bar (the ledger’s earlier hiring tool) and an icon-only sidebar</td><td>1 Bare structure</td></tr>
+<tr id="d-3" data-l="1"><td><span class="id">d-3</span> Navigation</td><td>Employees see only Inbox; the middleware sends other routes to the inbox</td><td>For: interviewers only have tasks; a place they cannot use is never shown.</td><td class="rejected">Show every item and explain on arrival</td><td>1 Bare structure</td></tr>
+<tr id="d-4" data-l="1"><td><span class="id">d-4</span> Inbox count</td><td>The rail shows the count of your open tasks on Inbox</td><td>Moment: between calls, the count says if there is work before opening it.</td><td class="rejected">No count</td><td>1 Bare structure</td></tr>
+<tr id="d-5" data-l="1"><td><span class="id">d-5</span> Sign-in</td><td>One Google button; refusal codes become plain sentences with what to do</td><td>Core copy: an invitee who used the wrong account must know which address to use.</td><td class="rejected">A generic “Access denied”</td><td>1 Bare structure</td></tr>
+<tr id="d-6" data-l="1"><td><span class="id">d-6</span> Errors</td><td>One map of every backend code to a sentence, in app/utils/api.ts</td><td>Voice: one term per concept everywhere; no raw codes in the UI.</td><td class="rejected">Show the server message</td><td>1 Bare structure</td></tr>
+<tr id="d-7" data-l="1"><td><span class="id">d-7</span> Run errors</td><td>Each run error maps to what happened and the fix a manager makes</td><td>Job: a stopped step must lead to its fix (retry or move).</td><td class="rejected">Show the error code</td><td>1 Bare structure</td></tr>
+<tr id="d-8" data-l="2"><td><span class="id">d-8</span> Direction</td><td>Badge day: warm paper, plum greys, magenta accent, round pills, lit cards</td><td>Character: the first-day front desk; Feel: bright, crisp, calm.</td><td class="rejected">Dark violet console, about 45% typical</td><td>2 Direction</td></tr>
+<tr id="d-9" data-l="2"><td><span class="id">d-9</span> Motif</td><td>The badge slot coloured by who acts, on step cards, task headers, current tab and the hire badge</td><td>Signature moment: whose turn it is must read at a glance.</td><td class="rejected">Coloured left borders on cards</td><td>2 Direction</td></tr>
+<tr id="d-10" data-l="2"><td><span class="id">d-10</span> Identity</td><td>Provisional name “Lanyard” and a dark badge mark with a magenta slot</td><td>Identity: an open brief still needs a name and mark, labelled for the owner.</td><td class="rejected">The word “Hiring” in the default font</td><td>2 Direction</td></tr>
+<tr id="d-11" data-l="3"><td><span class="id">d-11</span> Type</td><td>Instrument Sans with JetBrains Mono for keys and references</td><td>Character: crisp and current, but not the default; refs need a mono.</td><td class="rejected">Inter alone</td><td>3 Type and space</td></tr>
+<tr id="d-12" data-l="3"><td><span class="id">d-12</span> Type scale</td><td>12, 13, 14, 16, 20, 26, 36 px, body 14 px</td><td>Richness: dense work surfaces; each step at least 15% apart.</td><td class="rejected">16 px body with 4 sizes</td><td>3 Type and space</td></tr>
+<tr id="d-13" data-l="4"><td><span class="id">d-13</span> Colour</td><td>One accent for action and “a person acts”; status colours only with a word</td><td>Feel: calm; one thing per view stands out.</td><td class="rejected">Indigo primary and colour-coded everything</td><td>4 Colour and surface</td></tr>
+<tr id="d-14" data-l="4"><td><span class="id">d-14</span> Status</td><td>Rejected and withdrawn are grey, not red; red only for stopped or late</td><td>Job: a rejection is a normal outcome, a stopped step needs someone.</td><td class="rejected">Red for every negative</td><td>4 Colour and surface</td></tr>
+<tr id="d-15" data-l="4"><td><span class="id">d-15</span> Buttons</td><td>Pills, one primary per view, an outlined secondary, a quiet tertiary</td><td>Direction: round geometry; one primary keeps the next action clear.</td><td class="rejected">8 px rounded buttons</td><td>4 Colour and surface</td></tr>
+<tr id="d-16" data-l="4"><td><span class="id">d-16</span> Fields</td><td>All text fields, selects and textareas share 38 px, 10 px radius, a 3 px accent glow on focus</td><td>Controls: a field and its button line up.</td><td class="rejected">Browser default controls</td><td>4 Colour and surface</td></tr>
+<tr id="d-17" data-l="4"><td><span class="id">d-17</span> Checkboxes</td><td>Drawn boxes and radios on the native input, magenta when checked</td><td>Controls: native behaviour, designed look.</td><td class="rejected">Browser default checkboxes</td><td>4 Colour and surface</td></tr>
+<tr id="d-18" data-l="4"><td><span class="id">d-18</span> Shadows</td><td>Two layers tinted plum, with a lit top edge</td><td>Direction: layered and lit; the tint keeps shadows from looking grey on warm paper.</td><td class="rejected">One black shadow</td><td>4 Colour and surface</td></tr>
+<tr id="d-19" data-l="4"><td><span class="id">d-19</span> Dialogs</td><td>Native dialog that grows from 96% with @starting-style; menus in popover</td><td>Native first: no focus-trap library, menus are never clipped.</td><td class="rejected">A div modal and a positioned menu</td><td>4 Colour and surface</td></tr>
+<tr id="d-20" data-l="5"><td><span class="id">d-20</span> Toasts</td><td>One at a time, ink pill at the bottom, never the only home of an action</td><td>States: several events queue; nothing important vanishes.</td><td class="rejected">A stack of toasts in a corner</td><td>5 Use over time</td></tr>
+<tr id="d-21" data-l="5"><td><span class="id">d-21</span> Reduced motion</td><td>A global rule shortens every animation; the spinner becomes a slow pulse</td><td>Access: the busy state still shows without travel.</td><td class="rejected">No reduced-motion handling</td><td>5 Use over time</td></tr>
+<tr id="d-22" data-l="5"><td><span class="id">d-22</span> Focus</td><td>A 2 px magenta ring with 2 px offset everywhere</td><td>Access: 3:1 or more on paper and white; easier to see than the default.</td><td class="rejected">The browser ring</td><td>5 Use over time</td></tr>
+<tr id="d-23" data-l="1"><td><span class="id">d-23</span> Dev entry</td><td>The custom Worker entry applies only to production builds</td><td>The dev server failed with “worker entry not found”, so nobody could run the UI.</td><td class="rejected">One entry for dev and build</td><td>1 Bare structure</td></tr>
+<tr id="d-24" data-l="1"><td><span class="id">d-24</span> Inbox list</td><td>A segmented switch “Yours · Team problems”, in the URL</td><td>Job: with 60 own tasks, stopped candidates would fall off screen in one long list; own work stays first.</td><td class="rejected">One list with section headers</td><td>1 Bare structure</td></tr>
+<tr id="d-25" data-l="1"><td><span class="id">d-25</span> Inbox arrival</td><td>The first task (earliest due) opens by itself</td><td>Character: the desk is ready; nobody starts on a blank pane.</td><td class="rejected">A “pick a task” placeholder</td><td>1 Bare structure</td></tr>
+<tr id="d-26" data-l="1"><td><span class="id">d-26</span> Stopped rows</td><td>Act in the row: what happened, the fix, Retry, a link to move on the candidate page</td><td>Job: an automatic step has no scorecard to open.</td><td class="rejected">Open them in the detail pane</td><td>1 Bare structure</td></tr>
+<tr id="d-27" data-l="4"><td><span class="id">d-27</span> Rating field</td><td>Whole-number ranges of 10 or less are radio pills with no default</td><td>Signature moment: one press per rating, arrow keys work.</td><td class="rejected">A select or a slider</td><td>4 Colour and surface</td></tr>
+<tr id="d-28" data-l="6"><td><span class="id">d-28</span> Submit hint</td><td>“You can’t change it after you send it.” beside the button</td><td>Copy: there is no undo, so the consequence comes before the press.</td><td class="rejected">An Undo toast the API cannot honour</td><td>6 Motion and detail</td></tr>
+<tr id="d-29" data-l="6"><td><span class="id">d-29</span> Sent line</td><td>A green line at the top of the detail, in a live region: “Scorecard sent for Jun Li. Next: …”</td><td>Signature moment: the next task replaced the page, so the page says so where the eye is.</td><td class="rejected">A toast that vanishes</td><td>6 Motion and detail</td></tr>
+<tr id="d-30" data-l="5"><td><span class="id">d-30</span> Panel progress</td><td>Pips plus “1 of 2 scorecards in”; others’ blind answers say “hidden until you send yours”</td><td>States: blind panels must not read as missing data.</td><td class="rejected">A progress bar</td><td>5 Use over time</td></tr>
+<tr id="d-31" data-l="1"><td><span class="id">d-31</span> Why card</td><td>One sentence that starts with the outcome, then every branch with the taken one outlined</td><td>Signature moment: people read the line aloud to a hiring manager.</td><td class="rejected">A table of rules</td><td>1 Bare structure</td></tr>
+<tr id="d-32" data-l="1"><td><span class="id">d-32</span> Why source</td><td>The later of the last decision step or the last manual move explains the outcome</td><td>Job: a hand-made outcome must not be explained by an older rule.</td><td class="rejected">Always the last rule</td><td>1 Bare structure</td></tr>
+<tr id="d-33" data-l="2"><td><span class="id">d-33</span> Hired badge</td><td>A 300 px ID card replaces the header, with the Why card beside it</td><td>Ending: the one Moment; a badge is card-shaped.</td><td class="rejected">A restyled wide header</td><td>2 Direction</td></tr>
+<tr id="d-34" data-l="1"><td><span class="id">d-34</span> Move dialog</td><td>Every step except Start and End, plus “Close as …”; the reason is required</td><td>Job: the history must say why someone moved a candidate.</td><td class="rejected">Free move without a reason</td><td>1 Bare structure</td></tr>
+<tr id="d-35" data-l="4"><td><span class="id">d-35</span> Quote bars</td><td>A 2 px left bar only marks quoted words: grey for the AI, magenta-tinted for a person</td><td>Colour roles: who said it, with one meaning for the bar.</td><td class="rejected">Bars as decoration</td><td>4 Colour and surface</td></tr>
+<tr id="d-36" data-l="1"><td><span class="id">d-36</span> Publish problems</td><td>An inline panel under the header that stays while you fix things in another tab</td><td>Job: the person needs to see the list while they fix the flow or form.</td><td class="rejected">A modal</td><td>1 Bare structure</td></tr>
+<tr id="d-37" data-l="6"><td><span class="id">d-37</span> Publish ending</td><td>“v4 is live” with the apply link and a Copy button that says “Copied” in place</td><td>Ending: the next step after publishing is to share the link.</td><td class="rejected">A toast</td><td>6 Motion and detail</td></tr>
+<tr id="d-38" data-l="4"><td><span class="id">d-38</span> Live chip</td><td>Green with a dot; Draft, Closed and Archived are grey</td><td>Colour roles: “switched on” reads as ok; nothing about a closed job needs a look.</td><td class="rejected">Accent or amber for status</td><td>4 Colour and surface</td></tr>
+<tr id="d-39" data-l="4"><td><span class="id">d-39</span> Save buttons</td><td>Dark, not magenta, on Details and Form</td><td>Emphasis: Publish in the hub header is the one primary per view.</td><td class="rejected">Two primaries</td><td>4 Colour and surface</td></tr>
+<tr id="d-40" data-l="5"><td><span class="id">d-40</span> Form breakage</td><td>A panel lists only the flow problems that a form edit introduces, with links to the step</td><td>Job: deleting the CV field would break Read CV without a word.</td><td class="rejected">Silent breakage found at publish</td><td>5 Use over time</td></tr>
+<tr id="d-41" data-l="3"><td><span class="id">d-41</span> Form preview</td><td>A live preview of the candidate form beside the builder</td><td>Cause and effect: the change shows where the person looks.</td><td class="rejected">Edit without preview</td><td>3 Type and space</td></tr>
+<tr id="d-42" data-l="3"><td><span class="id">d-42</span> Canvas load</td><td>Fit the flow, but never below 80% zoom; start at the top instead</td><td>Job: the Standard hire flow fitted is 37% zoom and unreadable.</td><td class="rejected">Plain fit view</td><td>3 Type and space</td></tr>
+<tr id="d-43" data-l="4"><td><span class="id">d-43</span> Canvas background</td><td>Faint dots on a 24 px grid, and steps snap to it</td><td>The dots are the snap points and show the canvas moving when you pan.</td><td class="rejected">No background (the reference’s dots were kept only for this reason)</td><td>4 Colour and surface</td></tr>
+<tr id="d-44" data-l="3"><td><span class="id">d-44</span> Branch labels</td><td>Pills at the start of each branch line; an unconnected branch is amber</td><td>Job: labels at the midpoint landed on cards; amber marks what needs a look.</td><td class="rejected">Midpoint labels</td><td>3 Type and space</td></tr>
+<tr id="d-45" data-l="3"><td><span class="id">d-45</span> Step panel</td><td>A side panel only while a step is selected; the palette folds to icons below 1360 px</td><td>Screens: at 960 px the canvas keeps about 330 px.</td><td class="rejected">A modal editor</td><td>3 Type and space</td></tr>
+<tr id="d-46" data-l="5"><td><span class="id">d-46</span> Key rename</td><td>Renaming a key rewrites every edge and every {{nodes.old…}} reference</td><td>Job: a rename never breaks the flow silently.</td><td class="rejected">Rename only the key</td><td>5 Use over time</td></tr>
+<tr id="d-47" data-l="6"><td><span class="id">d-47</span> Problem wording</td><td>Structural issues reworded (“‘Reject’ doesn’t lead to a step yet”)</td><td>Voice: recruiters, not engineers.</td><td class="rejected">The raw issue message</td><td>6 Motion and detail</td></tr>
+<tr id="d-48" data-l="3"><td><span class="id">d-48</span> Hires headline</td><td>“24 of 63 seats filled” across live jobs, at display size with the ok slot</td><td>Emphasis: the one number people act on.</td><td class="rejected">The API totals including closed jobs</td><td>3 Type and space</td></tr>
+<tr id="d-49" data-l="4"><td><span class="id">d-49</span> Seat pills</td><td>One pill per opening, filled for each hire, up to 12; a bar above that</td><td>Motif: the slot shape counts seats; text beside it so colour is not alone.</td><td class="rejected">A numbers-only column</td><td>4 Colour and surface</td></tr>
+<tr id="d-50" data-l="5"><td><span class="id">d-50</span> Deactivate</td><td>Switching off asks first and says sessions end at once; switching on applies at once</td><td>Respect: a reversible action that still signs people out needs a warning.</td><td class="rejected">Confirm both ways</td><td>5 Use over time</td></tr>
+<tr id="d-51" data-l="2"><td><span class="id">d-51</span> Apply page brand</td><td>No product logo and no “Powered by”</td><td>Real content: candidates apply to the employer, not the tool.</td><td class="rejected">A small footer brand</td><td>2 Direction</td></tr>
+<tr id="d-52" data-l="4"><td><span class="id">d-52</span> Apply colour</td><td>Magenta only on “Send application”; controls and focus are ink</td><td>Feel: a calm page for a nervous candidate; one accent.</td><td class="rejected">Magenta controls everywhere</td><td>4 Colour and surface</td></tr>
+<tr id="d-53" data-l="5"><td><span class="id">d-53</span> Apply consent</td><td>A required checkbox the browser explains, not a disabled button</td><td>Forms: never pre-disable submit.</td><td class="rejected">A disabled submit button</td><td>5 Use over time</td></tr>
+<tr id="d-54" data-l="1"><td><span class="id">d-54</span> Step names</td><td>One nodeLabel for every screen: label, else key as words, short keys as the type noun</td><td>Map: one object, one face; the canvas said “AI” and the candidate page “AI review”.</td><td class="rejected">A helper per screen</td><td>1 Bare structure</td></tr>
+<tr id="d-55" data-l="4"><td><span class="id">d-55</span> Status chip</td><td>The hires page uses the jobs StatusChip</td><td>Map: one object, one face; hires showed Live in magenta.</td><td class="rejected">A local status map</td><td>4 Colour and surface</td></tr>
+<tr id="d-56" data-l="4"><td><span class="id">d-56</span> Muted text</td><td>--ink-3 darkened from L .58 to .53</td><td>Access: 4.29:1 on white failed at 13 px.</td><td class="rejected">Per-screen patches</td><td>4 Colour and surface</td></tr>
+<tr id="d-57" data-l="6"><td><span class="id">d-57</span> Field focus</td><td>No transition on field border and glow</td><td>Motion map: keyboard focus is instant; the checker read the start value.</td><td class="rejected">A 140 ms focus fade</td><td>6 Motion and detail</td></tr>
+<tr id="d-58" data-l="4"><td><span class="id">d-58</span> Switched-off people</td><td>Grey text and avatar instead of 55% opacity</td><td>Access: opacity dropped the name to 3.8:1.</td><td class="rejected">Opacity dimming</td><td>4 Colour and surface</td></tr>
+<tr id="d-59" data-l="4"><td><span class="id">d-59</span> Avatars</td><td>Neutral grey discs with initials, for every person</td><td>Critique: magenta on every avatar made accent mean “a person exists”.</td><td class="rejected">Accent-tinted avatars</td><td>4 Colour and surface</td></tr>
+<tr id="d-60" data-l="4"><td><span class="id">d-60</span> Waiting status</td><td>“With a person” is a neutral chip; red and amber stand out</td><td>Critique: the normal state was the loudest thing in the pipeline.</td><td class="rejected">Magenta for waiting</td><td>4 Colour and surface</td></tr>
+<tr id="d-61" data-l="2"><td><span class="id">d-61</span> Slot placements</td><td>Removed from login, the hires headline and publish-done; issues panel red</td><td>Critique: the slot had 6 meanings; now 3 (who acts, how it ended, where you are).</td><td class="rejected">Slot as decoration</td><td>2 Direction</td></tr>
+<tr id="d-62" data-l="1"><td><span class="id">d-62</span> Pipeline</td><td>Stopped first, a row of counts per step that filters by step, version column only when mixed</td><td>Job: keep candidates moving; a pile-up must show before scrolling.</td><td class="rejected">Newest first only</td><td>1 Bare structure</td></tr>
+<tr id="d-63" data-l="3"><td><span class="id">d-63</span> Canvas zoom</td><td>Load at 90% or more; the type word hidden when the name repeats it</td><td>Critique: cards read at 11 px.</td><td class="rejected">80% minimum</td><td>3 Type and space</td></tr>
+<tr id="d-64" data-l="4"><td><span class="id">d-64</span> Hired badge</td><td>An ink band with a punched slot and the avatar over its edge</td><td>Ending: the Moment must read as an ID badge.</td><td class="rejected">A card with a pill on top</td><td>4 Colour and surface</td></tr>
+<tr id="d-65" data-l="6"><td><span class="id">d-65</span> Panel and empty copy</td><td>The step-name field shows its value; one inbox empty message</td><td>Critique: a value in placeholder grey reads as empty.</td><td class="rejected">Placeholder as value</td><td>6 Motion and detail</td></tr>
+<tr id="d-66" data-l="4"><td><span class="id">d-66</span> Apply file field</td><td>A dashed drop area that shows the file name and size; the native input covers it</td><td>Moment: a nervous candidate on a phone must see their CV is attached.</td><td class="rejected">The native file button</td><td>4 Colour and surface</td></tr>
+<tr id="d-67" data-l="4"><td><span class="id">d-67</span> Paper (supersedes the warm paper of d-8)</td><td>Cool plum-tinted paper oklch(.974 .004 330)</td><td>Critique: warm paper repeats the ledger; plum ties paper to the greys and the magenta.</td><td class="rejected">Warm paper (hue 60)</td><td>4 Colour and surface</td></tr>
+<tr id="d-68" data-l="1"><td><span class="id">d-68</span> Apply link</td><td>A “Copy apply link” button and an Open button in the job header whenever the job is live; icon versions on live rows in the jobs list</td><td>Owner feedback: the link showed only right after publishing or on an empty pipeline, but recruiters share it again and again.</td><td class="rejected">The link only in the publish ending</td><td>1 Bare structure</td></tr>
+<tr id="d-69" data-l="5"><td><span class="id">d-69</span> Copy fallback</td><td>If the Clipboard API is refused, copy through a hidden textarea; if that also fails, the button says so and points to Open</td><td>States: on plain http or a locked-down browser the button silently did nothing.</td><td class="rejected">A copy that fails silently</td><td>5 Use over time</td></tr>
+<tr id="d-70" data-l="1"><td><span class="id">d-70</span> Apply page shape</td><td>Two steps on one page: the job post with “Apply for this job”, then the form; the step is in the URL (?step=apply), the form stays mounted so Back never loses answers; a job with nothing to read opens on the form</td><td>Owner request, and Moment: on a phone a long description pushed the form far down; reading and applying are two decisions.</td><td class="rejected">One long page (rejected); a separate form URL that loses input on Back</td><td>1 Bare structure</td></tr>
+<tr id="d-71" data-l="3"><td><span class="id">d-71</span> Apply button</td><td>Sticky at the bottom of the job post on phones, static on short screens</td><td>Moment: the candidate decides while reading; the action stays under the thumb.</td><td class="rejected">A button only at the end</td><td>3 Type and space</td></tr>
+<tr id="d-72" data-l="1"><td><span class="id">d-72</span> Employer name</td><td>The company name above the job title, in the page title and in the ending, from a new setting</td><td>Critique blocker: candidates must know who they apply to before they consent.</td><td class="rejected">An unbranded page</td><td>1 Bare structure</td></tr>
+<tr id="d-73" data-l="3"><td><span class="id">d-73</span> What we look for</td><td>Must-have skills as chips and the minimum years, in their own card under the description</td><td>Real content: the job’s structured requirements were already there but never shown.</td><td class="rejected">Requirements only inside free text</td><td>3 Type and space</td></tr>
+<tr id="d-74" data-l="1"><td><span class="id">d-74</span> Pipeline holders</td><td>Waiting candidates show who still owes a scorecard (faces and short names) and the due chip; late rows sort after stopped ones</td><td>Job: keep candidates moving; “With a person” said nothing about who.</td><td class="rejected">“With a person” for every waiting row</td><td>1 Bare structure</td></tr>
+<tr id="d-75" data-l="1"><td><span class="id">d-75</span> Jobs list counts</td><td>“7 active” and a red “2 stopped” chip per job; hires as “1 of 2”; the version column removed</td><td>Job: see which job needs you without opening each one.</td><td class="rejected">A version column nobody acts on</td><td>1 Bare structure</td></tr>
+<tr id="d-76" data-l="1"><td><span class="id">d-76</span> Manager pickers</td><td>A new manager-level list of people who can sign in feeds task assignees, reassign and job owner</td><td>Map: managers run the flows, so they must pick people; only admins could before.</td><td class="rejected">Admin-only pickers with a note</td><td>1 Bare structure</td></tr>
+<tr id="d-77" data-l="1"><td><span class="id">d-77</span> Task instructions</td><td>Rendered with the title when a task starts, shown in the scorecard</td><td>Signature moment: the interviewer needs the brief beside the questions.</td><td class="rejected">Instructions stored in the flow but never shown</td><td>1 Bare structure</td></tr>
+<tr id="d-78" data-l="1"><td><span class="id">d-78</span> Reminder link</td><td>/tasks/:id redirects to /inbox/:id</td><td>Reminder emails link to /tasks/:id, which had no page.</td><td class="rejected">A dead link in every reminder</td><td>1 Bare structure</td></tr>
+</tbody></table></div>
+</div>
+
+<h3 class="i-spark"><span class="key">Life</span> three places, one of them animated</h3>
+<ol class="life">
+<li><div class="scene" aria-hidden="true"><span class="act" style="--h:4rem"><svg viewBox="0 0 80 40" width="80" height="40"><rect x="2" y="6" width="34" height="28" rx="6" fill="none" stroke="currentColor"/><path d="M44 20h20m-6-6 6 6-6 6" stroke="currentColor" fill="none" stroke-width="2"/></svg></span></div><strong>The next task opens by itself</strong>After a scorecard, the next task replaces it, and a line says which. It tells the person the product kept their place. Every task. Reduced motion: the same, with no movement.</li>
+<li><div class="scene" aria-hidden="true"><span class="act" style="--h:4rem"><svg viewBox="0 0 40 48" width="34" height="40"><rect x="2" y="2" width="36" height="44" rx="9" fill="none" stroke="currentColor"/><rect x="13" y="8" width="14" height="4" rx="2" fill="currentColor"/></svg></span></div><strong>The hire badge</strong>When a recruiter closes a candidate as hired, the header becomes a badge with a short settle. It tells them the hire is done. Rare. Reduced motion: a fade.</li>
+<li><div class="scene" aria-hidden="true"><span class="act" style="--h:4rem"><svg viewBox="0 0 40 40" width="40" height="40"><rect x="6" y="10" width="26" height="20" rx="10" fill="none" stroke="currentColor"/><circle cx="32" cy="10" r="7" fill="currentColor"/></svg></span></div><strong>The inbox count on the rail</strong>The count on Inbox changes when a task arrives or leaves. It tells the person there is work before they open it. Often. Still.</li>
+</ol>
+
+<h3 class="i-motion"><span class="key">Motion map</span> crisp ease-out, quiet by default, one Moment</h3>
+<p class="note">Every state change, its tier and its design (see references/motion.md). Hover or focus a row to run its dot at that duration and easing.</p>
+<div class="scroll"><table class="motion">
+<thead><tr><th scope="col">Moment</th><th scope="col">Tier (none, micro, transition, moment)</th><th scope="col">How often</th><th scope="col">Trigger, feedback, loops</th><th scope="col">Reduced-motion version</th><th scope="col">How much it matters</th><th scope="col">What they need to know</th></tr></thead>
+<tbody>
+<tr tabindex="0"><td>Button press</td><td><span class="dur" style="--ms:140"></span><span class="demo" style="--ms:140;--ease:cubic-bezier(.2,.8,.2,1)"></span>micro, 140 ms</td><td>many times an hour</td><td>press: scale to 0.97 on press, not release</td><td>no scale</td><td>low</td><td>the press landed</td></tr>
+<tr tabindex="0"><td>Checkbox tick</td><td><span class="dur" style="--ms:140"></span><span class="demo" style="--ms:140;--ease:cubic-bezier(.2,.8,.2,1)"></span>micro, 140 ms</td><td>often</td><td>check: the tick grows from 0 to full size</td><td>instant</td><td>low</td><td>the box is on</td></tr>
+<tr tabindex="0"><td>Dialog open and close</td><td><span class="dur" style="--ms:220"></span><span class="demo" style="--ms:220;--ease:cubic-bezier(.2,.8,.2,1)"></span>transition, 220 ms</td><td>a few times a day</td><td>opens from 96% and fades in; leaves the same way</td><td>fade only</td><td>medium</td><td>a decision waits</td></tr>
+<tr tabindex="0"><td>Toast arrives</td><td><span class="dur" style="--ms:220"></span><span class="demo" style="--ms:220;--ease:cubic-bezier(.2,.8,.2,1)"></span>transition, 220 ms</td><td>a few times a day</td><td>rises 8 px and fades in; queues one at a time</td><td>fade only</td><td>medium</td><td>what happened</td></tr>
+<tr tabindex="0"><td>Tab or nav change</td><td>none</td><td>many times an hour</td><td>instant</td><td>instant</td><td>low</td><td>where you are, shown by the slot</td></tr>
+<tr tabindex="0"><td>Loading</td><td>micro</td><td>every page</td><td>skeleton shimmer; spinner on buttons with aria-busy</td><td>slow pulse</td><td>medium</td><td>it is still working</td></tr>
+<tr tabindex="0"><td>Next task opens after a scorecard</td><td><span class="dur" style="--ms:220"></span><span class="demo" style="--ms:220;--ease:cubic-bezier(.2,.8,.2,1)"></span>transition, 220 ms</td><td>several times a day</td><td>submit: the next task rises in; the sent line names it</td><td>instant; the line still says it</td><td>high</td><td>it worked, and what is next</td></tr>
+<tr tabindex="0"><td>Rating pill chosen</td><td><span class="dur" style="--ms:140"></span><span class="demo" style="--ms:140;--ease:cubic-bezier(.2,.8,.2,1)"></span>micro, 140 ms</td><td>constant</td><td>press: the pill fills</td><td>instant</td><td>medium</td><td>the rating took</td></tr>
+<tr tabindex="0"><td>Hire badge arrives</td><td><span class="dur" style="--ms:420"></span><span class="demo" style="--ms:420;--ease:cubic-bezier(.2,.8,.2,1)"></span>moment, 420 ms</td><td>rare</td><td>close as hired: the badge scales 0.96 → 1.012 → 1</td><td>200 ms fade</td><td>high</td><td>the hire is done</td></tr>
+<tr tabindex="0"><td>Step detail opens on the candidate page</td><td>none</td><td>frequent</td><td>native details; the chevron turns</td><td>instant</td><td>low</td><td>more is here</td></tr>
+<tr tabindex="0"><td>Canvas centres on a step</td><td><span class="dur" style="--ms:260"></span><span class="demo" style="--ms:260;--ease:cubic-bezier(.2,.8,.2,1)"></span>transition, 260 ms</td><td>often</td><td>a problem or ?node=: the view pans to the step</td><td>instant jump</td><td>medium</td><td>where the problem is</td></tr>
+<tr tabindex="0"><td>Canvas zoom buttons</td><td><span class="dur" style="--ms:160"></span><span class="demo" style="--ms:160;--ease:cubic-bezier(.2,.8,.2,1)"></span>micro, 160 ms</td><td>often</td><td>press: the view zooms</td><td>instant</td><td>low</td><td>the zoom level</td></tr>
+<tr tabindex="0"><td>Autosave status</td><td>none</td><td>constant</td><td>“Saving…” then “Saved”, or the error with Retry</td><td>same</td><td>high</td><td>the work is safe</td></tr>
+<tr tabindex="0"><td>Switch knob on Team</td><td><span class="dur" style="--ms:140"></span><span class="demo" style="--ms:140;--ease:cubic-bezier(.2,.8,.2,1)"></span>micro, 140 ms</td><td>occasional</td><td>the knob slides; the word changes too</td><td>instant</td><td>medium</td><td>access on or off</td></tr>
+<tr tabindex="0"><td>Copy apply link</td><td>micro</td><td>occasional</td><td>the button text becomes “Copied”</td><td>same</td><td>medium</td><td>the link is on the clipboard</td></tr>
+<tr tabindex="0"><td>Application sent</td><td>none</td><td>once per candidate</td><td>the form is replaced by the confirmation; scroll to top</td><td>same</td><td>high</td><td>it arrived, and what happens next</td></tr>
+<tr tabindex="0"><td>Copy apply link</td><td>micro</td><td>often</td><td>the button reads “Copied” for 2 s, or the failure for 4 s</td><td>same</td><td>medium</td><td>the link is on the clipboard, or how to get it</td></tr>
+</tbody></table></div>
+
+<details>
+<summary>Look notes and what was removed</summary>
+<h3>Look notes</h3>
+<p>Style tile (1280 px): the slot reads at 30 × 5 px; magenta stays on actions.</p>
+<p>Round 1 set (18 captures at 960, 1440, 1920, 375): the inbox and candidate page read as made; pipeline, canvas and team read generic; magenta and the slot carried too many meanings.</p>
+<p>Round 2 set: the badge reads as a badge; the pipeline leads with stopped rows; canvas cards are readable at load.</p>
+<p>render_check: 0 errors on every page apart from the Nuxt DevTools frame, which exists only in dev.</p>
+<h3>Removed</h3>
+<p>The Nuxt welcome page.</p>
+<p>The slot on the login card, the hires headline and the publish-done panel.</p>
+<p>The palette side bars on the canvas.</p>
+<p>The magenta tint on avatars and on the waiting chip.</p>
+<p>The duplicate empty line in the inbox list.</p>
+<p>The flow version column when every candidate is on the same version.</p>
+</details>
+</article>
+</section>
+
+<section class="chapter ask" id="decide">
+<h2><span class="key">For you to decide<span class="vh">:</span></span> 5 choices, and 1 things owed</h2>
+<p class="lede">You can reverse each one. Each card shows what it gains, what it costs, and the alternative if you do not agree.</p>
+<ol class="cards">
+<li><b>The name “Lanyard” and the badge mark</b><span>It gives the tool a face and ties it to the result, a person who starts work. It is a guess at your brand. <a href="#d-10">d-10</a></span><span class="alt">Your company name and logo, if the tool is internal only.</span></li>
+<li><b>Magenta as the one accent</b><span>It is far from the status colours and reads fresh. It is louder than a neutral tool. <a href="#d-13">d-13</a></span><span class="alt">A deep blue-black accent, if magenta clashes with your brand.</span></li>
+<li><b>No server rendering</b><span>It keeps the app simple and made the faked-API reviews possible. Shared apply links show no job title in chat previews. <a href="#d-1">d-1</a></span><span class="alt">Server rendering for /apply only, if candidates share links in chat apps.</span></li>
+<li><b>Dots on the canvas</b><span>They are the 24 px snap grid. The reference images also had dots, which you asked to leave behind. <a href="#d-43">d-43</a></span><span class="alt">A plain canvas without snapping, if the dots read as the old look.</span></li>
+<li><b>Green for live jobs as well as hires</b><span>Green is one family: a good or finished state. Hired and live share it. <a href="#d-38">d-38</a></span><span class="alt">Ink for live, if you want green to mean hired only.</span></li>
+</ol>
+<h3>Still owed</h3>
+<ul class="owed">
+<li>A live sign-in with Google, and every screen against the real API and database: all reviews used a faked API.</li>
+</ul>
+</section>
+
+<section class="chapter" id="assumed">
+<h2><span class="key">Assumed, please correct<span class="vh">:</span></span> 4 guesses, the riskiest is that recruiters use a laptop, not a phone</h2>
+<p class="lede">We assumed these because nobody could answer. Correct a line, and the design will change to agree.</p>
+<ul class="fields">
+<li><strong>Laptops</strong> Recruiters and interviewers use a laptop or desktop, 960 px and wider. Interviewers do not fill scorecards on a phone.</li>
+<li><strong>Phones for candidates</strong> Candidates apply on phones, so the apply page works from 360 px.</li>
+<li><strong>Light only</strong> The product has one light scheme and no dark mode.</li>
+<li><strong>English</strong> The product is in English, with dates in the browser’s locale.</li>
+</ul>
+</section>
+
+<footer class="foot"><span>Lanyard · design decisions · latest session 2026-10-20</span><a href="design-coverage.html">Coverage report</a><a href="#top">Back to top ↑</a></footer>
+</main>
+<script>
+/* Report motion: plays each .plays in a loop while it is on screen and stops it off screen. Without this script the glyphs show their end state. */
+if(!matchMedia("(prefers-reduced-motion: reduce)").matches&&"IntersectionObserver" in window){
+const hold=1500,timers=new Map();
+const io=new IntersectionObserver(es=>{for(const e of es){const el=e.target;
+if(!e.isIntersecting){clearTimeout(timers.get(el));timers.delete(el);el.classList.remove("on");continue}
+if(timers.has(el))continue;
+const loop=()=>{el.classList.remove("on");void el.offsetWidth;el.classList.add("on");
+const end=Math.max(0,...el.getAnimations({subtree:true}).map(a=>a.effect.getComputedTiming().endTime).filter(Number.isFinite));
+timers.set(el,setTimeout(loop,end+hold))};loop()}},{threshold:.3});
+document.querySelectorAll(".plays").forEach(el=>io.observe(el))}
+</script>
+</body>
+</html>

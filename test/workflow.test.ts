@@ -322,6 +322,17 @@ describe('review regressions', () => {
       g.edges.push({ from: 'cv', to: 'v' }, { from: 'v', to: 'ai' })
       ;(node(g, 'ai').config as any).cv_text_ref = 'nodes.v.t'
     })).toEqual(['ai_input_not_allowed'])
+    // review round 2: candidate identity and job fields are not CV text either
+    for (const ref of ['candidate.email', 'candidate.first_name', 'job.title']) {
+      expect(issuesFor(g => { (node(g, 'ai').config as any).cv_text_ref = ref })).toEqual(['ai_input_not_allowed'])
+    }
+  })
+
+  it('human task titles and instructions cannot show protected answers to assignees', () => {
+    expect(issuesFor((g, form) => {
+      form.push({ key: 'gender', label: 'G', type: 'string', required: false, protected: true })
+      ;(node(g, 'interview').config as any).title = 'Interview {{form.gender}}'
+    })).toEqual(['protected_ref'])
   })
 
   it('scorecard min > max is caught', () => {

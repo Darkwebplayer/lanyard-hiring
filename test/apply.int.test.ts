@@ -38,8 +38,8 @@ beforeAll(async () => {
   db = await testDb()
   const [manager] = await db.select().from(s.roles).where(eq(s.roles.name, 'Manager'))
   await db.insert(s.user).values({ id: 'owner', email: 'owner@example.test', name: 'Owner', roleId: manager!.id })
-  await db.update(s.settings).set({ consentText: 'We process your data to assess your application.', aiNoticeText: 'An AI helps screen applications.' })
-  const { job } = await createJob(db, 'owner', { title: 'Backend Engineer', description: 'Build things', requirements: { location: 'Remote', salary_min: 1 }, openings: 1, closesAt: new Date('2026-11-01T00:00:00Z') }, { kind: 'blank' })
+  await db.update(s.settings).set({ companyName: 'Northwind', consentText: 'We process your data to assess your application.', aiNoticeText: 'An AI helps screen applications.' })
+  const { job } = await createJob(db, 'owner', { title: 'Backend Engineer', description: 'Build things', requirements: { location: 'Remote', salary_min: 1, must_have_skills: ['Go'] }, openings: 1, closesAt: new Date('2026-11-01T00:00:00Z') }, { kind: 'blank' })
   await saveDraft(db, job.id, STANDARD_HIRE)
   await publish(db, job.id, 'admin@example.test')
   jobId = job.id
@@ -50,7 +50,7 @@ beforeEach(() => { bucket = new Map() })
 describe('public job page', () => {
   it('shows only applicant-facing fields, with the consent and AI notices', async () => {
     const page = await publicJob(db, jobId, now)
-    expect(page).toMatchObject({ title: 'Backend Engineer', location: 'Remote', consentText: expect.any(String), aiNoticeText: expect.any(String) })
+    expect(page).toMatchObject({ title: 'Backend Engineer', companyName: 'Northwind', location: 'Remote', mustHaveSkills: ['Go'], consentText: expect.any(String), aiNoticeText: expect.any(String) })
     expect(page.form.map(f => f.key)).toEqual(['cv', 'linkedin', 'notice_period_weeks'])
     expect(JSON.stringify(page)).not.toContain('salary') // internal requirements stay internal
   })
@@ -122,6 +122,49 @@ describe('submit', () => {
   })
 })
 
+describe('review round 2', () => {
+  it('applying with someone else\'s email does not change their name or phone', async () => {
+    await submitApplication(db, fakeBucket, jobId, sub({ email: 'victim@example.test', first_name: 'Vic', last_name: 'Tim', phone: '+1 555 0100' }), now)
+    const { job } = await createJob(db, 'owner', { title: 'Other', description: '', requirements: {}, openings: 1, closesAt: null }, { kind: 'blank' })
+    await saveDraft(db, job.id, STANDARD_HIRE)
+    await publish(db, job.id, 'admin@example.test')
+    await submitApplication(db, fakeBucket, job.id, sub({ email: 'VICTIM@example.test', first_name: 'Evil', last_name: 'Doer', phone: '+1 555 6666' }), now)
+    expect(await db.query.candidates.findFirst({ where: eq(s.candidates.email, 'victim@example.test') }))
+      .toMatchObject({ firstName: 'Vic', lastName: 'Tim', phone: '+1 555 0100' })
+  })
+
+  it('a job closed while the files uploaded takes no application and keeps no files', async () => {
+    const closing = { ...fakeBucket, put: async (k: string, v: Uint8Array) => { bucket.set(k, v); await updateJob(db, jobId, { status: 'closed' }) } }
+    try {
+      await fails(submitApplication(db, closing, jobId, sub(), now), 404, 'job_not_open')
+      expect(bucket.size).toBe(0)
+    }
+    finally {
+      await updateJob(db, jobId, { status: 'open' })
+    }
+  })
+
+  it('a partly failed upload leaves no files behind', async () => {
+    // the object lands, then the put reports failure (e.g. a timeout after the write)
+    const failing = { ...fakeBucket, put: async (k: string, v: Uint8Array) => { bucket.set(k, v); throw new Error('r2 down') } }
+    await expect(submitApplication(db, failing, jobId, sub(), now)).rejects.toThrow('r2 down')
+    expect(bucket.size).toBe(0)
+  })
+
+  it('the sweeper keeps going past an application that can\'t start', async () => {
+    const { job } = await createJob(db, 'owner', { title: 'Broken', description: '', requirements: {}, openings: 1, closesAt: null }, { kind: 'blank' })
+    await saveDraft(db, job.id, STANDARD_HIRE)
+    const v = await publish(db, job.id, 'admin@example.test')
+    const bad = await submitApplication(db, fakeBucket, job.id, sub(), now)
+    await db.update(s.jobVersions).set({ workflow: { nodes: [], edges: [] } }).where(eq(s.jobVersions.id, v.id)) // no trigger: start throws
+    const good = await submitApplication(db, fakeBucket, jobId, sub(), now)
+    const deps = { db, handlers: {}, adminEmail: 'admin@example.test', enqueue: async () => {}, now: () => new Date(Date.now() + 3 * 60_000) }
+    await sweep(deps)
+    expect(await db.select().from(s.nodeRuns).where(eq(s.nodeRuns.applicationId, good))).not.toHaveLength(0)
+    expect(await db.select().from(s.nodeRuns).where(eq(s.nodeRuns.applicationId, bad))).toHaveLength(0)
+  })
+})
+
 describe('turnstile', () => {
   const answer = (body: unknown, ok = true) => (async () => new Response(JSON.stringify(body), { status: ok ? 200 : 500 })) as typeof fetch
   it('fails closed', async () => {
@@ -131,5 +174,8 @@ describe('turnstile', () => {
     expect(await verifyTurnstile(undefined, 't', undefined, answer({ success: true }))).toBe(false)
     expect(await verifyTurnstile('s', undefined, undefined, answer({ success: true }))).toBe(false)
     expect(await verifyTurnstile('s', 't', undefined, (async () => { throw new Error('down') }) as typeof fetch)).toBe(false)
+    // review round 2: a token issued for another site is refused
+    expect(await verifyTurnstile('s', 't', undefined, answer({ success: true, hostname: 'evil.test' }), 'jobs.example.test')).toBe(false)
+    expect(await verifyTurnstile('s', 't', undefined, answer({ success: true, hostname: 'jobs.example.test' }), 'jobs.example.test')).toBe(true)
   })
 })

@@ -21,12 +21,21 @@ export async function assertCanSee(db: Db, viewer: Viewer, applicationId: string
   if (!row) throw new DomainError(404, 'application_not_found')
 }
 
-interface AssignmentView { userId: string, submittedAt: Date | null, values: unknown }
+interface AssignmentView { userId: string, values: unknown }
 
-// Blind panels: while a task is open, an assignee who hasn't submitted sees no one else's scorecard.
-export function visibleAssignments<T extends AssignmentView>(runStatus: string, assignments: T[], viewer: Viewer): T[] {
-  if (atLeastManager(viewer.level) || runStatus !== 'waiting_on_human') return assignments
-  if (assignments.find(a => a.userId === viewer.userId)?.submittedAt) return assignments
+// Nodes the viewer still has to score on this application. Blind panels: for these, every attempt's
+// scorecards but the viewer's own are hidden (an earlier attempt's scores would bias the new one).
+export async function blindNodes(db: Db, viewer: Viewer, applicationId: string) {
+  if (atLeastManager(viewer.level)) return new Set<string>()
+  const rows = await db.select({ nodeKey: nodeRuns.nodeKey }).from(taskAssignments)
+    .innerJoin(nodeRuns, eq(nodeRuns.id, taskAssignments.runId))
+    .where(and(eq(nodeRuns.applicationId, applicationId), eq(nodeRuns.status, 'waiting_on_human'), eq(taskAssignments.userId, viewer.userId),
+      isNull(taskAssignments.closedAt), isNull(taskAssignments.submittedAt)))
+  return new Set(rows.map(r => r.nodeKey))
+}
+
+export function visibleAssignments<T extends AssignmentView>(nodeKey: string, assignments: T[], viewer: Viewer, blind: Set<string>): T[] {
+  if (!blind.has(nodeKey)) return assignments
   return assignments.map(a => a.userId === viewer.userId ? a : { ...a, values: null })
 }
 
@@ -69,6 +78,10 @@ export async function timeline(db: Db, viewer: Viewer, applicationId: string, no
   }).from(applicationEvents).leftJoin(user, eq(user.id, applicationEvents.actorId))
     .where(eq(applicationEvents.applicationId, app.id)).orderBy(asc(applicationEvents.seq))
 
+  const blind = await blindNodes(db, viewer, app.id)
+  // Run data can carry protected answers (condition traces, copies, CV text of a protected file),
+  // so only managers get it; others see the path, statuses and scorecards.
+  const manager = atLeastManager(viewer.level)
   return {
     application: {
       id: app.id, status: app.status, outcome: app.outcome, currentNodeKey: app.currentNodeKey, createdAt: app.createdAt,
@@ -81,9 +94,10 @@ export async function timeline(db: Db, viewer: Viewer, applicationId: string, no
     nodes: (version.workflow as Graph).nodes.map(({ key, type, label }) => ({ key, type, label })),
     runs: runs.map(r => ({
       id: r.id, nodeKey: r.nodeKey, nodeType: r.nodeType, attempt: r.attempt, status: r.status,
-      input: r.input, output: r.output, branchTaken: r.branchTaken, evaluation: r.evaluation, error: r.error, retries: r.retries,
+      ...(manager && { input: r.input, output: r.output, evaluation: r.evaluation }),
+      branchTaken: r.branchTaken, error: r.error, retries: r.retries,
       dueAt: r.dueAt, overdue: isOverdue(r, now), actorId: r.actorId, createdAt: r.createdAt, completedAt: r.completedAt,
-      assignments: visibleAssignments(r.status, assignments.filter(a => a.runId === r.id), viewer).map(({ runId: _, ...a }) => a),
+      assignments: visibleAssignments(r.nodeKey, assignments.filter(a => a.runId === r.id), viewer, blind).map(({ runId: _, ...a }) => a),
     })),
     events,
   }
@@ -111,6 +125,14 @@ export async function pipeline(db: Db, jobId: string) {
     createdAt: applications.createdAt, version: jobVersions.version,
     candidate: { firstName: candidates.firstName, lastName: candidates.lastName, email: candidates.email },
     runStatus: sql<string | null>`(select r.status from ${nodeRuns} r where r.application_id = ${applications.id} order by r.seq desc limit 1)`,
+    // who holds the candidate now, and by when: the open assignments of the latest run (empty unless it's a task)
+    dueAt: sql<string | null>`(select r.due_at from ${nodeRuns} r where r.application_id = ${applications.id} order by r.seq desc limit 1)`,
+    assignees: sql<{ id: string, name: string, submitted: boolean }[]>`coalesce((
+      select json_agg(json_build_object('id', u.id, 'name', u.name, 'submitted', ta.submitted_at is not null) order by u.name)
+      from ${taskAssignments} ta join ${user} u on u.id = ta.user_id
+      where ta.closed_at is null
+        and ta.run_id = (select r.id from ${nodeRuns} r where r.application_id = ${applications.id} order by r.seq desc limit 1)
+    ), '[]'::json)`,
   }).from(applications)
     .innerJoin(candidates, eq(candidates.id, applications.candidateId))
     .innerJoin(jobVersions, eq(jobVersions.id, applications.jobVersionId))

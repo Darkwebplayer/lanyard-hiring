@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta name="report-kind" content="coverage"><meta name="generated" content="2026-10-20">
+<title>Coverage: app</title>
+<style>
+:root{--bg:#fbfaf7;--fg:#1d1c1a;--mute:#6b675f;--line:#e4e0d6;--miss:#b3261e;--skip:#b9b3a6;--done:#6b675f}
+/* Light by default; the Dark checkbox switches, no script */
+:root:has(#dark:checked){color-scheme:dark;--bg:#171614;--fg:#ece9e2;--mute:#a19c91;--line:#34312c;--miss:#ff8a80;--skip:#5a564f;--done:#a19c91}
+.theme{float:right;font-size:.875rem;color:var(--mute);cursor:pointer}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,sans-serif}
+a{color:inherit}main{max-width:70rem;margin:0 auto;padding:2rem 1rem 4rem}
+h1{font-size:1.5rem;margin:0}.sub{color:var(--mute);margin:.25rem 0 1.5rem}
+.verdict{font-size:1.25rem;font-weight:600;margin:0 0 .75rem}
+.bar{display:flex;height:.75rem;border-radius:.375rem;overflow:hidden;background:var(--line);max-width:40rem}
+.bar span{display:block}.bar .missing{background:var(--miss)}.bar .skipped{background:var(--skip)}.bar .done{background:var(--done)}
+.counts{display:flex;gap:1.5rem;margin:.5rem 0 2rem;padding:0}.counts div{display:flex;gap:.4rem;align-items:baseline}
+.counts dd{margin:0;font-size:1.5rem;font-weight:650;font-variant-numeric:tabular-nums}.counts dt{color:var(--mute)}
+details{border-top:1px solid var(--line);padding:.75rem 0}summary{cursor:pointer;font-weight:600;font-size:1.1rem}
+table{border-collapse:collapse;width:100%;margin-top:.5rem}th,td{text-align:left;vertical-align:top;padding:.4rem .75rem .4rem 0;border-bottom:1px solid var(--line)}
+th[scope=row]{font-weight:500;width:45%}td{color:var(--mute)}
+.tag{font:600 .75rem/1 ui-monospace,monospace;letter-spacing:.04em;padding:.2rem .4rem;border-radius:.25rem;border:1px solid}
+.tag{color:var(--mute)}[data-status=missing] .tag{color:var(--miss)}
+.strip{display:flex;flex-wrap:wrap;gap:2px;margin:1rem 0 .25rem;padding:0;list-style:none;max-width:40rem}
+.strip li{width:1.1rem;height:1.1rem;display:grid;place-items:center;font:700 .7rem/1 ui-monospace,monospace;border-radius:2px;color:var(--bg)}
+.strip .missing{background:var(--miss)}.strip .skipped{background:var(--skip)}.strip .done{background:var(--done)}
+@media print{.theme{display:none}details>*{display:block}summary{list-style:none}}
+</style>
+</head><body><main>
+<header id="summary">
+<label class="theme"><input type="checkbox" id="dark"> Dark</label>
+<h1>Coverage: app</h1>
+<p class="sub">open, product · 2026-10-20 · from <a href="design-decisions.html">design-decisions.html</a> by human-touch/scripts/coverage.py</p>
+<p class="verdict">Every mandatory step is done.</p>
+<div class="bar" role="img" aria-label="0 missing, 0 skipped, 43 done"><span class="done" style="width:100.00%"></span></div>
+<ol class="strip" aria-label="Every check in process order"><li class="done" title="DONE: a dated session section">✓</li><li class="done" title="DONE: Brief: Who sets the look">✓</li><li class="done" title="DONE: Brief: For">✓</li><li class="done" title="DONE: Brief: Job">✓</li><li class="done" title="DONE: Brief: Feel">✓</li><li class="done" title="DONE: Brief: Core copy">✓</li><li class="done" title="DONE: Brief: Character">✓</li><li class="done" title="DONE: Brief: Screens">✓</li><li class="done" title="DONE: Brief: Richness">✓</li><li class="done" title="DONE: Brief: Signature moment">✓</li><li class="done" title="DONE: Brief: Ending">✓</li><li class="done" title="DONE: Brief: Flow shape">✓</li><li class="done" title="DONE: Brief: Map">✓</li><li class="done" title="DONE: Brief: First value">✓</li><li class="done" title="DONE: Assumed, please correct">✓</li><li class="done" title="DONE: Brief: Identity (provisional)">✓</li><li class="done" title="DONE: Direction: Default to beat">✓</li><li class="done" title="DONE: Direction: Directions sampled">✓</li><li class="done" title="DONE: Direction: Rolled candidate">✓</li><li class="done" title="DONE: Direction: Chosen">✓</li><li class="done" title="DONE: Direction: Default check (after layer 4)">✓</li><li class="done" title="DONE: Direction: Motif">✓</li><li class="done" title="DONE: Direction: Style tile">✓</li><li class="done" title="DONE: direction ledger line for today">✓</li><li class="done" title="DONE: Design language table, rows this change touches">✓</li><li class="done" title="DONE: Design language: Mechanics row">✓</li><li class="done" title="DONE: Voice: pairs and terms">✓</li><li class="done" title="DONE: Decisions table">✓</li><li class="done" title="DONE: Motion map table">✓</li><li class="done" title="DONE: Chunks table">✓</li><li class="done" title="DONE: Look notes (or &#x27;owed&#x27;)">✓</li><li class="done" title="DONE: For you to decide (hand-off)">✓</li><li class="done" title="DONE: Critique (or &#x27;owed&#x27;)">✓</li><li class="done" title="DONE: decisions logged for layer 1 Bare structure">✓</li><li class="done" title="DONE: decisions logged for layer 2 Direction">✓</li><li class="done" title="DONE: decisions logged for layer 3 Type and space">✓</li><li class="done" title="DONE: decisions logged for layer 4 Color and surface">✓</li><li class="done" title="DONE: decisions logged for layer 5 Use over time">✓</li><li class="done" title="DONE: decisions logged for layer 6 Motion and detail">✓</li><li class="done" title="DONE: Life: two or three places">✓</li><li class="done" title="DONE: Critique caught: each finding and its outcome">✓</li><li class="done" title="DONE: Removed (subtract pass)">✓</li><li class="done" title="DONE: motion map covers the code (17 rows, 28 motion declarations)">✓</li></ol>
+<dl class="counts"><div><dd data-count="missing">0</dd><dt>missing</dt></div><div><dd data-count="skipped">0</dd><dt>skipped</dt></div><div><dd data-count="done">43</dd><dt>done</dt></div></dl>
+<p class="sub">MISSING is mandatory: do it, or write in the log why this run is the exception. SKIPPED is a suggestion: decide, it is not an order.</p>
+</header>
+<details id="done"><summary>Done (43)</summary><table><tbody>
+<tr data-status="done"><th scope="row"><span class="tag">✓ DONE</span> a dated session section</th><td></td></tr>
+<tr data-status="done"><th scope="row"><span class="tag">✓ DONE</span> Brief: Who sets the look</th><td></td></tr>
+<tr data-status="done"><th scope="row"><span class="tag">✓ DONE</span> Brief: For</th><td></td></tr>
+<tr data-status="done"><th scope="row"><span class="tag">✓ DONE</span> Brief: Job</th><td></td></tr>
+<tr data-status="done"><th scope="row"><span class="tag">✓ DONE</span> Brief: Feel</th><td></td></tr>
+<tr data-status="done"><th scope="row"><span class="tag">✓ DONE</span> Brief: Core copy</th><td></td></tr>
+<tr data-status="done"><th scope="row"><span class="tag">✓ DONE</span> Brief: Character</th><td></td></tr>
+<tr data-status="done"><th scope="row"><span class="tag">✓ DONE</span> Brief: Screens</th><td></td></tr>
+<tr data-status="done"><th scope="row"><span class="tag">✓ DONE</span> Brief: Richness</th><td></td></tr>
+<tr data-status="done"><th scope="row"><span class="tag">✓ DONE</span> Brief: Signature moment</th><td></td></tr>
+<tr data-status="done"><th scope="row"><span class="tag">✓ DONE</span> Brief: Ending</th><td></td></tr>
+<tr data-status="done"><th scope="row"><span class="tag">✓ DONE</span> Brief: Flow shape</th><td></td></tr>
+<tr data-status="done"><th scope="row"><span class="tag">✓ DONE</span> Brief: Map</th><td></td></tr>
+<tr data-status="done"><th scope="row"><span class="tag">✓ DONE</span> Brief: First value</th><td></td></tr>
+<tr data-status="done"><th scope="row"><span class="tag">✓ DONE</span> Assumed, please correct</th><td></td></tr>
+<tr data-status="done"><th scope="row"><span class="tag">✓ DONE</span> Brief: Identity (provisional)</th><td></td></tr>
+<tr data-status="done"><th scope="row"><span class="tag">✓ DONE</span> Direction: Default to beat</th><td></td></tr>
+<tr data-status="done"><th scope="row"><span class="tag">✓ DONE</span> Direction: Directions sampled</th><td></td></tr>
+<tr data-status="done"><th scope="row"><span class="tag">✓ DONE</span> Direction: Rolled candidate</th><td></td></tr>
+<tr data-status="done"><th scope="row"><span class="tag">✓ DONE</span> Direction: Chosen</th><td></td></tr>
+<tr data-status="done"><th scope="row"><span class="tag">✓ DONE</span> Direction: Default check (after layer 4)</th><td></td></tr>
+<tr data-status="done"><th scope="row"><span class="tag">✓ DONE</span> Direction: Motif</th><td></td></tr>
+<tr data-status="done"><th scope="row"><span class="tag">✓ DONE</span> Direction: Style tile</th><td></td></tr>
+<tr data-status="done"><th scope="row"><span class="tag">✓ DONE</span> direction ledger line for today</th><td></td></tr>
+<tr data-status="done"><th scope="row"><span class="tag">✓ DONE</span> Design language table, rows this change touches</th><td></td></tr>
+<tr data-status="done"><th scope="row"><span class="tag">✓ DONE</span> Design language: Mechanics row</th><td></td></tr>
+<tr data-status="done"><th scope="row"><span class="tag">✓ DONE</span> Voice: pairs and terms</th><td></td></tr>
+<tr data-status="done"><th scope="row"><span class="tag">✓ DONE</span> Decisions table</th><td></td></tr>
+<tr data-status="done"><th scope="row"><span class="tag">✓ DONE</span> Motion map table</th><td></td></tr>
+<tr data-status="done"><th scope="row"><span class="tag">✓ DONE</span> Chunks table</th><td></td></tr>
+<tr data-status="done"><th scope="row"><span class="tag">✓ DONE</span> Look notes (or &#x27;owed&#x27;)</th><td></td></tr>
+<tr data-status="done"><th scope="row"><span class="tag">✓ DONE</span> For you to decide (hand-off)</th><td></td></tr>
+<tr data-status="done"><th scope="row"><span class="tag">✓ DONE</span> Critique (or &#x27;owed&#x27;)</th><td></td></tr>
+<tr data-status="done"><th scope="row"><span class="tag">✓ DONE</span> decisions logged for layer 1 Bare structure</th><td></td></tr>
+<tr data-status="done"><th scope="row"><span class="tag">✓ DONE</span> decisions logged for layer 2 Direction</th><td></td></tr>
+<tr data-status="done"><th scope="row"><span class="tag">✓ DONE</span> decisions logged for layer 3 Type and space</th><td></td></tr>
+<tr data-status="done"><th scope="row"><span class="tag">✓ DONE</span> decisions logged for layer 4 Color and surface</th><td></td></tr>
+<tr data-status="done"><th scope="row"><span class="tag">✓ DONE</span> decisions logged for layer 5 Use over time</th><td></td></tr>
+<tr data-status="done"><th scope="row"><span class="tag">✓ DONE</span> decisions logged for layer 6 Motion and detail</th><td></td></tr>
+<tr data-status="done"><th scope="row"><span class="tag">✓ DONE</span> Life: two or three places</th><td></td></tr>
+<tr data-status="done"><th scope="row"><span class="tag">✓ DONE</span> Critique caught: each finding and its outcome</th><td></td></tr>
+<tr data-status="done"><th scope="row"><span class="tag">✓ DONE</span> Removed (subtract pass)</th><td></td></tr>
+<tr data-status="done"><th scope="row"><span class="tag">✓ DONE</span> motion map covers the code (17 rows, 28 motion declarations)</th><td></td></tr>
+</tbody></table></details>
+</main></body></html>

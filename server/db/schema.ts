@@ -78,6 +78,7 @@ export const invites = pgTable('invites', {
 
 export const settings = pgTable('settings', {
   id: integer('id').primaryKey().default(1), // single row
+  companyName: text('company_name'), // shown to candidates on the apply page
   replyToEmail: text('reply_to_email'),
   consentText: text('consent_text'),
   aiNoticeText: text('ai_notice_text'),

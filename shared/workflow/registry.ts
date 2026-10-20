@@ -101,8 +101,9 @@ const aiReview: NodeDef<{
     if (!c.cv_text_ref) return issues
     const ref = checkRef(c.cv_text_ref, available, node, ['text', 'string'])
     const f = available.get(c.cv_text_ref)
-    // the AI only ever sees CV text or non-protected form text, never copies made by other nodes
-    if (!ref.length && (f!.protected || (f!.nodeType && f!.nodeType !== 'cv_parse'))) {
+    // the AI only ever sees CV text or non-protected form text: never candidate.*, job.* or copies made by other nodes
+    const allowed = c.cv_text_ref.startsWith('form.') ? !f?.protected : f?.nodeType === 'cv_parse'
+    if (!ref.length && !allowed) {
       ref.push({ node, code: 'ai_input_not_allowed', message: `"${c.cv_text_ref}" cannot be sent to the AI` })
     }
     return [...issues, ...ref]
@@ -225,6 +226,10 @@ const humanTask: NodeDef<HumanTaskConfig> = {
     ...c.scorecard.filter(f => f.min !== undefined && f.max !== undefined && f.min > f.max)
       .map(f => ({ node, code: 'min_gt_max', message: `scorecard field "${f.key}": min > max` })),
     ...checkTemplates([c.title, c.instructions], available, node),
+    // assignees see the title and instructions; protected answers are for managers only
+    ...[c.title, c.instructions].flatMap(t => t ? refsInTemplate(t) : [])
+      .filter(r => available.get(r)?.protected)
+      .map(r => ({ node, code: 'protected_ref', message: `"${r}" is protected and can't be shown to assignees` })),
   ],
 }
 
