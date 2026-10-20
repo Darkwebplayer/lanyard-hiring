@@ -45,7 +45,7 @@ export interface EngineDeps {
 export const MAX_RETRIES = 3
 const BACKOFF_SECONDS = [30, 120, 600]
 export const STALE_RUNNING_MS = 15 * 60_000 // a queue consumer can't run longer than this
-const LOST_PENDING_MS = 2 * 60_000
+export const LOST_PENDING_MS = 2 * 60_000
 const ACTIVE = ['pending', 'running', 'waiting_on_human'] as const
 const STEP_CAP = 100
 

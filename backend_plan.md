@@ -378,6 +378,29 @@ Verified:
 - `test/apply.int.test.ts`.
 - Over real HTTP in `wrangler dev`: Turnstile, a disguised file, 201, a duplicate 409, then queue → cv_parse in workerd → mock AI → shortlist → interview waiting.
 
+### Phase 7 status (2026-10-20)
+- Routes:
+  - `GET /api/tasks`: mine for everyone; overdue, blocked, failed and stuck for managers.
+  - `GET /api/tasks/:runId`, `POST /api/tasks/:runId/submit`.
+  - `PUT /api/runs/:id/assignees` (`{add, remove}`), `POST /api/runs/:id/retry`.
+  - `GET /api/applications/:id` (timeline), `POST /api/applications/:id/move` (`{to: {node} | {close}, reason}`; a node target reopens a closed application), `GET /api/applications/:id/files/:field` (always served as a download, `nosniff`).
+  - `GET /api/jobs/:id/applications` (pipeline), `GET /api/reports/hires`.
+- Domain: `server/domain/applications.ts` (access, blind panels, timeline, pipeline, hire report) and `server/domain/tasks.ts` (inbox, task view, reminders).
+- Access rules:
+  - An employee sees an application while they hold an open assignment on it, or for good once they've submitted.
+  - Anyone removed, closed out or moved away without submitting loses access (404).
+  - Protected answers are hidden from employees.
+  - Blind panels apply in both the task view and the timeline.
+- Inbox lists:
+  - Blocked: submissions so far plus open assignees who can still sign in add up to fewer than `min_submissions`.
+  - Failed: a failed run that is still the latest run of an active application.
+  - Stuck: a stale running run, or a pending run whose message was lost.
+- Reminders (`0 8 * * *`):
+  - The cron claims the `reminder_log` row for the day before sending. If the send fails, it releases the claim so a rerun can try again; the provider idempotency key `reminder:run:user:day` prevents a double send.
+  - It skips assignees who already submitted and users who can no longer sign in.
+- Tests: `test/ops.int.test.ts` (7). Totals: 113 passing on PGlite; typecheck clean. I checked that the blind-panel test fails when the blind check is removed.
+- Verified in workerd: both crons run against Neon dev, and the new routes return 401 without a session. Signed-in HTTP checks need the Google credentials.
+
 ## 9. Still open
 1. AI provider and model: pick by screening quality on about 20 real CVs, with zero data retention.
 2. Email: mocked for now. Going live means a Resend account and a verified sending domain.

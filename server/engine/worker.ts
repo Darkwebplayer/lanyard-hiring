@@ -1,5 +1,6 @@
 import { createDb, type Db } from '../db/client'
 import { settings } from '../db/schema'
+import { sendReminders } from '../domain/tasks'
 import type { AppEnv } from '../env'
 import { createAi } from './ai'
 import { sendEmail } from './email'
@@ -50,7 +51,9 @@ export async function scheduled(cron: string, env: AppEnv) {
   const db = createDb(env.HYPERDRIVE.connectionString)
   try {
     if (cron === '*/5 * * * *') console.log('[engine] sweep', await sweep(engineDeps(env, db)))
-    // '0 8 * * *' → overdue reminders (phase 7)
+    if (cron === '0 8 * * *') {
+      console.log('[reminders]', await sendReminders(db, env.ADMIN_EMAIL, env.BETTER_AUTH_URL, new Date(), (key, email) => sendEmail(env, key, email)))
+    }
   }
   finally {
     await db.close()
