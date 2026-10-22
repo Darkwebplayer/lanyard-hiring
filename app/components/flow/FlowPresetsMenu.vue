@@ -10,6 +10,8 @@ const props = defineProps<{
   form: FormField[]
   workflow: Graph
   liveVersion: number | null
+  // archived jobs: their flow can still be reused, but nothing may replace it
+  saveOnly?: boolean
 }>()
 const emit = defineEmits<{ replace: [next: Flow, name: string] }>()
 const toast = useToast()
@@ -78,10 +80,13 @@ async function save() {
 </script>
 
 <template>
-  <button type="button" class="btn btn-quiet btn-sm presets-btn" popovertarget="flow-presets-menu">
+  <button v-if="saveOnly" type="button" class="btn btn-quiet btn-sm presets-btn" @click="openSave">
+    <Icon name="library" />Save as flow preset…
+  </button>
+  <button v-else type="button" class="btn btn-quiet btn-sm presets-btn" popovertarget="flow-presets-menu">
     <Icon name="library" />Flow presets<Icon name="chevron-down" :size="14" />
   </button>
-  <div id="flow-presets-menu" ref="menu" popover class="menu presets-menu">
+  <div v-if="!saveOnly" id="flow-presets-menu" ref="menu" popover class="menu presets-menu">
     <button type="button" @click="openLoad"><Icon name="reopen" :size="16" />Start from a preset…</button>
     <button type="button" @click="openSave"><Icon name="library" :size="16" />Save as flow preset…</button>
   </div>

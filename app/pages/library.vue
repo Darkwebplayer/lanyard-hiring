@@ -7,7 +7,10 @@ const tabs = [
 </script>
 
 <template>
-  <div class="page">
+  <!-- a flow preset's editor brings its own header and wide canvas, so no Library tabs above it.
+       ponytail: keyed on params.id (only that editor has one); switch to route.name if another library page gets an id -->
+  <NuxtPage v-if="route.params.id" />
+  <div v-else class="page">
     <header class="page-head">
       <h1>Library</h1>
     </header>

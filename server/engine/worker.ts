@@ -4,7 +4,8 @@ import { sendReminders } from '../domain/tasks'
 import type { AppEnv } from '../env'
 import { createAi } from './ai'
 import { sendEmail } from './email'
-import { type EngineDeps, executeAutoRun, sweep } from './engine'
+import { DomainError } from '../domain/errors'
+import { type EngineDeps, executeAutoRun, moveApplication, type MoveFrom, type MoveTarget, sweep } from './engine'
 import { createHandlers } from './handlers'
 
 export function engineDeps(env: AppEnv, db: Db): EngineDeps {
@@ -24,20 +25,31 @@ export function engineDeps(env: AppEnv, db: Db): EngineDeps {
   }
 }
 
+// A board drop of a whole step: one message per application, so thousands never sit in one request.
+export interface MoveMessage { applicationId: string, from: MoveFrom, to: MoveTarget, reason: string, actorId: string }
+export type EngineMessage = { runId: string } | { move: MoveMessage }
+
 // Messages are only triggers; Postgres is the source of truth. The engine records its own failures
 // and retries, so a message is acked once handled. Only infrastructure errors (db down) redeliver.
-export async function consume(batch: MessageBatch<{ runId: string }>, env: AppEnv) {
+export async function consume(batch: MessageBatch<EngineMessage>, env: AppEnv) {
   const db = createDb(env.HYPERDRIVE.connectionString)
   const deps = engineDeps(env, db)
   try {
     for (const msg of batch.messages) {
+      const label = 'move' in msg.body ? `move ${msg.body.move.applicationId}` : `run ${msg.body.runId}`
       try {
-        const result = await executeAutoRun(deps, msg.body.runId)
-        console.log('[engine] run', msg.body.runId, result)
+        if ('move' in msg.body) {
+          const m = msg.body.move
+          // `from` makes a redelivery or a candidate who moved on meanwhile a no-op
+          const result = await moveApplication(deps, m.applicationId, m.to, m.reason, m.actorId, m.from)
+            .catch((e) => { if (e instanceof DomainError) return e.message; throw e })
+          console.log('[engine]', label, result)
+        }
+        else console.log('[engine]', label, await executeAutoRun(deps, msg.body.runId))
         msg.ack()
       }
       catch (e) {
-        console.error('[engine] run', msg.body.runId, 'infrastructure error', e)
+        console.error('[engine]', label, 'infrastructure error', e)
         msg.retry({ delaySeconds: 30 })
       }
     }

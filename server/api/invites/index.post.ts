@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
-import { invites, user } from '../../db/schema'
+import { invites, roles, user } from '../../db/schema'
 import { isAdminEmail } from '../../domain/access'
 
 const body = z.object({ email: z.email().transform(e => e.trim().toLowerCase()), roleId: z.uuid() })
@@ -21,5 +21,6 @@ export default defineEventHandler(async (event) => {
       .returning(),
     { fk: 'unknown_role' },
   )
-  return invite
+  const role = await db.query.roles.findFirst({ where: eq(roles.id, invite!.roleId) })
+  return { email: invite!.email, roleId: invite!.roleId, roleName: role!.name, createdAt: invite!.createdAt }
 })

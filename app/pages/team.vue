@@ -89,6 +89,17 @@ async function sendInvite() {
   finally { inviting.value = false }
 }
 const inviteRowError = reactive<Record<string, string>>({})
+// an invite's role changes by inviting the address again
+async function reinvite(i: Invite, roleId: string) {
+  delete inviteRowError[i.email]
+  busyRow.value = i.email
+  try { Object.assign(i, await api<Invite>('/api/invites', { method: 'POST', body: { email: i.email, roleId } })) }
+  catch (e) {
+    inviteRowError[i.email] = toApiError(e).message
+    invites.value = [...invites.value] // re-render so the control shows the saved value again
+  }
+  finally { busyRow.value = null }
+}
 async function removeInvite(i: Invite) {
   delete inviteRowError[i.email]
   try {
@@ -167,7 +178,7 @@ async function addRole() {
           <button class="btn btn-primary" :aria-busy="inviting" :disabled="inviting || !roles.length">
             <span v-if="inviting" class="spinner" /><span>Send invite</span>
           </button>
-          <p class="hint">They sign in with Google using this address; the invite is used up at their first sign-in. Inviting an address again changes its role.</p>
+          <p class="hint">They join the list below at once and sign in with Google using this address.</p>
           <div aria-live="polite" class="inv-result">
             <p v-if="inviteError" class="error"><Icon name="alert" :size="16" />{{ inviteError }}</p>
             <p v-else-if="invitedNote" class="ok"><Icon name="check" :size="16" />{{ invitedNote }}</p>
@@ -210,24 +221,30 @@ async function addRole() {
                 </td>
                 <td class="faint nowrap">{{ fmtDate(u.createdAt) }}</td>
               </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div v-if="invites.length" class="panel table-wrap">
-          <table class="table">
-            <caption class="cap">Waiting for first sign-in</caption>
-            <thead><tr><th>Email</th><th>Role</th><th>Sent</th><th><span class="sr-only">Actions</span></th></tr></thead>
-            <tbody>
-              <tr v-for="i in invites" :key="i.email">
-                <td class="email-cell">{{ i.email }}<p v-if="inviteRowError[i.email]" class="error" role="alert">{{ inviteRowError[i.email] }}</p></td>
-                <td>{{ i.roleName }}</td>
-                <td class="faint nowrap">{{ fmtDate(i.createdAt) }}</td>
-                <td class="num"><button class="btn btn-quiet btn-sm" :aria-label="`Remove invite for ${i.email}`" @click="removeInvite(i)">Remove</button></td>
+              <!-- invited, not signed in yet: on the list from the moment they're invited, so nobody wonders where they went -->
+              <tr v-for="i in invites" :key="i.email" class="pending">
+                <td>
+                  <div class="who">
+                    <Avatar :name="i.email" :size="32" />
+                    <div class="who-text">
+                      <b class="email-cell">{{ i.email }}</b>
+                      <span class="faint">Invited, not signed in yet</span>
+                    </div>
+                  </div>
+                </td>
+                <td class="role">
+                  <select :value="i.roleId" :aria-label="`Role for ${i.email}`" :disabled="busyRow === i.email" @change="reinvite(i, ($event.target as HTMLSelectElement).value)">
+                    <option v-for="r in sortedRoles" :key="r.id" :value="r.id">{{ r.name }}</option>
+                  </select>
+                  <p v-if="inviteRowError[i.email]" class="error" role="alert">{{ inviteRowError[i.email] }}</p>
+                </td>
+                <td><button class="btn btn-quiet btn-sm" :aria-label="`Cancel invite for ${i.email}`" :disabled="busyRow === i.email" @click="removeInvite(i)">Cancel invite</button></td>
+                <td class="faint nowrap">Invited {{ fmtDate(i.createdAt) }}</td>
               </tr>
             </tbody>
           </table>
         </div>
+
       </section>
 
       <section class="block" aria-labelledby="roles-h">
@@ -305,7 +322,6 @@ async function addRole() {
 tr.off .who b { color: var(--ink-2); font-weight: 500; }
 tr.off .who .avatar { background: var(--sunk); color: var(--ink-2); }
 .nowrap { white-space: nowrap; }
-.cap { caption-side: top; text-align: left; padding: 14px 14px 4px; font-weight: 600; }
 .email-cell { overflow-wrap: anywhere; }
 
 /* switch: a checkbox drawn as a track and knob */

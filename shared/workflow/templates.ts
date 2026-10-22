@@ -107,5 +107,10 @@ export const STANDARD_HIRE: { form: FormField[], workflow: Graph } = {
       { from: 'offer_email', to: 'hired' },
       { from: 'rejection_email', to: 'rejected' },
     ],
+    stages: [
+      { id: 'screening', name: 'Screening', nodeKeys: ['cv', 'ai', 'manual_review'] },
+      { id: 'interview', name: 'Interview', nodeKeys: ['interview'] },
+      { id: 'decision', name: 'Decision', nodeKeys: ['offer_email', 'rejection_email'] },
+    ],
   },
 }

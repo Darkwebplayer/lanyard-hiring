@@ -6,7 +6,7 @@ const flash = useState<{ at: string } | null>('inbox-flash', () => null)
 
 // with tasks waiting, the first one opens by itself; nobody starts from a blank page
 const router = useRouter()
-const opening = computed(() => !!inbox.value?.mine.length && route.query.list !== 'team')
+const opening = computed(() => !!inbox.value?.mine.length && route.query.list !== 'attention')
 // after mount, so it never races the navigation that brought us here
 onMounted(async () => {
   await router.isReady()
@@ -40,7 +40,7 @@ async function retry() {
     <button class="btn" :aria-busy="retrying" @click="retry"><span v-if="retrying" class="spinner" /><Icon v-else name="retry" />Retry</button>
   </div>
 
-  <div v-else-if="inbox.mine.length" class="empty">
+  <div v-else-if="inbox.mine.length || route.query.list === 'attention'" class="empty">
     <p>Choose a late or blocked task to see its scorecard.</p>
   </div>
 

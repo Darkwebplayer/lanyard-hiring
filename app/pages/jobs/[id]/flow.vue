@@ -7,6 +7,7 @@ const router = useRouter()
 const toast = useToast()
 const id = computed(() => String(route.params.id))
 const { detail, editable, error, refresh, saveDraft } = useJob(id.value)
+const source = useJobFlowSource(id.value)
 if (!detail.value) refresh()
 useHead({ title: () => (detail.value ? `Flow · ${detail.value.job.title}` : 'Flow') })
 
@@ -49,7 +50,7 @@ function onEdit() {
 <template>
   <div class="flow-page">
     <h2 class="sr-only">Flow</h2>
-    <FlowEditor v-if="editable" ref="editor" :key="`${id}:${rev}`" :job-id="id" @edit="onEdit" @replace="replace" />
+    <FlowEditor v-if="editable" ref="editor" :key="`${id}:${rev}`" :source="source" @edit="onEdit" @replace="replace" />
     <div v-else-if="error" class="empty" role="alert">
       <h3>The flow didn’t load</h3>
       <p>{{ error.message }}</p>

@@ -15,20 +15,25 @@ const flash = useState<{ at: string, text: string, next?: { to: string, title: s
 
 const loading = computed(() => !inbox.value && !error.value)
 const mine = computed(() => inbox.value?.mine ?? [])
-const view = computed(() => (isManager.value && route.query.list === 'team' ? 'team' : 'mine'))
+const view = computed(() => (isManager.value && route.query.list === 'attention' ? 'attention' : 'mine'))
 const selected = computed(() => route.params.runId as string | undefined)
 
 // failed and stuck steps are automatic ones: no scorecard to open, so they act inline
-const team = computed(() => [
+const attention = computed(() => [
   { key: 'failed', label: 'Stopped', rows: inbox.value?.failed ?? [], inline: true },
   { key: 'blocked', label: 'Blocked', rows: inbox.value?.blocked ?? [], inline: false },
-  { key: 'overdue', label: 'Late across the team', rows: inbox.value?.overdue ?? [], inline: false },
+  { key: 'overdue', label: 'Late', rows: inbox.value?.overdue ?? [], inline: false },
   { key: 'stuck', label: 'Stuck', rows: inbox.value?.stuck ?? [], inline: true },
 ].filter(s => s.rows.length))
-const teamCount = computed(() => team.value.reduce((n, s) => n + s.rows.length, 0))
+const attentionCount = computed(() => attention.value.reduce((n, s) => n + s.rows.length, 0))
 
 const linkTo = (t: TaskRow) => ({ path: `/inbox/${t.runId}`, query: route.query })
-const setView = (v: string) => router.replace({ path: route.path, query: v === 'team' ? { list: 'team' } : {} })
+// the open task stays only if the list switched to also holds it; else back to the list's own start
+const setView = (v: string) => {
+  const rows = v === 'attention' ? attention.value.flatMap(s => s.rows) : mine.value
+  const keep = !!selected.value && rows.some(t => t.runId === selected.value)
+  router.replace({ path: keep ? route.path : '/inbox', query: v === 'attention' ? { list: 'attention' } : {} })
+}
 
 const retrying = ref<string | null>(null)
 const retryError = ref<Record<string, string>>({})
@@ -81,7 +86,7 @@ watch(selected, async (id) => {
         <h1>Inbox</h1>
         <div v-if="isManager && inbox" class="seg" role="radiogroup" aria-label="Show">
           <label><input type="radio" name="list" :checked="view === 'mine'" @change="setView('mine')"><span>Yours <b class="n">{{ mine.length }}</b></span></label>
-          <label><input type="radio" name="list" :checked="view === 'team'" @change="setView('team')"><span>Team problems <b v-if="teamCount" class="n n-bad">{{ teamCount }}</b></span></label>
+          <label><input type="radio" name="list" :checked="view === 'attention'" @change="setView('attention')"><span>Needs attention <b v-if="attentionCount" class="n n-bad">{{ attentionCount }}</b></span></label>
         </div>
       </header>
 
@@ -104,8 +109,8 @@ watch(selected, async (id) => {
       </template>
 
       <template v-else-if="inbox">
-        <p v-if="!team.length" class="calm"><Icon name="check" :size="16" />Nothing is stuck or late across the team.</p>
-        <section v-for="s in team" :key="s.key" :aria-labelledby="`sec-${s.key}`">
+        <p v-if="!attention.length" class="calm"><Icon name="check" :size="16" />Nothing needs attention. No step is stopped, stuck, blocked or late.</p>
+        <section v-for="s in attention" :key="s.key" :aria-labelledby="`sec-${s.key}`">
           <h2 :id="`sec-${s.key}`" class="sec">{{ s.label }} <span class="faint">{{ s.rows.length }}</span></h2>
           <ul class="rows">
             <li v-for="t in s.rows" :key="t.runId">
@@ -138,7 +143,7 @@ watch(selected, async (id) => {
         </section>
       </template>
 
-      <footer v-if="inbox && (view === 'mine' ? mine.length : team.length) > 1" class="list-foot faint">
+      <footer v-if="inbox && (view === 'mine' ? mine.length : attention.length) > 1" class="list-foot faint">
         <span class="kbd">j</span><span class="kbd">k</span> next and previous task
       </footer>
     </aside>

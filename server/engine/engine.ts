@@ -349,12 +349,21 @@ export async function reassignTask(deps: EngineDeps, runId: string, change: { ad
 }
 
 export type MoveTarget = { node: string } | { close: Outcome }
+// Where the mover saw the application. A board shows a snapshot; by the time a move lands the candidate
+// may have moved on by itself, and then the move is skipped rather than yanking them back.
+export type MoveFrom = { node: string } | { closed: Outcome }
+export interface MoveResult { moved: boolean, currentNodeKey: string | null, status: 'active' | 'closed', outcome: Outcome | null }
+
+const isAt = (app: Application, from: MoveFrom) => 'node' in from
+  ? app.status === 'active' && app.currentNodeKey === from.node
+  : app.status === 'closed' && app.outcome === from.closed
 
 // Manual override: cancel whatever is active, then jump to any node (or close). Also reopens.
-export async function moveApplication(deps: EngineDeps, applicationId: string, target: MoveTarget, reason: string, actorId: string) {
+export async function moveApplication(deps: EngineDeps, applicationId: string, target: MoveTarget, reason: string, actorId: string, from?: MoveFrom): Promise<MoveResult> {
   const out: Enqueued[] = []
-  await deps.db.transaction(async (tx) => {
+  const moved = await deps.db.transaction(async (tx) => {
     const app = await lockApplication(tx, applicationId)
+    if (from && !isAt(app, from)) return false
     const graph = await loadGraph(tx, app.jobVersionId)
     if ('node' in target) findNode(graph, target.node) // 422 before changing anything
     // changing a recorded outcome goes through a reopen, so a hire can't flip with a single call
@@ -375,15 +384,20 @@ export async function moveApplication(deps: EngineDeps, applicationId: string, t
     if ('close' in target) {
       await tx.update(applications).set({ status: 'closed', outcome: target.close }).where(eq(applications.id, app.id))
       await event(tx, app.id, 'closed', { outcome: target.close, manual: true }, actorId)
-      return
+      return true
     }
     if (app.status === 'closed') {
       await tx.update(applications).set({ status: 'active', outcome: null }).where(eq(applications.id, app.id))
       await event(tx, app.id, 'reopened', { reason }, actorId)
     }
     await walkFrom(tx, deps, { ...app, status: 'active', outcome: null }, target.node, out, actorId)
+    return true
   })
   await flush(deps, out)
+  // the walk may carry on past the target (a condition, an End), so report where it actually stopped
+  const [pos] = await deps.db.select({ currentNodeKey: applications.currentNodeKey, status: applications.status, outcome: applications.outcome })
+    .from(applications).where(eq(applications.id, applicationId))
+  return { moved, ...pos! } as MoveResult
 }
 
 // Retry the application's latest run when it failed, or when it is stuck in `running` (dead worker).

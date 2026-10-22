@@ -37,9 +37,17 @@ export interface GraphEdge {
   branch?: string // condition nodes only: a branch key, 'default' or 'missing'
 }
 
+// Display-only grouping of steps (board columns, canvas highlight). Never affects how a flow runs.
+export interface Stage {
+  id: string
+  name: string
+  nodeKeys: string[]
+}
+
 export interface Graph {
   nodes: GraphNode[]
   edges: GraphEdge[]
+  stages?: Stage[] // array order = board column order
 }
 
 // The job fields every workflow can read as job.*

@@ -21,7 +21,15 @@ export const draftShape = z.object({
 
 const BLANK: { form: FormField[], workflow: Graph } = {
   form: [],
-  workflow: { nodes: [{ key: 'start', type: 'application_received', config: {}, position: { x: 0, y: 0 } }], edges: [] },
+  workflow: {
+    nodes: [{ key: 'start', type: 'application_received', config: {}, position: { x: 0, y: 0 } }],
+    edges: [],
+    stages: [
+      { id: 'screening', name: 'Screening', nodeKeys: [] },
+      { id: 'interview', name: 'Interview', nodeKeys: [] },
+      { id: 'offer', name: 'Offer', nodeKeys: [] },
+    ],
+  },
 }
 
 export type StartFrom = { kind: 'blank' } | { kind: 'standard_hire' } | { kind: 'job', jobId: string } | { kind: 'preset', presetId: string }

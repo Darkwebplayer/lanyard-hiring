@@ -4,6 +4,7 @@ import { REGISTRY } from '~~/shared/workflow/registry'
 import { STANDARD_HIRE } from '~~/shared/workflow/templates'
 import type { Graph, GraphNode, Issue } from '~~/shared/workflow/types'
 import StepPanel from '~/components/flow/StepPanel.vue'
+import { SAMPLE_JOB } from '~/composables/useFlowSource'
 import { type Person, type Preset, type Role, blankConfig, blankItem, blankNoun, summaryOf } from '~/lib/flow'
 
 useHead({ title: 'Steps · Library' })
@@ -22,7 +23,6 @@ const sections = computed(() => PRESET_SECTIONS.map(s => ({
   ...s,
   presets: (presets.value ?? []).filter(p => (s.types as readonly string[]).includes(p.type)).sort((a, b) => a.position - b.position),
 })))
-const SAMPLE_JOB = { title: 'Example job', openings: 1, requirements: { must_have_skills: ['TypeScript'], min_experience_years: 3 } }
 
 // ---------- the editor: one preset (?preset=id) or a new one (?new=type) ----------
 const selectedId = computed(() => route.query.preset as string | undefined)
@@ -183,7 +183,7 @@ async function confirmDelete() {
         <div v-if="draft" class="editor card">
           <StepPanel
             :key="`${selectedId ?? 'new'}-${draft.node.type}`" :node="draft.node" :graph="draft.graph" :form="STANDARD_HIRE.form"
-            :roles="roles" :people="people" :issues="issues" :key-locked="false" :read-only="false" job-id="" :job="SAMPLE_JOB" preset
+            :roles="roles" :people="people" :issues="issues" :key-locked="false" :read-only="false" form-href="" :job="SAMPLE_JOB" preset
             @close="choose({})"
           >
             <template #extra>

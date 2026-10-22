@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import type { PipelineState } from '../[id].vue'
+import type { PipelineRow, PipelineState } from '../[id].vue'
 
 const route = useRoute()
 const router = useRouter()
 const id = route.params.id as string
 const { detail } = useJob(id)
-const { rows, error, load } = inject<PipelineState>('pipeline')!
+const { board, error, load } = inject<PipelineState>('pipeline')!
 
+const view = computed(() => route.query.view === 'list' ? 'list' : 'board')
 const FILTERS = [
   { value: 'active', label: 'Active' },
   { value: 'hired', label: 'Hired' },
@@ -16,51 +17,64 @@ const FILTERS = [
 type Filter = typeof FILTERS[number]['value']
 const filter = computed<Filter>(() => FILTERS.some(f => f.value === route.query.show) ? route.query.show as Filter : 'active')
 const q = computed(() => (route.query.q as string | undefined) ?? '')
+const stepFilter = computed(() => (route.query.step as string | undefined) ?? '')
 
-const matches = (r: NonNullable<typeof rows.value>[number], f: Filter) =>
-  f === 'all' || (f === 'active' ? r.status === 'active' : r.outcome === f)
-const count = (f: Filter) => rows.value?.filter(r => matches(r, f)).length ?? 0
-const shown = computed(() => {
-  const needle = q.value.trim().toLowerCase()
-  return (rows.value ?? [])
-    .filter(r => matches(r, filter.value) && (!needle || fullName(r.candidate).toLowerCase().includes(needle))
-      && (!stepFilter.value || r.currentNodeKey === stepFilter.value))
-    // stopped first (nothing happens until someone acts), then late tasks, then newest
-    .sort((a, b) => urgency(b) - urgency(a) || b.createdAt.localeCompare(a.createdAt))
-})
+// counts come from the board, so they cover everyone, not just the loaded page
+const counts = computed(() => board.value?.counts ?? [])
+const count = (f: Filter) => counts.value.filter(c => f === 'all' || (f === 'active' ? c.status === 'active' : c.outcome === f)).reduce((n, c) => n + c.n, 0)
+const total = computed(() => count('all'))
+
+// ---------- the list: one page at a time from the server ----------
+const PAGE = 50
+const rows = ref<PipelineRow[] | null>(null)
+const more = ref(false)
+const listError = ref<string | null>(null)
+const loadingMore = ref(false)
+let seq = 0
+async function fetchRows(offset = 0) {
+  const mine = ++seq
+  listError.value = null
+  try {
+    const page = await api<PipelineRow[]>(`/api/jobs/${id}/applications`, {
+      query: { show: filter.value, q: q.value.trim() || undefined, step: stepFilter.value || undefined, limit: PAGE, offset },
+    })
+    if (mine !== seq) return
+    rows.value = offset ? [...(rows.value ?? []), ...page] : page
+    more.value = page.length === PAGE
+  }
+  catch (e) { if (mine === seq) listError.value = toApiError(e).message }
+}
+async function loadMore() {
+  loadingMore.value = true
+  await fetchRows(rows.value?.length ?? 0)
+  loadingMore.value = false
+}
+let typing: ReturnType<typeof setTimeout> | undefined
+watch([view, filter, stepFilter], () => { if (view.value === 'list') fetchRows() }, { immediate: true })
+watch(q, () => { clearTimeout(typing); typing = setTimeout(() => view.value === 'list' && fetchRows(), 250) })
 
 // "Tomás H., Mei T. +1": who still owes a scorecard (people who already sent theirs are left out)
-const owing = (r: NonNullable<typeof rows.value>[number]) => {
+const owing = (r: PipelineRow) => {
   const open = r.assignees.filter(a => !a.submitted)
   return open.length ? open : r.assignees
 }
-const holders = (r: NonNullable<typeof rows.value>[number]) => {
+const holders = (r: PipelineRow) => {
   const short = (n: string) => n.split(/\s+/).length > 1 ? `${n.split(/\s+/)[0]} ${n.split(/\s+/).at(-1)![0]}.` : n
   const list = owing(r).map(a => short(a.name))
   return list.length > 2 ? `${list.slice(0, 2).join(', ')} +${list.length - 2}` : list.join(', ')
 }
 
-function urgency(r: NonNullable<typeof rows.value>[number]) {
-  if (r.status !== 'active') return 0
-  if (r.runStatus === 'failed') return 2
-  return r.runStatus === 'waiting_on_human' && r.dueAt && new Date(r.dueAt) < new Date() ? 1 : 0
-}
-
 // Where the active candidates are now, so a step that piles up shows before scrolling. Filters by ?step=.
-const stepFilter = computed(() => (route.query.step as string | undefined) ?? '')
-const byStep = computed(() => {
-  const counts = new Map<string, number>()
-  for (const r of rows.value ?? []) if (r.status === 'active' && r.currentNodeKey) counts.set(r.currentNodeKey, (counts.get(r.currentNodeKey) ?? 0) + 1)
-  return [...counts].map(([key, n]) => ({ key, n, label: step(key)?.label ?? key, stopped: (rows.value ?? []).some(r => r.currentNodeKey === key && r.runStatus === 'failed') }))
-    .sort((a, b) => b.n - a.n)
-})
+const byStep = computed(() => counts.value.filter(c => c.status === 'active' && c.key)
+  .map(c => ({ key: c.key!, n: c.n, label: step(c.key)?.label ?? c.key!, stopped: c.failed > 0 }))
+  .sort((a, b) => b.n - a.n))
 // the flow version only matters when candidates are on different ones
 const mixedVersions = computed(() => new Set((rows.value ?? []).map(r => r.version)).size > 1)
 
 const setQuery = (patch: Record<string, string | undefined>) => router.replace({ query: { ...route.query, ...patch } })
 
 // Step names come from the flow; rows on older versions may name a step that's gone, so fall back to the key.
-const nodes = computed(() => [...(detail.value?.published?.workflow.nodes ?? []), ...(detail.value?.draft?.workflow.nodes ?? [])])
+const nodes = computed(() => [...(board.value?.steps ?? []), ...(detail.value?.published?.workflow.nodes ?? []), ...(detail.value?.draft?.workflow.nodes ?? [])])
 const step = (key: string | null) => {
   const n = nodes.value.find(n => n.key === key)
   // an End step repeats the outcome chip, so it isn't shown as a step
@@ -77,11 +91,11 @@ const everPublished = computed(() => !!detail.value?.published)
       <Icon name="alert" />{{ error }} <button class="btn btn-sm" @click="load">Retry</button>
     </div>
 
-    <div v-else-if="!rows || !detail" class="panel" aria-busy="true">
+    <div v-else-if="!board || !detail" class="panel" aria-busy="true">
       <div v-for="i in 8" :key="i" class="sk-row"><span class="skeleton" style="width: 22%" /><span class="skeleton" style="width: 18%" /><span class="skeleton" style="width: 16%" /><span class="skeleton" style="width: 10%" /></div>
     </div>
 
-    <section v-else-if="!rows.length" class="panel empty">
+    <section v-else-if="!total" class="panel empty">
       <template v-if="!everPublished">
         <h2>No applications yet</h2>
         <p>Publish the job to start taking applications.</p>
@@ -98,11 +112,21 @@ const everPublished = computed(() => !!detail.value?.published)
     </section>
 
     <template v-else>
+      <div class="views">
+        <div class="seg" role="radiogroup" aria-label="View">
+          <label><input type="radio" name="view" value="board" :checked="view === 'board'" @change="setQuery({ view: undefined })"><span>Board</span></label>
+          <label><input type="radio" name="view" value="list" :checked="view === 'list'" @change="setQuery({ view: 'list' })"><span>List</span></label>
+        </div>
+      </div>
+
+      <PipelineBoard v-if="view === 'board'" :job-id="id" :board="board" @reload="load" />
+
+      <template v-else>
       <div class="tools">
         <div class="seg" role="radiogroup" aria-label="Show applications">
           <label v-for="f in FILTERS" :key="f.value">
             <input type="radio" name="show" :value="f.value" :checked="filter === f.value" @change="setQuery({ show: f.value === 'active' ? undefined : f.value })">
-            <span>{{ f.label }} <b class="n">{{ count(f.value) }}</b></span>
+            <span>{{ f.label }} <b class="n">{{ count(f.value).toLocaleString() }}</b></span>
           </label>
         </div>
         <label class="search">
@@ -114,17 +138,23 @@ const everPublished = computed(() => !!detail.value?.published)
 
       <nav v-if="filter === 'active' && byStep.length > 1" class="steps" aria-label="Active candidates by step">
         <button v-for="s in byStep" :key="s.key" class="step-n" :class="{ stopped: s.stopped }" :aria-pressed="stepFilter === s.key" @click="setQuery({ step: stepFilter === s.key ? undefined : s.key })">
-          <Icon v-if="s.stopped" name="stop" :size="14" /><b>{{ s.n }}</b> {{ s.label }}<span v-if="s.stopped" class="sr-only">, some stopped</span>
+          <Icon v-if="s.stopped" name="stop" :size="14" /><b>{{ s.n.toLocaleString() }}</b> {{ s.label }}<span v-if="s.stopped" class="sr-only">, some stopped</span>
         </button>
       </nav>
 
-      <div class="panel">
+      <div v-if="listError" class="form-error" role="alert">
+        <Icon name="alert" />{{ listError }} <button class="btn btn-sm" @click="fetchRows()">Retry</button>
+      </div>
+      <div v-else-if="!rows" class="panel" aria-busy="true">
+        <div v-for="i in 8" :key="i" class="sk-row"><span class="skeleton" style="width: 22%" /><span class="skeleton" style="width: 18%" /><span class="skeleton" style="width: 16%" /><span class="skeleton" style="width: 10%" /></div>
+      </div>
+      <div v-else class="panel">
         <table class="table">
           <thead>
             <tr><th>Candidate</th><th>Current step</th><th>Status</th><th>Applied</th><th v-if="mixedVersions">Flow</th></tr>
           </thead>
           <tbody>
-            <tr v-for="r in shown" :key="r.id">
+            <tr v-for="r in rows" :key="r.id">
               <td class="who">
                 <NuxtLink :to="`/candidates/${r.id}`" class="row-link">{{ fullName(r.candidate) }}</NuxtLink>
                 <span class="faint email">{{ r.candidate.email }}</span>
@@ -149,7 +179,7 @@ const everPublished = computed(() => !!detail.value?.published)
               <td class="nowrap">{{ fmtAgo(r.createdAt) }}</td>
               <td v-if="mixedVersions" class="mono">v{{ r.version }}</td>
             </tr>
-            <tr v-if="!shown.length">
+            <tr v-if="!rows.length">
               <td :colspan="mixedVersions ? 5 : 4" class="none">
                 <template v-if="q">Nobody called “{{ q }}” here. <button class="btn btn-sm btn-quiet" @click="setQuery({ q: undefined })">Clear search</button></template>
                 <template v-else>No {{ FILTERS.find(f => f.value === filter)!.label.toLowerCase() }} applications.</template>
@@ -157,12 +187,18 @@ const everPublished = computed(() => !!detail.value?.published)
             </tr>
           </tbody>
         </table>
+        <div v-if="more" class="more">
+          <button class="btn btn-sm" :aria-busy="loadingMore" :disabled="loadingMore" @click="loadMore"><span v-if="loadingMore" class="spinner" />Show {{ PAGE }} more</button>
+        </div>
       </div>
+      </template>
     </template>
   </div>
 </template>
 
 <style scoped>
+.views { margin-bottom: 16px; }
+.more { display: flex; justify-content: center; padding: 12px; border-top: 1px solid var(--line); }
 .tools { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
 .n { font-weight: 600; color: var(--ink-3); }
 .search { position: relative; display: block; width: 260px; }

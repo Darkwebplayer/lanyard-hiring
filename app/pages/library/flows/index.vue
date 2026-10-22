@@ -9,7 +9,7 @@ useHead({ title: 'Flows · Library' })
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
-const { flowPresets, error, refresh, update, remove } = useFlowPresets()
+const { flowPresets, error, refresh, create, update, remove } = useFlowPresets()
 refresh()
 
 const people = ref<Person[] | null>(null)
@@ -23,8 +23,9 @@ const steps = (g: Graph) => g.nodes.filter(n => n.type !== 'application_received
 const counts = (r: Row) => `${plural(steps(r.workflow), 'step')} · ${plural(r.form.length, 'field')}`
 
 // ---------- the detail: ?flow=<id|standard> ----------
-// Standard hire until something else is chosen: there is always a flow to look at
-const selectedId = computed(() => (route.query.flow as string | undefined) ?? 'standard')
+// your first saved preset until something else is chosen (its Rename, Duplicate and Delete are right there),
+// else Standard hire: there is always a flow to look at
+const selectedId = computed(() => (route.query.flow as string | undefined) ?? flowPresets.value?.[0]?.id ?? 'standard')
 const selected = computed(() => rows.value.find(r => r.id === selectedId.value))
 // a link to a preset someone deleted (only knowable once the list is in)
 const gone = computed(() => !!flowPresets.value && !selected.value)
@@ -59,10 +60,25 @@ const facts = computed(() => {
     // named, like the canvas names them, so nobody has to start a job to learn what's wrong
     problems: validateVersion(r.form, r.workflow).map((i) => {
       const n = r.workflow.nodes.find(x => x.key === i.node)
-      return { where: n ? nodeLabel(n) : i.node ? i.node : 'The flow', text: issueText(i, r.workflow).replace(/\.$/, '') }
+      return { where: n ? nodeLabel(n) : i.node ? i.node : 'The flow', node: n?.key, text: issueText(i, r.workflow).replace(/\.$/, '') }
     }),
   }
 })
+
+// ---------- duplicate: a copy to change, opened at once ----------
+const duplicating = ref(false)
+async function duplicate() {
+  const r = selected.value
+  if (!r || duplicating.value) return
+  duplicating.value = true
+  try {
+    const copy = await create({ name: `${r.name} (copy)`.slice(0, 100), description: r.description, form: structuredClone(toRaw(r.form)), workflow: structuredClone(toRaw(r.workflow)) })
+    await router.replace({ query: { flow: copy.id } })
+    toast.show(`Made “${copy.name}”. Rename it to tell them apart.`)
+  }
+  catch (e) { toast.show((e as ApiError).message) }
+  finally { duplicating.value = false }
+}
 
 // ---------- name and description: edited in place, explicit Save ----------
 const renaming = ref(false)
@@ -172,10 +188,13 @@ async function confirmDelete() {
               <div class="title-row">
                 <h2 id="flow-h">{{ selected.name }}</h2>
                 <span v-if="selected.builtIn" class="chip">Built in</span>
-                <button v-else type="button" class="btn btn-quiet btn-sm rename" @click="startRename"><Icon name="edit" />Rename…</button>
+                <template v-else>
+                  <NuxtLink :to="`/library/flows/${selected.id}`" class="btn btn-sm edit-flow"><Icon name="branch" />Edit flow and form</NuxtLink>
+                  <button type="button" class="btn btn-quiet btn-sm rename" @click="startRename"><Icon name="edit" />Rename…</button>
+                </template>
               </div>
               <p v-if="selected.description" class="muted">{{ selected.description }}</p>
-              <p v-if="selected.builtIn" class="faint small">Comes with the app. It can’t be changed or deleted.</p>
+              <p v-if="selected.builtIn" class="faint small">Comes with the app, so it can’t be changed or deleted. Duplicate it to make a version you can change.</p>
             </template>
           </header>
 
@@ -191,7 +210,7 @@ async function confirmDelete() {
                 </li>
                 <li v-for="(p, i) in facts.problems" :key="i">
                   <Icon name="alert" :size="16" />
-                  <span><b>{{ p.where }}</b>: {{ p.text }}. A job that starts from it fixes this before it can publish.</span>
+                  <span><NuxtLink v-if="p.node && !selected.builtIn" :to="`/library/flows/${selected.id}?node=${p.node}`" class="fix"><b>{{ p.where }}</b></NuxtLink><b v-else>{{ p.where }}</b>: {{ p.text }}. A job that starts from it fixes this before it can publish.</span>
                 </li>
               </ul>
               <p v-if="facts.named.length" class="small">Every job that starts from this preset gets the same people until you reassign them in its flow.</p>
@@ -204,7 +223,6 @@ async function confirmDelete() {
                   <Icon :name="nodeMeta(n.type).icon" :size="14" />{{ nodeLabel(n) }}
                 </li>
               </ol>
-              <p v-if="!selected.builtIn" class="faint small">To change the steps, edit them in a job’s Flow tab, then choose Save as flow preset › Replace an existing one.</p>
             </section>
 
             <section class="block" aria-labelledby="form-h">
@@ -225,6 +243,7 @@ async function confirmDelete() {
 
           <footer class="foot">
             <button v-if="!selected.builtIn" type="button" class="btn btn-danger btn-sm" @click="dlg?.showModal()"><Icon name="trash" />Delete…</button>
+            <button type="button" class="btn btn-sm" :disabled="duplicating" :aria-busy="duplicating" @click="duplicate"><Icon name="copy" />Duplicate</button>
             <NuxtLink :to="{ path: '/jobs', query: { new: selected.id } }" class="btn btn-primary"><Icon name="plus" />New job from this flow</NuxtLink>
           </footer>
         </article>
@@ -276,7 +295,8 @@ async function confirmDelete() {
 .sheet-head { padding: 22px 20px 16px; display: grid; gap: 6px; }
 .title-row { display: flex; align-items: center; gap: 10px; }
 .title-row h2 { font-size: var(--t-xl); overflow-wrap: anywhere; min-width: 0; }
-.rename { margin-left: auto; flex: none; }
+.edit-flow { margin-left: auto; flex: none; }
+.rename { flex: none; }
 .naming { display: grid; gap: 12px; }
 .save-row { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 .small { font-size: var(--t-sm); text-wrap: pretty; }
@@ -293,9 +313,11 @@ async function confirmDelete() {
 .warns li { display: flex; gap: 10px; align-items: flex-start; font-size: var(--t-sm); text-wrap: pretty; }
 .warns li svg { flex: none; margin-top: 2px; color: var(--warn); }
 .warns b { font-weight: 600; }
+/* a preset's problems can be fixed in its editor: the step name opens it there */
+.warns .fix { color: inherit; }
 .warns .bad { color: var(--bad); font-weight: 600; }
-.foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 20px; border-top: 1px solid var(--line); background: var(--surface); }
-.foot .btn-primary { margin-left: auto; }
+.foot .btn-danger { margin-right: auto; }
+.foot { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--line); background: var(--surface); }
 .pick-hint { display: grid; gap: 10px; padding: 28px 24px; border: 1.5px dashed var(--line-2); border-radius: var(--r-card); color: var(--ink-2); }
 @media (max-height: 600px) { .detail { position: static; } }
 </style>

@@ -1,11 +1,20 @@
 <script lang="ts">
 import type { Ref } from 'vue'
+import type { Stage } from '~~/shared/workflow/types'
 export interface PipelineRow {
   id: string, status: 'active' | 'closed', outcome: string | null, currentNodeKey: string | null, createdAt: string
   version: number, runStatus: string | null, candidate: { firstName: string, lastName: string, email: string }
   dueAt: string | null, assignees: { id: string, name: string, submitted: boolean }[]
+  total: number // how many matched the query, before paging
 }
-export interface PipelineState { rows: Ref<PipelineRow[] | null>, error: Ref<string | null>, load: () => Promise<void> }
+// Counts only: where everyone is, never the rows, so the tab holds up at thousands of applicants.
+export interface Board {
+  stages: Stage[] | null
+  steps: { key: string, type: string, label?: string }[]
+  counts: { key: string | null, status: 'active' | 'closed', outcome: string | null, n: number, failed: number, overdue: number }[]
+  preview: PipelineRow[] // the first five of each group, in list order
+}
+export interface PipelineState { board: Ref<Board | null>, error: Ref<string | null>, load: () => Promise<void> }
 </script>
 
 <script setup lang="ts">
@@ -20,20 +29,20 @@ const { detail, error, refresh } = useJob(id)
 const job = computed(() => detail.value?.job)
 useHead({ title: () => job.value?.title ?? 'Job' })
 
-// The pipeline lives here so the tab can show its count; the pipeline tab reads it via inject.
-const rows = ref<PipelineRow[] | null>(null)
-const rowsError = ref<string | null>(null)
-async function loadRows() {
-  rowsError.value = null
-  try { rows.value = await api<PipelineRow[]>(`/api/jobs/${id}/applications`) }
-  catch (e) { rowsError.value = toApiError(e).message }
+// The board counts live here so the tab can show its count; the pipeline tab reads them via inject.
+const board = ref<Board | null>(null)
+const boardError = ref<string | null>(null)
+async function loadBoard() {
+  boardError.value = null
+  try { board.value = await api<Board>(`/api/jobs/${id}/board`) }
+  catch (e) { boardError.value = toApiError(e).message }
 }
-provide<PipelineState>('pipeline', { rows, error: rowsError, load: loadRows })
+provide<PipelineState>('pipeline', { board, error: boardError, load: loadBoard })
 
 onMounted(() => {
   // a different job's state may be cached from an earlier visit; refresh either way
   refresh()
-  loadRows()
+  loadBoard()
 })
 
 const archived = computed(() => job.value?.status === 'archived')
@@ -48,7 +57,7 @@ const versionLine = computed(() => {
 
 const base = `/jobs/${id}`
 const tabs = computed(() => [
-  { to: base, label: 'Pipeline', count: rows.value?.length },
+  { to: base, label: 'Pipeline', count: board.value?.counts.reduce((n, c) => n + c.n, 0) },
   { to: `${base}/flow`, label: 'Flow' },
   { to: `${base}/form`, label: 'Form' },
   { to: `${base}/details`, label: 'Details' },

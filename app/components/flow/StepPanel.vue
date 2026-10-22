@@ -10,7 +10,7 @@ import TemplateField from './TemplateField.vue'
 
 const props = defineProps<{
   node: GraphNode, graph: Graph, form: FormField[], roles: Role[], people: Person[] | null
-  issues: Issue[], keyLocked: boolean, readOnly: boolean, jobId: string
+  issues: Issue[], keyLocked: boolean, readOnly: boolean, formHref: string
   job: { title: string, openings: number, requirements?: object }
   // preset: editing a library preset, not a step in a flow: no key, no connections, no delete
   preset?: boolean
@@ -200,7 +200,7 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
           <select v-if="fileFields.length" :id="`ff-${node.key}`" v-model="c.file_field">
             <option v-for="f in fileFields" :key="f.key" :value="f.key">{{ f.label }}</option>
           </select>
-          <p v-else class="hint">The form has no file field. <NuxtLink :to="`/jobs/${jobId}/form`">Add a file field in the Form tab</NuxtLink></p>
+          <p v-else class="hint">The form has no file field. <NuxtLink :to="formHref">Add a file field in the Form tab</NuxtLink></p>
         </div>
       </section>
 

@@ -3,11 +3,11 @@
 // handlers (AI calls) can be cut off. Here the queue and cron handlers await the engine instead.
 import nitro from 'nitropack/presets/cloudflare/runtime/cloudflare-module'
 import type { AppEnv } from './env'
-import { consume, scheduled } from './engine/worker'
+import { consume, type EngineMessage, scheduled } from './engine/worker'
 
 export default {
   ...nitro,
-  async queue(batch: MessageBatch<{ runId: string }>, env: Env) {
+  async queue(batch: MessageBatch<EngineMessage>, env: Env) {
     ;(globalThis as any).__env__ = env
     await consume(batch, env as AppEnv)
   },

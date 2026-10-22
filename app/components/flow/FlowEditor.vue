@@ -4,28 +4,29 @@ import { ConnectionMode, MarkerType, VueFlow, useVueFlow, type Connection, type 
 import { fieldsAvailableAt, validateVersion } from '~~/shared/workflow/graph'
 import type { ConditionConfig } from '~~/shared/workflow/rules'
 import type { FormField, Graph, GraphEdge, Issue } from '~~/shared/workflow/types'
+import { resting } from '~/lib/board'
 import {
   GRID, blankNoun, buildPalette, type PaletteItem, type Person, type Preset, type Role, branchKeys, branchLabel, cardWidth, freeSlot, issueText,
   layout, makeNode, reaches, spotBelow, summaryOf, titleOf,
 } from '~/lib/flow'
+import type { FlowSource } from '~/composables/useFlowSource'
 import FlowPresetsMenu from './FlowPresetsMenu.vue'
-import StepNode, { type StepData } from './StepNode.vue'
+import StepNode, { STAGE_ACTIONS, type StepData } from './StepNode.vue'
+import StagesPanel from './StagesPanel.vue'
 import StepPanel from './StepPanel.vue'
 
-const props = defineProps<{ jobId: string }>()
+const props = defineProps<{ source: FlowSource }>()
 const emit = defineEmits<{ edit: [], replace: [next: { form: FormField[], workflow: Graph }, name: string] }>()
-const { detail, editable, saveDraft } = useJob(() => props.jobId)
 const toast = useToast()
 const route = useRoute()
 const router = useRouter()
 const { fitView, zoomIn, zoomOut, setCenter, setViewport, getViewport, findNode, project, updateNodeInternals, onNodesInitialized, dimensions } = useVueFlow()
 
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v))
-const wf = ref<Graph>(clone(editable.value!.workflow))
-const form = computed(() => editable.value?.form ?? [])
-const readOnly = computed(() => detail.value?.job.status === 'archived')
-const liveKeys = computed(() => new Set(detail.value?.published?.workflow.nodes.map(n => n.key) ?? []))
-const jobCtx = computed(() => ({ title: detail.value?.job.title ?? '', openings: detail.value?.job.openings ?? 1, requirements: detail.value?.job.requirements }))
+const wf = ref<Graph>(clone(props.source.workflow.value!))
+const form = computed(() => props.source.form.value ?? [])
+const readOnly = computed(() => props.source.readOnly.value)
+const isJob = props.source.kind === 'job'
 const reduced = import.meta.client && matchMedia('(prefers-reduced-motion: reduce)').matches
 const ms = (n: number) => (reduced ? 0 : n)
 
@@ -161,7 +162,7 @@ function save() {
   dirty.value = false
   pending = (async () => {
     try {
-      await saveDraft({ workflow: clone(wf.value) })
+      await props.source.save({ workflow: clone(wf.value) })
       saveState.value = 'saved'
     }
     catch (e) {
@@ -209,7 +210,8 @@ const onUnload = (e: BeforeUnloadEvent) => { if (dirty.value) e.preventDefault()
 onMounted(() => window.addEventListener('beforeunload', onUnload))
 onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', onUnload)
-  if (dirty.value && !readOnly.value) save()
+  // a deleted preset has nowhere to save to; a second 404 would only repeat what the page says
+  if (dirty.value && !readOnly.value && !props.source.missing.value) save()
 })
 
 // ---------- selection lives in the URL (?node=key), so the hub's Publish problems can link to a step ----------
@@ -223,6 +225,74 @@ function select(key: string | null) {
   selectedEdge.value = null
   if (key === selectedKey.value) return
   router.replace({ query: { ...route.query, node: key ?? undefined } })
+}
+
+// ---------- stages: board columns, display only. The picked one lives in the URL (?stage=id) ----------
+const leftTab = ref<'steps' | 'stages'>(route.query.stage ? 'stages' : 'steps')
+const stages = computed(() => wf.value.stages ?? [])
+const activeStage = computed(() => stages.value.find(s => s.id === route.query.stage) ?? null)
+function setStage(id: string | null) {
+  router.replace({ query: { ...route.query, stage: id ?? undefined, node: id ? undefined : route.query.node } })
+  // bring the stage's steps into view; a stage spread over a long flow is otherwise half off-screen
+  const keys = stages.value.find(s => s.id === id)?.nodeKeys ?? []
+  if (keys.length) nextTick(() => fitView({ nodes: keys, padding: 0.3, minZoom: 0.85, maxZoom: 1, duration: ms(260) }))
+}
+function showTab(tab: 'steps' | 'stages') {
+  leftTab.value = tab
+  if (tab === 'steps') setStage(null)
+  else select(null) // the stage list needs the full width
+}
+function addStage() {
+  record()
+  const id = `s_${Math.random().toString(36).slice(2, 8)}`
+  wf.value.stages = [...stages.value, { id, name: `Stage ${stages.value.length + 1}`, nodeKeys: [] }]
+  setStage(id)
+}
+function renameStage(id: string, name: string) {
+  record()
+  wf.value.stages!.find(s => s.id === id)!.name = name
+}
+function removeStage(id: string) {
+  const st = stages.value.find(s => s.id === id)!
+  record()
+  wf.value.stages = stages.value.filter(s => s.id !== id)
+  record()
+  if (activeStage.value?.id === id) setStage(null)
+  toast.show(`Deleted stage “${st.name}”. Its steps stay in the flow.`, { label: 'Undo', run: undo })
+}
+function moveStage(id: string, dir: -1 | 1) {
+  record()
+  const list = [...stages.value]
+  const i = list.findIndex(s => s.id === id)
+  list.splice(i + dir, 0, ...list.splice(i, 1))
+  wf.value.stages = list
+}
+// A step sits in one stage at most, so adding it here takes it out of any other.
+function toggleInStage(key: string) {
+  const st = activeStage.value
+  const n = wf.value.nodes.find(x => x.key === key)
+  if (!st || !n || readOnly.value) return
+  if (!resting(n.type)) return toast.show(`Nobody waits at “${titleOf(n)}”, so the board has no row for it.`)
+  record()
+  const had = st.nodeKeys.includes(key)
+  for (const s of wf.value.stages!) s.nodeKeys = s.nodeKeys.filter(k => k !== key)
+  if (!had) st.nodeKeys.push(key)
+}
+// from the stage chip on a step's card: put it in this stage (out of any other), or in none
+function assignStage(key: string, id: string | null) {
+  record()
+  for (const s of wf.value.stages!) s.nodeKeys = s.nodeKeys.filter(k => k !== key)
+  if (id) wf.value.stages!.find(s => s.id === id)!.nodeKeys.push(key)
+}
+provide(STAGE_ACTIONS, { assign: assignStage, toggle: toggleInStage })
+function dropFromStage(id: string, key: string) {
+  record()
+  const st = wf.value.stages!.find(s => s.id === id)!
+  st.nodeKeys = st.nodeKeys.filter(k => k !== key)
+}
+function onNodeClick(key: string) {
+  if (activeStage.value) toggleInStage(key)
+  else select(key)
 }
 
 // ---------- what Vue Flow draws ----------
@@ -249,6 +319,13 @@ const vfNodes = computed<Node<StepData>[]>(() => wf.value.nodes.map((n) => {
       width: cardWidth(n),
       issues: issuesBy.value.get(n.key)?.length ?? 0,
       selected: n.key === selectedKey.value,
+      stage: activeStage.value ? (activeStage.value.nodeKeys.includes(n.key) ? 'in' : resting(n.type) ? 'out' : 'na') : null,
+      // on the Stages tab every step people wait at says its stage, and changes it, right on its card
+      stageChip: leftTab.value !== 'stages' || readOnly.value || !stages.value.length || !resting(n.type)
+        ? null
+        : activeStage.value
+          ? { mode: 'toggle', name: activeStage.value.name, in: activeStage.value.nodeKeys.includes(n.key), from: stages.value.find(st => st.id !== activeStage.value!.id && st.nodeKeys.includes(n.key))?.name ?? null }
+          : { mode: 'pick', current: stages.value.find(st => st.nodeKeys.includes(n.key))?.id ?? null, options: stages.value.map(st => ({ id: st.id, name: st.name })) },
       readOnly: readOnly.value,
       branches: n.type === 'condition' ? branchKeys(n).map(b => ({ key: b, label: branchLabel(n, b), linked: out.some(e => e.branch === b) })) : null,
     },
@@ -377,6 +454,7 @@ function renameNode(next: string) {
     if (e.from === old) e.from = next
     if (e.to === old) e.to = next
   }
+  for (const st of wf.value.stages ?? []) st.nodeKeys = st.nodeKeys.map(k => (k === old ? next : k))
   select(next)
 }
 
@@ -386,6 +464,7 @@ function removeNode(key: string) {
   record()
   wf.value.nodes = wf.value.nodes.filter(x => x.key !== key)
   wf.value.edges = wf.value.edges.filter(e => e.from !== key && e.to !== key)
+  for (const st of wf.value.stages ?? []) st.nodeKeys = st.nodeKeys.filter(k => k !== key)
   record()
   select(null)
   toast.show(`Deleted “${titleOf(n)}”`, { label: 'Undo', run: undo })
@@ -429,6 +508,7 @@ let loaded = false
 onNodesInitialized(async () => {
   if (loaded) return
   loaded = true
+  if (activeStage.value?.nodeKeys.length) return fitView({ nodes: activeStage.value.nodeKeys, padding: 0.3, minZoom: 0.85, maxZoom: 1 })
   await fitOnLoad()
   if (selectedKey.value) focusStep(selectedKey.value)
 })
@@ -443,9 +523,10 @@ function onKey(e: KeyboardEvent) {
   }
   if (mod && e.key.toLowerCase() === 'y' && !typing(e.target)) return e.preventDefault(), redo()
   if (typing(e.target) || document.querySelector(':popover-open, dialog[open]')) return
+  if (e.key === 'Escape' && activeStage.value) return setStage(null)
   if (e.key === 'Escape' && (selectedKey.value || selectedEdge.value)) return select(null)
   const onStep = (e.target as HTMLElement).closest?.('.vue-flow__node') as HTMLElement | null
-  if (e.key === 'Enter' && onStep?.dataset.id) return e.preventDefault(), select(onStep.dataset.id)
+  if (e.key === 'Enter' && onStep?.dataset.id) return e.preventDefault(), onNodeClick(onStep.dataset.id)
   const inCanvas = e.target === document.body || !!canvasEl.value?.contains(e.target as HTMLElement)
   if ((e.key === 'Delete' || e.key === 'Backspace') && inCanvas) {
     if (selectedEdge.value) return e.preventDefault(), removeEdge(selectedEdge.value)
@@ -492,7 +573,16 @@ function goTo(key?: string) {
 
 <template>
   <div ref="root" class="flow" :class="{ 'has-panel': !!selected, 'read-only': readOnly, editing }" :style="{ height: `${height}px`, marginBottom: `${-pullUp}px` }">
-    <nav v-if="!readOnly" class="palette" :class="{ editing }" aria-label="Add a step">
+    <nav v-if="!readOnly" class="palette" :class="{ editing, 'on-stages': leftTab === 'stages' }" :aria-label="leftTab === 'steps' ? 'Add a step' : 'Stages'">
+      <div class="seg left-tabs" role="radiogroup" aria-label="Show in this column">
+        <label><input type="radio" name="left-tab" :checked="leftTab === 'steps'" @change="showTab('steps')"><span>Steps</span></label>
+        <label><input type="radio" name="left-tab" :checked="leftTab === 'stages'" @change="showTab('stages')"><span>Stages <b v-if="stages.length" class="tab-n">{{ stages.length }}</b></span></label>
+      </div>
+      <StagesPanel
+        v-if="leftTab === 'stages'" :stages="stages" :active="activeStage?.id ?? null" :nodes="wf.nodes"
+        @add="addStage" @activate="setStage" @rename="renameStage" @remove="removeStage" @move="moveStage" @drop="dropFromStage"
+      />
+      <template v-else>
       <div class="pal-top">
         <p class="pal-hint">{{ editing ? 'Hide, reorder or add. Changes reach every job’s palette.' : 'Click to add under the selected step, or drag onto the canvas.' }}</p>
         <button type="button" class="btn btn-sm" :class="editing ? 'btn-dark' : 'btn-quiet'" :aria-pressed="editing" @click="toggleEditing">
@@ -533,16 +623,17 @@ function goTo(key?: string) {
           </div>
         </div>
       </section>
+      </template>
     </nav>
 
-    <div ref="canvasEl" class="canvas" @dragover.prevent @drop.prevent="onDrop">
+    <div ref="canvasEl" class="canvas" :class="{ staging: !!activeStage }" @dragover.prevent @drop.prevent="onDrop">
       <VueFlow
         :nodes="vfNodes" :edges="vfEdges" :min-zoom="0.2" :max-zoom="1.6"
         :nodes-draggable="!readOnly" :nodes-connectable="!readOnly" :elements-selectable="false"
         :connection-mode="ConnectionMode.Strict" :is-valid-connection="isValidConnection"
         :delete-key-code="null" :snap-to-grid="true" :snap-grid="[GRID, GRID]"
         :connection-line-options="{ type: 'smoothstep' as any }"
-        @connect="onConnect" @node-click="({ node }) => select(node.id)" @pane-click="select(null)"
+        @connect="onConnect" @node-click="({ node }) => onNodeClick(node.id)" @pane-click="activeStage ? setStage(null) : select(null)"
         @edge-click="({ edge }) => { select(null); selectedEdge = edge.id }"
         @node-drag-stop="onDragStop"
       >
@@ -561,15 +652,17 @@ function goTo(key?: string) {
           <span class="sep" />
           <button type="button" class="btn btn-quiet btn-icon btn-sm" :disabled="!canUndo" aria-label="Undo" title="Undo (⌘Z)" @click="undo"><Icon name="reopen" /></button>
           <button type="button" class="btn btn-quiet btn-icon btn-sm" :disabled="!canRedo" aria-label="Redo" title="Redo (⇧⌘Z)" @click="redo"><Icon name="reopen" class="flip" /></button>
-          <span class="sep" />
-          <FlowPresetsMenu :source="presetSource" :form="form" :workflow="wf" :live-version="detail?.published?.version ?? null" @replace="(next, name) => emit('replace', next, name)" />
         </template>
         <span class="sep" />
+        <template v-if="isJob">
+          <FlowPresetsMenu :source="presetSource" :form="form" :workflow="wf" :live-version="source.lockVersion.value" :save-only="readOnly" @replace="(next, name) => emit('replace', next, name)" />
+          <span class="sep" />
+        </template>
         <span v-if="readOnly" class="locked" role="status"><Icon name="lock" :size="14" />Archived: read-only</span>
         <button v-else-if="issues.length" type="button" class="btn btn-sm problems-btn" popovertarget="flow-problems">
           <Icon name="alert" />{{ issues.length }} problem{{ issues.length === 1 ? '' : 's' }}
         </button>
-        <span v-else class="ready"><Icon name="check" :size="14" />Ready to publish</span>
+        <span v-else class="ready"><Icon name="check" :size="14" />{{ isJob ? 'Ready to publish' : 'No problems' }}</span>
         <span v-if="!readOnly" class="save" aria-live="polite">
           <template v-if="saveState === 'saving'"><span class="spinner" />Saving…</template>
           <template v-else-if="saveState === 'saved'">Saved</template>
@@ -581,7 +674,7 @@ function goTo(key?: string) {
       </div>
 
       <div id="flow-problems" ref="problemsMenu" popover class="menu problems-menu">
-        <div class="pm-head eyebrow">Fix these before you publish</div>
+        <div class="pm-head eyebrow">{{ isJob ? 'Fix these before you publish' : 'A job that starts from this fixes these before it can publish' }}</div>
         <button v-for="(p, i) in problemList" :key="i" type="button" :disabled="!p.node" @click="goTo(p.node)">
           <span class="pm-where">{{ p.where }}</span>
           <span class="pm-text">{{ p.text }}</span>
@@ -591,8 +684,8 @@ function goTo(key?: string) {
 
     <StepPanel
       v-if="selected" :key="selected.key" class="side" :node="selected" :graph="wf" :form="form" :roles="roles" :people="people"
-      :issues="issuesBy.get(selected.key) ?? []" :key-locked="liveKeys.has(selected.key)" :read-only="readOnly"
-      :job-id="jobId" :job="jobCtx"
+      :issues="issuesBy.get(selected.key) ?? []" :key-locked="source.lockedKeys.value.has(selected.key)" :read-only="readOnly"
+      :form-href="source.formHref" :job="source.sample.value"
       @rename="renameNode" @connect="(b, to) => connect(selected!.key, to, b)" @remove="removeNode(selected!.key)" @close="select(null)"
       @save-preset="saveAsPreset(selected!.key)"
     />
@@ -609,6 +702,10 @@ function goTo(key?: string) {
 .flow.read-only { grid-template-columns: minmax(0, 1fr); }
 .flow.read-only.has-panel { grid-template-columns: minmax(0, 1fr) 380px; }
 
+.left-tabs { display: flex; }
+.left-tabs label { flex: 1; }
+.left-tabs span { justify-content: center; }
+.tab-n { font-weight: 600; color: var(--ink-3); font-variant-numeric: tabular-nums; }
 .palette { overflow-y: auto; padding: 14px 12px 24px; border-right: 1px solid var(--line); background: var(--surface); display: grid; align-content: start; gap: 16px; }
 .pal-hint { font-size: var(--t-xs); color: var(--ink-2); padding: 0 6px; }
 .palette section { display: grid; gap: 2px; }
@@ -639,6 +736,7 @@ function goTo(key?: string) {
 /* narrow screens with a step open: the palette folds to icons so the canvas keeps room */
 @media (width < 1360px) {
   .flow.has-panel:not(.read-only) { grid-template-columns: 60px minmax(0, 1fr) 350px; }
+  .has-panel .left-tabs { display: none; }
   .has-panel .palette { padding: 12px 8px; gap: 10px; }
   .has-panel .pal-hint, .has-panel .pal-label, .has-panel .palette h3 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .has-panel .palette section + section { border-top: 1px solid var(--line); padding-top: 10px; }

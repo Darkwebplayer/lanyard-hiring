@@ -3,7 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { STANDARD_HIRE } from '../shared/workflow/templates'
 import type { Db } from '../server/db/client'
 import * as s from '../server/db/schema'
-import { fileAnswer, hireReport, pipeline, timeline, type Viewer } from '../server/domain/applications'
+import { board, fileAnswer, hireReport, movable, pipeline, timeline, type Viewer } from '../server/domain/applications'
 import { DomainError } from '../server/domain/errors'
 import { createJob, publish, saveDraft } from '../server/domain/jobs'
 import { getTask, listTasks, sendReminders } from '../server/domain/tasks'
@@ -265,6 +265,42 @@ describe('pipeline and hire report', () => {
     expect(report.jobs.find(j => j.id === job.id)).toMatchObject({ openings: 2, applications: 2, hired: 1, fillRate: 0.5 })
     expect(report.totals.hires).toBe(report.jobs.reduce((n, j) => n + j.hired, 0))
     expect(report.totals.jobs).toBe(report.jobs.length)
+  })
+})
+
+describe('board', () => {
+  it('counts per step, searches and pages the list, and moves only those still where the board saw them', async () => {
+    const job = await panelJob()
+    const a = await apply(job)
+    const b = await apply(job)
+
+    const bd = await board(db, job.id, t)
+    expect(bd.counts).toEqual([{ key: 'interview', status: 'active', outcome: null, n: 2, failed: 0, overdue: 0 }])
+    expect(bd.stages?.map(st => st.name)).toEqual(['Screening', 'Interview', 'Decision'])
+    expect(bd.steps.map(st => st.key)).toContain('interview')
+    expect((await board(db, job.id, new Date(t.getTime() + 6 * day))).counts[0]).toMatchObject({ n: 2, overdue: 2 })
+
+    const [cand] = await db.select().from(s.candidates).innerJoin(s.applications, eq(s.applications.candidateId, s.candidates.id)).where(eq(s.applications.id, b))
+    expect((await pipeline(db, job.id, { q: cand!.candidates.lastName })).map(r => r.id)).toEqual([b])
+    expect((await pipeline(db, job.id, { q: '100%' }))).toEqual([])
+    expect((await pipeline(db, job.id, { step: 'interview', limit: 1 })).length).toBe(1)
+    expect((await pipeline(db, job.id, { show: 'hired' }))).toEqual([])
+    // a whole stage: several steps at once; the total counts all matches, not the page
+    expect((await pipeline(db, job.id, { step: 'cv,interview', limit: 1 }))[0]!.total).toBe(2)
+    // the board carries the first people of each group, newest first, same rows as the list
+    expect(bd.preview.map(r => r.id)).toEqual((await pipeline(db, job.id, { step: 'interview' })).map(r => r.id))
+
+    // a step missing from the pinned flow is counted out, not attempted
+    expect(await movable(db, job.id, { node: 'interview' }, { node: 'nope' })).toEqual({ ids: [], notInVersion: 2 })
+    expect((await movable(db, job.id, { node: 'interview' }, { close: 'rejected' }, [a])).ids).toEqual([a])
+    expect((await movable(db, job.id, { node: 'interview' }, { close: 'rejected' }, undefined, [a])).ids).toEqual([b])
+
+    // stale snapshot: the board saw `a` at cv, it is at interview, so nothing happens
+    expect(await moveApplication(deps(), a, { close: 'rejected' }, 'r', 'owner', { node: 'cv' })).toMatchObject({ moved: false, status: 'active', currentNodeKey: 'interview' })
+    expect(await moveApplication(deps(), a, { close: 'rejected' }, 'r', 'owner', { node: 'interview' })).toMatchObject({ moved: true, status: 'closed', outcome: 'rejected' })
+    // a redelivered message finds it closed and does nothing
+    expect((await moveApplication(deps(), a, { close: 'rejected' }, 'r', 'owner', { node: 'interview' })).moved).toBe(false)
+    expect(await moveApplication(deps(), a, { node: 'manual_review' }, 'back', 'owner', { closed: 'rejected' })).toMatchObject({ moved: true, status: 'active', currentNodeKey: 'manual_review' })
   })
 })
 

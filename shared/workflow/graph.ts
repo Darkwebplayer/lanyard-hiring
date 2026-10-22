@@ -14,6 +14,11 @@ export const graphSchema = z.object({
     label: z.string().max(100).optional(),
   })).max(200),
   edges: z.array(z.object({ from: z.string(), to: z.string(), branch: z.string().optional() })).max(400),
+  stages: z.array(z.object({
+    id: z.string().min(1).max(40),
+    name: z.string().trim().min(1).max(40),
+    nodeKeys: z.array(z.string()).max(200),
+  })).max(30).optional(),
 }) satisfies z.ZodType<Graph>
 
 export const JOB_FIELDS: Field[] = [

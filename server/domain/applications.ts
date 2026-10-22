@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm'
+import { type AnyColumn, type SQL, and, asc, count, desc, eq, ilike, inArray, isNotNull, isNull, lte, notInArray, or, sql } from 'drizzle-orm'
 import type { FormField, Graph } from '../../shared/workflow/types'
 import type { Db } from '../db/client'
 import { applicationEvents, applications, candidates, jobs, jobVersions, nodeRuns, taskAssignments, user } from '../db/schema'
@@ -116,28 +116,114 @@ export async function fileAnswer(db: Db, viewer: Viewer, applicationId: string, 
   return meta
 }
 
-// Pipeline list for a job: every application with where it is and the state of its latest run.
-export async function pipeline(db: Db, jobId: string) {
+export type PipelineShow = 'active' | 'hired' | 'rejected' | 'withdrawn' | 'all'
+export interface PipelineQuery { show?: PipelineShow, q?: string, step?: string, limit?: number, offset?: number }
+
+async function assertJob(db: Db, jobId: string) {
   const [job] = await db.select({ id: jobs.id }).from(jobs).where(eq(jobs.id, jobId))
   if (!job) throw new DomainError(404, 'job_not_found')
+}
+
+// Who comes first in a list: stopped (nothing happens until someone acts), then late tasks, then newest.
+// `id` is passed in because a single-table select leaves columns unqualified, which a subquery would bind to node_runs.
+const latestRun = (id: SQL | AnyColumn) => sql`(select r.id from ${nodeRuns} r where r.application_id = ${id} order by r.seq desc limit 1)`
+const urgency = (id: SQL | AnyColumn) => sql`case when ${applications.status} <> 'active' then 0
+  when (select r.status from ${nodeRuns} r where r.id = ${latestRun(id)}) = 'failed' then 2
+  when (select r.status = 'waiting_on_human' and r.due_at < now() from ${nodeRuns} r where r.id = ${latestRun(id)}) then 1 else 0 end`
+
+function rows(db: Db, where: SQL | undefined) {
+  const latest = latestRun(applications.id)
   return db.select({
     id: applications.id, status: applications.status, outcome: applications.outcome, currentNodeKey: applications.currentNodeKey,
     createdAt: applications.createdAt, version: jobVersions.version,
     candidate: { firstName: candidates.firstName, lastName: candidates.lastName, email: candidates.email },
-    runStatus: sql<string | null>`(select r.status from ${nodeRuns} r where r.application_id = ${applications.id} order by r.seq desc limit 1)`,
+    runStatus: sql<string | null>`(select r.status from ${nodeRuns} r where r.id = ${latest})`,
     // who holds the candidate now, and by when: the open assignments of the latest run (empty unless it's a task)
-    dueAt: sql<string | null>`(select r.due_at from ${nodeRuns} r where r.application_id = ${applications.id} order by r.seq desc limit 1)`,
+    dueAt: sql<string | null>`(select r.due_at from ${nodeRuns} r where r.id = ${latest})`,
     assignees: sql<{ id: string, name: string, submitted: boolean }[]>`coalesce((
       select json_agg(json_build_object('id', u.id, 'name', u.name, 'submitted', ta.submitted_at is not null) order by u.name)
       from ${taskAssignments} ta join ${user} u on u.id = ta.user_id
-      where ta.closed_at is null
-        and ta.run_id = (select r.id from ${nodeRuns} r where r.application_id = ${applications.id} order by r.seq desc limit 1)
+      where ta.closed_at is null and ta.run_id = ${latest}
     ), '[]'::json)`,
+    // how many match, before the page is cut
+    total: sql<number>`count(*) over ()`.mapWith(Number),
   }).from(applications)
     .innerJoin(candidates, eq(candidates.id, applications.candidateId))
     .innerJoin(jobVersions, eq(jobVersions.id, applications.jobVersionId))
-    .where(eq(applications.jobId, jobId))
-    .orderBy(desc(applications.createdAt))
+    .where(where)
+    .orderBy(desc(urgency(applications.id)), desc(applications.createdAt), desc(applications.id))
+}
+
+// Pipeline list for a job: one page of applications with where they are and the state of their latest run.
+// `step` may name several steps, comma separated (a whole stage).
+export async function pipeline(db: Db, jobId: string, query: PipelineQuery = {}) {
+  await assertJob(db, jobId)
+  const { show = 'all', q, step, limit = 50, offset = 0 } = query
+  const needle = q?.trim() && `%${q.trim().replace(/[\\%_]/g, m => `\\${m}`)}%`
+  return rows(db, and(
+    eq(applications.jobId, jobId),
+    show === 'all' ? undefined : show === 'active' ? eq(applications.status, 'active') : eq(applications.outcome, show),
+    step ? inArray(applications.currentNodeKey, step.split(',')) : undefined,
+    needle
+      ? or(ilike(sql`${candidates.firstName} || ' ' || ${candidates.lastName}`, needle), ilike(candidates.email, needle))
+      : undefined,
+  )).limit(limit).offset(offset)
+}
+
+// Board for a job: how many applications sit at each step (or outcome), plus only the first few rows of each,
+// so it stays cheap at thousands of applicants.
+const PREVIEW = 5
+export async function board(db: Db, jobId: string, now = new Date()) {
+  await assertJob(db, jobId)
+  // single-table select: drizzle leaves columns unqualified, which inside a subquery would bind to node_runs
+  const appId = sql`${applications}."id"`
+  const counts = await db.select({
+    key: applications.currentNodeKey, status: applications.status, outcome: applications.outcome, n: count(),
+    failed: sql<number>`count(*) filter (where (select r.status from ${nodeRuns} r where r.application_id = ${appId} order by r.seq desc limit 1) = 'failed')`.mapWith(Number),
+    // a waiting task is the active run, and there is at most one of those
+    overdue: sql<number>`count(*) filter (where exists (select 1 from ${nodeRuns} r where r.application_id = ${appId} and r.status = 'waiting_on_human' and r.due_at < ${now.toISOString()}::timestamptz))`.mapWith(Number),
+  }).from(applications).where(eq(applications.jobId, jobId))
+    .groupBy(applications.currentNodeKey, applications.status, applications.outcome)
+  // newest first: labels and stages come from the latest version; older versions only name steps that are gone
+  const versions = await db.select({ status: jobVersions.status, workflow: jobVersions.workflow }).from(jobVersions)
+    .where(eq(jobVersions.jobId, jobId)).orderBy(desc(jobVersions.version))
+  const graphs = versions.map(v => v.workflow as Graph)
+  const live = (versions.find(v => v.status === 'published') ?? versions[0])?.workflow as Graph | undefined
+  // A step gets a row if the live flow has it or someone is standing on it (applicants on older versions).
+  const keys = new Set([...(live?.nodes ?? []).map(n => n.key), ...counts.map(c => c.status === 'active' ? c.key : null)])
+  const steps = [...keys].flatMap((key) => {
+    const node = key && graphs.map(g => g.nodes.find(n => n.key === key)).find(Boolean)
+    return node ? [{ key: node.key, type: node.type, label: node.label }] : []
+  })
+  // the first few people of each group, in list order, so cards show faces and lists open with someone in them
+  const ranked = db.select({
+    id: applications.id,
+    rn: sql<number>`row_number() over (partition by ${applications.currentNodeKey}, ${applications.status}, ${applications.outcome}
+      order by ${urgency(appId)} desc, ${applications.createdAt} desc, ${applications.id} desc)`.as('rn'),
+  }).from(applications).where(eq(applications.jobId, jobId)).as('ranked')
+  const top = await db.select({ id: ranked.id }).from(ranked).where(lte(ranked.rn, PREVIEW))
+  const preview = top.length ? await rows(db, inArray(applications.id, top.map(r => r.id))) : []
+  return { stages: graphs[0]?.stages ?? null, steps, counts, preview }
+}
+
+export type MoveFrom = { node: string } | { closed: 'hired' | 'rejected' | 'withdrawn' }
+
+// Who a board drop would move: everyone at `from` (or just `ids`), minus those whose pinned flow
+// doesn't have the target step (moveApplication would refuse them).
+export async function movable(db: Db, jobId: string, from: MoveFrom, target: { node: string } | { close: string }, ids?: string[], except?: string[]) {
+  const rows = await db.select({ id: applications.id, workflow: jobVersions.workflow }).from(applications)
+    .innerJoin(jobVersions, eq(jobVersions.id, applications.jobVersionId))
+    .where(and(
+      eq(applications.jobId, jobId),
+      'node' in from
+        ? and(eq(applications.status, 'active'), eq(applications.currentNodeKey, from.node))
+        : and(eq(applications.status, 'closed'), eq(applications.outcome, from.closed)),
+      ids ? inArray(applications.id, ids) : undefined,
+      except?.length ? notInArray(applications.id, except) : undefined,
+    ))
+  const fits = (g: Graph) => !('node' in target) || g.nodes.some(n => n.key === target.node)
+  const ok = rows.filter(r => fits(r.workflow as Graph)).map(r => r.id)
+  return { ids: ok, notInVersion: rows.length - ok.length }
 }
 
 // Hires against openings, for every job that was ever published.

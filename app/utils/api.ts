@@ -32,6 +32,7 @@ const MESSAGES: Record<string, string> = {
   task_closed: 'This task has finished or moved on, so it can’t take changes.',
   node_not_in_version: 'That step isn’t in the flow this candidate is on.',
   already_closed: 'This application is already closed. Reopen it first.',
+  reason_required: 'Say why. The reason goes in each candidate’s history.',
   not_latest_run: 'Only the latest step can be retried.',
   not_retryable: 'This step isn’t stopped, so there’s nothing to retry.',
   application_closed: 'This application is closed.',

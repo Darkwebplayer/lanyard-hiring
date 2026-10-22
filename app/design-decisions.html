@@ -402,7 +402,7 @@ details::details-content{content-visibility:visible;display:block}summary{list-s
 <div class="bar"><div>
 <span class="name">Lanyard <span class="note">· design decisions</span></span>
 <nav aria-label="Chapters"><a href="#brief">Brief</a><a href="#flows">Flows</a><a href="#direction">Direction</a><a href="#language">Design language</a><a href="#captures">In the product</a><a href="#session-2026-10-20">What changed</a><a href="#assumed">Assumed</a></nav>
-<a class="needs" href="#decide">6 need you</a>
+<a class="needs" href="#decide">5 need you</a>
 <label class="theme"><input type="checkbox" id="dark"> Dark</label>
 </div></div>
 <main>
@@ -410,15 +410,15 @@ details::details-content{content-visibility:visible;display:block}summary{list-s
 <h1>Lanyard design decisions</h1>
 <p class="verdict">A hiring tool for in-house recruiters, made like <mark>a new hire’s ID badge</mark>: the slot on each card shows who acts next.</p>
 <p class="dek">The owner asked for a fresh, slick look instead of the sage-and-black reference. We chose warm paper, one magenta accent and round, lit cards over the usual dark violet console, because recruiters work in it all day and must see whose turn it is.</p>
-<div class="ctas"><a class="btn primary" href="#decide"><b>6</b> choices need your call</a><a class="btn" href="#brief">Read the story ↓</a></div>
+<div class="ctas"><a class="btn primary" href="#decide"><b>5</b> choices need your call</a><a class="btn" href="#brief">Read the story ↓</a></div>
 <figure class="shot-hero"><img src="design-captures/cand-hired.png" alt="The hired candidate as an ID badge beside the Why card" width="1440" height="900"><figcaption>The candidate page at 1440 px after a hire: the header is the ID badge, and the Why card explains the decision.</figcaption></figure>
 <dl class="stats">
-<div class="i-list"><dt>decisions, each with its reason and the default it beat</dt><dd>115</dd></div>
+<div class="i-list"><dt>decisions, each with its reason and the default it beat</dt><dd>128</dd></div>
 <div class="i-compass"><dt>directions tried on the same content</dt><dd>5</dd></div>
-<div class="i-search"><dt>critique findings, 36 closed</dt><dd>44</dd></div>
-<div class="open"><dt>choices waiting for you</dt><dd>6</dd></div>
+<div class="i-search"><dt>critique findings, 40 closed</dt><dd>50</dd></div>
+<div class="open"><dt>choices waiting for you</dt><dd>5</dd></div>
 </dl>
-<p class="note">Latest session <time datetime="2026-10-20">2026-10-20</time>. Coverage: <a href="design-coverage.html">design-coverage.html</a></p>
+<p class="note">Latest session <time datetime="2026-10-21">2026-10-21</time>. Coverage: <a href="design-coverage.html">design-coverage.html</a></p>
 <nav class="short" aria-labelledby="short-h">
 <h2 id="short-h">The short version</h2>
 <ol>
@@ -428,8 +428,8 @@ details::details-content{content-visibility:visible;display:block}summary{list-s
 <li><a href="#language"><span>Warm paper, plum greys, one magenta accent, round pills</span></a></li>
 <li><a href="#captures"><span>Your tasks come first, and the slot shows who acts</span></a></li>
 <li><a href="#session-2026-10-20"><span>A new frontend in 5 chunks, then the step library and two-step apply page</span></a>
-<ol><li><a href="#critique-2026-10-20">Critique caught: 36 fixed, 8 kept, 0 open</a></li><li><a href="#decisions-2026-10-20">Decisions: 115, most of them in structure and colour</a></li></ol></li>
-<li><a href="#decide"><span>For you to decide: 6 choices, 1 things owed</span></a></li>
+<ol><li><a href="#critique-2026-10-20">Critique caught: 40 fixed, 10 kept, 0 open</a></li><li><a href="#decisions-2026-10-20">Decisions: 128, most of them in structure and colour</a></li></ol></li>
+<li><a href="#decide"><span>For you to decide: 5 choices, 1 things owed</span></a></li>
 <li><a href="#assumed"><span>Assumed: 4 guesses, the riskiest is that recruiters use a laptop, not a phone</span></a></li>
 </ol>
 </nav>
@@ -609,12 +609,104 @@ details::details-content{content-visibility:visible;display:block}summary{list-s
 </section>
 
 <section id="sessions">
+<article class="session" id="session-2026-10-21">
+<h2><span class="key">Session 2026-10-21<span class="vh">:</span></span> The pipeline becomes a board of stages, and the flow gets stages</h2>
+<p class="kicker">Existing, Revamp for the pipeline tab, Minimal elsewhere · flow scope · the owner asked for a kanban board that holds thousands of applicants</p>
+<p class="lede">The pipeline was a table that loaded every application. Now it is a board: the columns are stages, the rows are steps, and each step shows one pile of badges with a count. Search pulls one person out to move them alone. Every drop says what it will do before it does it, because a step runs when someone lands on it. The table stays as List, paged by the server. In the flow, a Stages tab groups steps; picking a stage lights its steps.</p>
+
+<h3 class="i-list" id="chunks-2026-10-21"><span class="key">Chunks</span> 3 chunks, data first</h3>
+<div class="scroll"><table>
+<thead><tr><th scope="col">Chunk</th><th scope="col">Files it owns</th><th scope="col">Built by</th><th scope="col">Checks</th><th scope="col">Result</th></tr></thead>
+<tbody>
+<tr><td>I Stages and moves (server)</td><td>shared/workflow/{types,graph,templates}.ts, server/domain/{applications,jobs}.ts, server/engine/{engine,worker}.ts, server/entry.ts, server/api/jobs/[id]/{board.get,moves.post,applications.get}.ts</td><td>coordinator</td><td>1 new integration test (board counts, search, paging, stale moves, older versions), 141 tests, typecheck</td><td>done</td></tr>
+<tr><td>J Board</td><td>app/components/pipeline/{PipelineBoard,BoardMoveDialog}.vue, app/lib/board.ts, app/pages/jobs/[id].vue, app/pages/jobs/[id]/index.vue</td><td>coordinator</td><td>captures at 960 and 1440 with a faked API, drag and search driven by Playwright, check.py, critique</td><td>done</td></tr>
+<tr><td>K Stages in the flow</td><td>app/components/flow/{StagesPanel,FlowEditor,StepNode}.vue</td><td>coordinator</td><td>captures, typecheck, check.py, critique</td><td>done</td></tr>
+</tbody></table></div>
+<p class="sowhat">Behaviour against the baseline: the List view keeps the filters, the step chips, search and the stopped-first order. The order now comes from the server, and search also matches email. Moves on the candidate page did not change.</p>
+
+<h3 class="i-search" id="critique-2026-10-21"><span class="key">Critique caught</span> 8 fixed, 2 kept with evidence, 0 open</h3>
+<dl class="counts">
+<div class="i-fix"><dt>fixed, each linked to the row it changed</dt><dd>8</dd></div>
+<div class="i-keep"><dt>kept, with the evidence for keeping</dt><dd>2</dd></div>
+<div class="open"><dt>open</dt><dd>0</dd></div>
+</dl>
+<p class="sowhat">The reviewer found that an email drop looked like any other move, and that a red slot meant two things. Now only the email effect is red, and the slot only says who acts.</p>
+<details>
+<summary>Every finding and its outcome</summary>
+<div class="scroll"><table>
+<thead><tr><th scope="col">Finding</th><th scope="col">Outcome</th></tr></thead>
+<tbody>
+<tr><td>A mass email looks like a routine move</td><td>Fixed: red effect, “Reopen and email 1,284”, danger button. A reason is required (the field is required). <a href="#d-137">d-137</a></td></tr>
+<tr><td>Cards clipped inside equal rows</td><td>Fixed: rows grow to fit and the column scrolls; picked cards come first. <a href="#d-131">d-131</a></td></tr>
+<tr><td>A red slot means “stopped” and also “problems”</td><td>Fixed: the slot only says who acts. <a href="#d-133">d-133</a></td></tr>
+<tr><td>Three dim levels and a magenta ring on the stage highlight; the stage is off screen</td><td>Fixed: two levels, ink ring, fit to the stage at a readable zoom. <a href="#d-141">d-141</a></td></tr>
+<tr><td>Closed cards weigh as much as active ones</td><td>Fixed: flat closed cards. <a href="#d-134">d-134</a></td></tr>
+<tr><td>Amber effect panel reuses the “late” colour</td><td>Fixed. <a href="#d-137">d-137</a></td></tr>
+<tr><td>Stiff copy on count changes and older versions</td><td>Fixed: “3 more arrived since the board loaded. All 1,287 there now will move.”</td></tr>
+<tr><td>Focus does not start on Reason</td><td>Fixed: focus goes to the step picker, or else to Reason.</td></tr>
+<tr><td>At 960 px the Closed column is off screen</td><td>Kept: the board scrolls sideways inside itself, and browsers scroll it during a drag. Every card also has “Move…”, which needs no drag.</td></tr>
+<tr><td>The List view shows raw keys and its search is in another place</td><td>Kept in part: thousands separators fixed. Keys are an earlier decision. The two searches do different jobs: Board finds one person to move, List filters the rows.</td></tr>
+</tbody></table></div>
+</details>
+
+<h3 class="i-list" id="decisions-2026-10-21"><span class="key">Decisions</span> 15, most of them in structure</h3>
+<div class="scroll"><table>
+<thead><tr><th scope="col">Element</th><th scope="col">Decision</th><th scope="col">Because</th><th scope="col">Rejected default or kept convention</th><th scope="col">Layer</th></tr></thead>
+<tbody>
+<tr id="d-129" data-l="1"><td><span class="id">d-129</span> Board</td><td>Columns are stages; each stage is split into one row per step, equal height while the cards fit</td><td>The owner asked for it: moves stay step to step, so the engine does not change. Stages only group the rows.</td><td class="rejected">One column per step (kept only when a flow has no stages)</td><td>1 Bare structure</td></tr>
+<tr id="d-130" data-l="1"><td><span class="id">d-130</span> Board</td><td>One group card per step, with the count; no card per person</td><td>Jobs can have thousands of applicants. A card per person would be thousands of DOM nodes and no overview.</td><td class="rejected">A virtualised card per person</td><td>1 Bare structure</td></tr>
+<tr id="d-131" data-l="1"><td><span class="id">d-131</span> Board</td><td>Search pulls one person out as their own card, first in their row; reload groups them again</td><td>The owner asked that separate cards last until refresh. First in the row, so the busiest group never hides them.</td><td class="rejected">Picked cards below the group (the critique found them clipped)</td><td>1 Bare structure</td></tr>
+<tr id="d-132" data-l="2"><td><span class="id">d-132</span> Board</td><td>A group card is a pile of badges: one edge behind for 2 to 9 people, two edges for 10 or more</td><td>It carries the badge motif and says “many” before you read the number.</td><td class="rejected">A plain count tile</td><td>2 Direction</td></tr>
+<tr id="d-133" data-l="4"><td><span class="id">d-133</span> Board</td><td>The slot on a group card says who acts at that step, never “stopped”</td><td>One meaning per mark. “3 stopped” is a chip with a word, so colour never carries it alone.</td><td class="rejected">A red slot when anyone is stopped (first version; the critique caught the double meaning)</td><td>4 Color and surface</td></tr>
+<tr id="d-134" data-l="4"><td><span class="id">d-134</span> Board</td><td>Closed cards are flat, with no pile and no shadow</td><td>Closed is the record, not the work. The active columns get the weight.</td><td class="rejected">The same lit card as active steps</td><td>4 Color and surface</td></tr>
+<tr id="d-135" data-l="1"><td><span class="id">d-135</span> Board</td><td>Native HTML drag and drop, plus a “Move all…” or “Move…” button on every card</td><td>No new dependency (the brief allows Vue Flow only). The button is the keyboard path and opens the same dialog with a step picker.</td><td class="rejected">A drag library</td><td>1 Bare structure</td></tr>
+<tr id="d-136" data-l="5"><td><span class="id">d-136</span> Move dialog</td><td>Every drop opens a confirm that says what landing there does: sends an email, assigns a task, runs an AI review</td><td>Entering a step runs it for real. A drop of 1,284 onto an email step sends 1,284 emails.</td><td class="rejected">A silent drop with an Undo toast (an email can’t be undone)</td><td>5 Use over time</td></tr>
+<tr id="d-137" data-l="4"><td><span class="id">d-137</span> Move dialog</td><td>An email effect is red and the button says “and email”; other effects are a quiet paper panel</td><td>Only the email can’t be taken back. The critique found the amber panel reused the “late” colour.</td><td class="rejected">Amber for every effect</td><td>4 Color and surface</td></tr>
+<tr id="d-138" data-l="5"><td><span class="id">d-138</span> Move dialog</td><td>A dry run counts who will move now, and says how many are on an older flow without the step</td><td>The board is a snapshot; the server is the truth. The person sees the real number before they confirm.</td><td class="rejected">Trust the board’s count</td><td>5 Use over time</td></tr>
+<tr id="d-139" data-l="5"><td><span class="id">d-139</span> Move dialog</td><td>Group moves go through the queue and the board polls until the source drains</td><td>1,000 locked moves in one request would time out. The source count draining is the progress bar.</td><td class="rejected">One long request with a spinner</td><td>5 Use over time</td></tr>
+<tr id="d-140" data-l="1"><td><span class="id">d-140</span> Flow</td><td>A Steps | Stages switch at the top of the left column</td><td>Both are tools beside the canvas, used one at a time; the canvas keeps its width.</td><td class="rejected">A third panel, or stages in the step panel</td><td>1 Bare structure</td></tr>
+<tr id="d-141" data-l="4"><td><span class="id">d-141</span> Flow</td><td>A picked stage lights its steps in ink and dims the rest to 32%; clicking a step adds or removes it; the view fits the stage</td><td>Two levels only (the critique found three). Ink, because magenta means “selected” on the canvas.</td><td class="rejected">Magenta rings, three dim levels</td><td>4 Color and surface</td></tr>
+<tr id="d-142" data-l="1"><td><span class="id">d-142</span> Flow</td><td>The board reads stages from the newest version, draft included</td><td>Stages change no behaviour, so a rename shows at once without a publish.</td><td class="rejected">Stages from the published version only</td><td>1 Bare structure</td></tr>
+<tr id="d-143" data-l="1"><td><span class="id">d-143</span> List</td><td>The table stays as List, paged 50 at a time by the server, still stopped first, then late</td><td>It answers “who exactly”, which a board of counts can’t. Paging keeps it fast at thousands.</td><td class="rejected">Delete the table; load every row</td><td>1 Bare structure</td></tr>
+<tr id="d-144" data-l="1"><td><span class="id">d-144</span> Find</td><td>“Find a candidate” and each card’s “See who” open one dialog: a searchable, paged list of people, all of them or only those at that step. Picking someone pulls them out onto the board.</td><td>Seeing who sits in a group is a look, not a change of view. The board stays in place behind it, so the person can drag right after picking.</td><td class="rejected">An inline dropdown for search; “See who” jumping to List</td><td>1 Bare structure</td></tr>
+<tr id="d-145" data-l="1"><td><span class="id">d-145</span> Search clear</td><td>The native clear button in search fields is drawn as our ink x, app-wide</td><td>The browser default was a blue x, the only blue in the product.</td><td class="rejected">Browser default</td><td>4 Color and surface</td></tr>
+<tr id="d-146" data-l="1"><td><span class="id">d-146</span> Faces</td><td>Each group card shows the first five faces of the group, one initial each, beside the count. They open “See who”.</td><td>A count says how many; faces say these are people. One initial keeps five to the width of the count, where two overlapped initials were cut in half.</td><td class="rejected">Two-letter initials with a “+1,279” in the footer, which pushed “Move all…” off the card</td><td>3 Type and space</td></tr>
+<tr id="d-147" data-l="1"><td><span class="id">d-147</span> Instant list</td><td>The board loads the first five of each group in list order. “Find” and “See who” open on those at once, with the board’s count, and the server’s page takes their place.</td><td>The list is never empty while it loads, and the first rows don’t jump, because both come in the same order.</td><td class="rejected">A spinner in an empty list</td><td>5 Use over time</td></tr>
+<tr id="d-148" data-l="1"><td><span class="id">d-148</span> Where</td><td>“Find” has one select: everyone, everyone in progress, each stage whole and step by step, each outcome, all with counts. “See who” has no select: it is that group.</td><td>The select follows the board’s own columns, so a stage means the same thing in both places. The total says how many match before the page is cut.</td><td class="rejected">Filter chips for every step, which don’t fit a dialog at thirty steps</td><td>1 Bare structure</td></tr>
+<tr id="d-149" data-l="1"><td><span class="id">d-149</span> See more</td><td>The faces and the words “See more” are one button at the card’s foot. “Move…” sits by the count, and its name for screen readers is still “Move all N at Step…”.</td><td>Faces and a separate link read as two things that did the same job. With both in one foot, “Move all…” went off the card, so it moved up to the number it moves.</td><td class="rejected">Faces by the count, “See who” in the foot</td><td>1 Bare structure</td></tr>
+<tr id="d-150" data-l="1"><td><span class="id">d-150</span> Stage chip</td><td>On the Stages tab, every step people wait at shows its stage on its card, as a pill that is a native select. With a stage open, the pill is a toggle: “Add to Round 1”, “Move to Round 1” or “In Round 1”.</td><td>Steps went into stages only through a mode nobody found. A control on each card shows the whole grouping at a glance and changes it in place. The select keeps keyboard and screen reader use free.</td><td class="rejected">An add option that shows only after you select a step; a stage field in the step panel</td><td>1 Bare structure</td></tr>
+<tr id="d-151" data-l="1"><td><span class="id">d-151</span> Empty slot</td><td>“No stage” and “Add to …” are dashed pills; “In Round 1” is ink, like the card’s ring.</td><td>Dashed reads as a place to put something. Ink is what the open stage already uses, and magenta stays for selection.</td><td class="rejected">A magenta “Add” button on every card</td><td>4 Color and surface</td></tr>
+<tr id="d-152" data-l="1"><td><span class="id">d-152</span> Fade</td><td>Steps outside the open stage fade their content, not the whole card, so the chip stays at full strength.</td><td>The chip on a faded card is exactly the control the person needs next; at 32% it read as switched off.</td><td class="rejected">The whole card at 32%</td><td>4 Color and surface</td></tr>
+<tr id="d-153" data-l="1"><td><span class="id">d-153</span> Where column</td><td>In “Find”, where each person is sits in its own right column, not after the email with a dot.</td><td>People scan down the list to compare steps; a column lines them up.</td><td class="rejected">“email · step” in one run</td><td>3 Type and space</td></tr>
+<tr id="d-154" data-l="6"><td><span class="id">d-154</span> Review fixes</td><td>A fresh review found six points. Fixed: an open stage now zooms to at least 85% so pills stay readable; only a step’s details fade, not its name; the pill’s name says the action, with no pressed state that contradicts it; a step in another stage reads “Screening → Round 1”; the panel hint names the pill. Kept: “See more” on every group card, because the requester chose that label. Kept: the reorder arrow that check.py flagged as a chevron; it moves the stage and opens no list.</td><td>Each fix makes the pill easier to read or to hear. The two kept items have their evidence named here.</td><td class="rejected">—</td><td>6 Motion and detail</td></tr>
+<tr id="d-155" data-l="1"><td><span class="id">d-155</span> Invites on the People list</td><td>An invited address gets a row in the People table at once: “Invited, not signed in yet”, a role select (it invites again with the new role) and “Cancel invite”. The separate “Waiting for first sign-in” table is gone.</td><td>The requester invited someone and could not find them on the list. One list of everyone who has access or will have it answers “did it work?” where people look.</td><td class="rejected">A second table under the first, below the fold.</td><td>1 Bare structure</td></tr>
+<tr id="d-156" data-l="6"><td><span class="id">d-156</span> Cleared field stays calm</td><td>An empty text field that shows its placeholder no longer gets the red border from :user-invalid. Selects and aria-invalid fields keep it.</td><td>After a successful invite the emptied email field turned red beside a green “Invited” line. Submitting it empty is still stopped, with the browser’s own message.</td><td class="rejected">Red on any :user-invalid field, cleared or not.</td><td>6 Motion and detail</td></tr>
+<tr id="d-157" data-l="5"><td><span class="id">d-157</span> Inbox tab switch</td><td>Switching between Yours and Team problems keeps the open task only when the new list holds it; otherwise the right side goes back to the list’s start. Team problems with no task open says “Choose a late or blocked task”.</td><td>A task from the other list stayed open beside a list that did not contain it.</td><td class="rejected">Keep the open task on every switch.</td><td>5 Use over time</td></tr>
+<tr id="d-158" data-l="1"><td><span class="id">d-158</span> “Needs attention” tab</td><td>The inbox tab “Team problems” is now “Needs attention” (URL ?list=attention). “Late across the team” is “Late”. With nothing in it, it reads “Nothing needs attention. No step is stopped, stuck, blocked or late.”</td><td>The requester pointed out that the list is not about the team: it is every step in the hiring flow that waits for a person to act. The name says what to do with it.</td><td class="rejected">“Team problems”, which read as a list of people.</td><td>1 Bare structure</td></tr>
+</tbody></table></div>
+
+<h3 class="i-motion"><span class="key">Motion map</span> new state changes, all quiet</h3>
+<div class="scroll"><table class="motion">
+<thead><tr><th scope="col">Change</th><th scope="col">Tier</th><th scope="col">What happens</th><th scope="col">Reduced motion</th></tr></thead>
+<tbody>
+<tr><td>Drag over a row that can take the card</td><td>micro</td><td>The row tints magenta with a dashed edge, in 140 ms.</td><td>Instant tint.</td></tr>
+<tr><td>A stage chip is changed</td><td>none</td><td>The pill and the step’s ring change at once; undo puts it back.</td><td>Same.</td></tr>
+<tr><td>Find or See who opens</td><td>transition</td><td>The dialog grows from 96%, as every dialog does.</td><td>Instant.</td></tr>
+<tr><td>A person is picked from search</td><td>micro</td><td>Their card appears first in the row, scrolls into view and takes focus.</td><td>No smooth scroll.</td></tr>
+<tr><td>A group move is running</td><td>none</td><td>A spinner line says “Moving N of M to Step”. The source count drops as moves land.</td><td>Spinner pulses.</td></tr>
+<tr><td>A stage is picked</td><td>transition</td><td>Other steps dim and the view fits the stage, in 260 ms.</td><td>Instant.</td></tr>
+</tbody></table></div>
+
+<h3>Look notes</h3>
+<p>Captures at 960 and 1440 px, light scheme, with a faked API (sign-in is Google only). render_check.py did not run: it can’t get past sign-in without the faked API, so its checks are owed. check.py: no new ERROR. Two ASKs on the reorder arrows in the stages panel and palette were kept, because they are labelled move buttons and not disclosure chevrons.</p>
+</article>
+
 <article class="session" id="session-2026-10-20">
 <h2><span class="key">Session 2026-10-20<span class="vh">:</span></span> A new frontend in 5 chunks, then the step library and two-step apply page</h2>
 <p class="kicker">Reimagine, product scope · the owner asked for a fresh, slick, modern frontend</p>
-<p class="lede">The repo had a finished backend and no frontend. The coordinator built the shared system and checked it on a kitchen-sink page; five agents then built the screens on it. Review found that magenta and the slot meant too many things, and that the pipeline and canvas read generic. We gave each colour one job, put stopped candidates first, and redrew the hired header as a real ID badge. Follow-ups the same day: backend fields for the apply page, pipeline and jobs list; a two-step apply page with Markdown descriptions and opt-in salary; and a step library with an editable palette. Then flow presets: whole flows saved to the library and used to start a job or replace a draft, with the leftovers of the old job caught.</p>
+<p class="lede">The repo had a finished backend and no frontend. The coordinator built the shared system and checked it on a kitchen-sink page; five agents then built the screens on it. Review found that magenta and the slot meant too many things, and that the pipeline and canvas read generic. We gave each colour one job, put stopped candidates first, and redrew the hired header as a real ID badge. Follow-ups the same day: backend fields for the apply page, pipeline and jobs list; a two-step apply page with Markdown descriptions and opt-in salary; and a step library with an editable palette. Then flow presets: whole flows saved to the library and used to start a job or replace a draft, with the leftovers of the old job caught. Then flow presets became editable in place: the canvas and the form builder now edit a job or a preset through one small adapter, and jobs behave exactly as before.</p>
 
-<h3 class="i-list" id="chunks-2026-10-20"><span class="key">Chunks</span> 8 chunks, shared work first</h3>
+<h3 class="i-list" id="chunks-2026-10-20"><span class="key">Chunks</span> 9 chunks, shared work first</h3>
 <div class="scroll"><table>
 <thead><tr><th scope="col">Chunk</th><th scope="col">Files it owns</th><th scope="col">Built by</th><th scope="col">Checks</th><th scope="col">Result</th></tr></thead>
 <tbody>
@@ -626,12 +718,13 @@ details::details-content{content-visibility:visible;display:block}summary{list-s
 <tr><td>E Hires, team, settings, apply</td><td>app/pages/{hires,team,settings}.vue, app/pages/apply/[id].vue, app/components/apply/*</td><td>agent</td><td>captures at 375 to 1920, typecheck, check.py</td><td>done</td></tr>
 <tr><td>F Step presets</td><td>server: step_presets table + migration 0006, domain/presets.ts, api/step-presets/*; app: pages/library.vue, composables/usePresets.ts, lib/flow.ts (palette), flow/FlowEditor.vue + StepPanel.vue (edit mode, preset mode, save as preset)</td><td>coordinator</td><td>3 integration tests, typecheck, check.py, render_check, captures, critique</td><td>done</td></tr>
 <tr><td>G Flow presets</td><td>server: flow_presets table + migration 0007, domain/flowPresets.ts, api/flow-presets/*, jobs.ts (from preset, draftShape); shared/workflow/flowPresets.ts; app: pages/library.vue (tabs), library/index.vue (moved), library/flows.vue, composables/useFlowPresets.ts, flow/FlowPresetsMenu.vue, FlowEditor.vue (flush, menu), jobs/[id]/flow.vue (replace, Undo), jobs/[id].vue (check), jobs/[id]/details.vue (note), jobs/index.vue (presets)</td><td>implementer</td><td>4 integration + 2 unit tests, typecheck, check.py, render_check, captures, fresh critique</td><td>Steps tab: same list, editor and guard, under Library; publish: same checks, now also run by ?check=1</td></tr>
+<tr><td>H Edit flow presets</td><td>app: composables/useFlowSource.ts (new: job and preset adapters, SAMPLE_JOB), components/flow/FormBuilder.vue (new, body of jobs/[id]/form.vue), FlowEditor.vue and StepPanel.vue (source / formHref props), jobs/[id]/form.vue and flow.vue (thin), library.vue (bare child), library/flows.vue → library/flows/index.vue (Edit button), library/flows/[id].vue, [id]/index.vue, [id]/form.vue (new); no server change</td><td>implementer</td><td>vue-tsc app+server clean, 140 tests, check.py 0 errors, render_check (dev frame only), job captures before/after, guard check, fresh critique</td><td>Jobs: flow and form captures (draft, published with locked keys, archived, presets menu, form footer, step panel) pixel-identical before and after except the dev-tools timer; leave-without-saving confirm checked on both editors</td></tr>
 </tbody></table></div>
 
-<h3 class="i-search" id="critique-2026-10-20"><span class="key">Critique caught</span> 36 fixed, 8 kept with evidence, 0 open</h3>
+<h3 class="i-search" id="critique-2026-10-20"><span class="key">Critique caught</span> 40 fixed, 10 kept with evidence, 0 open</h3>
 <dl class="counts">
-<div class="i-fix"><dt>fixed, each linked to the row it changed</dt><dd>36</dd></div>
-<div class="i-keep"><dt>kept, with the evidence for keeping</dt><dd>8</dd></div>
+<div class="i-fix"><dt>fixed, each linked to the row it changed</dt><dd>40</dd></div>
+<div class="i-keep"><dt>kept, with the evidence for keeping</dt><dd>10</dd></div>
 <div class="open"><dt>open</dt><dd>0</dd></div>
 </dl>
 <p class="sowhat">The first round found that magenta and the slot meant too many things. Now magenta means “act here” and the slot means who acts, how it ended, or where you are.</p>
@@ -682,8 +775,14 @@ details::details-content{content-visibility:visible;display:block}summary{list-s
 <tr><td>Error state said “Try again” twice</td><td>critique (flow presets)</td><td>fixed: the button reads “Load again”</td></tr>
 <tr><td>“goes to named people: someone who can’t sign in any more” when nobody active is left</td><td>critique (flow presets)</td><td>fixed: “goes to someone who can’t sign in any more”</td></tr>
 <tr><td>“Standard hire flow” and “Standard hire”</td><td>critique (flow presets)</td><td>fixed: “Standard hire” everywhere</td></tr>
-<tr><td>Keep Save as flow preset on archived jobs</td><td>critique (flow presets)</td><td>kept hidden: the approved plan hides the menu on read-only jobs; proposed for the owner</td></tr>
+<tr><td>Keep Save as flow preset on archived jobs</td><td>critique (flow presets)</td><td>fixed after the owner agreed: a save-only button on archived jobs</td></tr>
 <tr><td>“Ready to publish” on the canvas beside a server problem in the panel</td><td>critique (flow presets)</td><td>kept: known limit in the plan; the canvas checks the flow alone, the panel adds people and earlier versions</td></tr>
+<tr><td>“Changes save here” is false on the Form tab, and the copy line appeared twice there</td><td>critique (edit presets)</td><td>fixed: sub line without “Changes save here”; footer hint removed for presets</td></tr>
+<tr><td>The list’s problems block did not lead to the new editor</td><td>critique (edit presets)</td><td>fixed: each problem’s step name links to the step in the editor; heading kept, because named people still need a check after use</td></tr>
+<tr><td>A 404 on save flips the hub to “doesn’t exist” and drops unsaved form edits without a word</td><td>critique (edit presets)</td><td>kept: the preset is gone, so the edits have nowhere to go; the page says why and links back (approved plan, §4)</td></tr>
+<tr><td>Loading skeleton had no tab placeholders</td><td>critique (edit presets)</td><td>fixed: two tab placeholders</td></tr>
+<tr><td>Canvas save error wraps in the toolbar pill</td><td>critique (edit presets)</td><td>kept: shared job behaviour; job parity required</td></tr>
+<tr><td>render_check ASKs on the crumb (55×19), rail count badge and 18px checkbox</td><td>render_check (edit presets)</td><td>kept: shared controls, identical on the job hub; the crumb has clear space around it</td></tr>
 </tbody></table></div>
 </details>
 
@@ -705,17 +804,17 @@ details::details-content{content-visibility:visible;display:block}summary{list-s
 </table>
 </details>
 
-<h3 class="i-list" id="decisions-2026-10-20"><span class="key">Decisions</span> 115, most of them in structure and colour</h3>
+<h3 class="i-list" id="decisions-2026-10-20"><span class="key">Decisions</span> 128, most of them in structure and colour</h3>
 <div class="decisions">
 <fieldset class="layers">
 <legend>Press a layer to see its decisions</legend>
-<label style="--n:40"><input type="radio" name="layer" id="l-1">1 Bare structure <b>40</b></label>
+<label style="--n:44"><input type="radio" name="layer" id="l-1">1 Bare structure <b>44</b></label>
 <label style="--n:6"><input type="radio" name="layer" id="l-2">2 Direction <b>6</b></label>
-<label style="--n:17"><input type="radio" name="layer" id="l-3">3 Type and space <b>17</b></label>
+<label style="--n:19"><input type="radio" name="layer" id="l-3">3 Type and space <b>19</b></label>
 <label style="--n:26"><input type="radio" name="layer" id="l-4">4 Colour and surface <b>26</b></label>
-<label style="--n:14"><input type="radio" name="layer" id="l-5">5 Use over time <b>14</b></label>
-<label style="--n:12"><input type="radio" name="layer" id="l-6">6 Motion and detail <b>12</b></label>
-<label class="all"><input type="radio" name="layer" id="l-all" checked>All, in order <b>115</b></label>
+<label style="--n:18"><input type="radio" name="layer" id="l-5">5 Use over time <b>18</b></label>
+<label style="--n:15"><input type="radio" name="layer" id="l-6">6 Motion and detail <b>15</b></label>
+<label class="all"><input type="radio" name="layer" id="l-all" checked>All, in order <b>128</b></label>
 </fieldset>
 <p class="hint">Each row: the decision, why, and the default it rejected.</p>
 <div class="scroll"><table>
@@ -836,6 +935,19 @@ details::details-content{content-visibility:visible;display:block}summary{list-s
 <tr id="d-113" data-l="6"><td><span class="id">d-113</span> Preset option counts</td><td>“11 steps · 3 fields” beside every preset name in the Load and New job dialogs; the description, when there is one, on the line below</td><td>Critique: counts and descriptions mean different things; showing counts only for presets without a description hid the comparison.</td><td class="rejected">Description, else counts</td><td>6 Motion and detail</td></tr>
 <tr id="d-114" data-l="6"><td><span class="id">d-114</span> Named problems</td><td>The library names each problem in a preset (“Screen: “Pay fits” doesn’t lead to a step yet”) with the canvas’s wording</td><td>Critique: leftovers must be explained, not counted, before anyone starts a job from the preset.</td><td class="rejected">“1 problem in the flow”</td><td>6 Motion and detail</td></tr>
 <tr id="d-115" data-l="6"><td><span class="id">d-115</span> One name for the built-in</td><td>“Standard hire” everywhere, including the New job dialog</td><td>Critique: “Standard hire flow” and “Standard hire” named one thing twice.</td><td class="rejected">Two names</td><td>6 Motion and detail</td></tr>
+<tr id="d-116" data-l="1"><td><span class="id">d-116</span> Archived jobs</td><td>A single “Save as flow preset…” button in the read-only toolbar; loading a preset stays unavailable</td><td>Owner decision: a past job’s flow is often the best start for the next one; an archived job itself must not change.</td><td class="rejected">The presets menu hidden on archived jobs</td><td>1 Bare structure</td></tr>
+<tr id="d-117" data-l="1"><td><span class="id">d-117</span> Preset editor route</td><td>A full-width editor at /library/flows/:id with its own crumb, title and Flow | Form tabs; the Library tabs are not shown there</td><td>Flow shape: the same shape as the job hub, one header above a full-height canvas; the crumb returns to the same preset in the list.</td><td class="rejected">A third Library tab, or the canvas in a dialog</td><td>1 Bare structure</td></tr>
+<tr id="d-118" data-l="5"><td><span class="id">d-118</span> Preset autosave</td><td>The preset canvas saves 800 ms after each change, like a job draft; the Form tab keeps its explicit Save</td><td>One editor, one behaviour: people who edit job flows already trust autosave there; the form keeps its leave-without-saving confirm.</td><td class="rejected">An explicit Save button on the preset canvas</td><td>5 Use over time</td></tr>
+<tr id="d-119" data-l="1"><td><span class="id">d-119</span> Presets menu in the preset editor</td><td>Not shown</td><td>Loading a preset into a preset or saving it as one is circular; Duplicate in the list makes the copy.</td><td class="rejected">The menu shown disabled</td><td>1 Bare structure</td></tr>
+<tr id="d-120" data-l="3"><td><span class="id">d-120</span> Sample job in previews</td><td>Email previews in the preset editor use “Example job”, the same sample as the step library (now one constant)</td><td>A preset has no job; one sample everywhere a job is missing, so previews read the same.</td><td class="rejected">A blank job title in previews</td><td>3 Type and space</td></tr>
+<tr id="d-121" data-l="5"><td><span class="id">d-121</span> Standard hire link</td><td>/library/flows/standard goes back to the list with Standard hire selected</td><td>The built-in cannot change; the list already says “Duplicate it to make a version you can change”.</td><td class="rejected">A read-only canvas for the built-in</td><td>5 Use over time</td></tr>
+<tr id="d-122" data-l="3"><td><span class="id">d-122</span> Edit flow and form button</td><td>An outlined button before a quiet Rename… in the detail header; the hint “edit them in a job’s Flow tab…” is removed</td><td>Changing the steps and form is the main reason to open a preset; renaming is rarer.</td><td class="rejected">A hint that sends people into a job</td><td>3 Type and space</td></tr>
+<tr id="d-123" data-l="6"><td><span class="id">d-123</span> Preset canvas wording</td><td>“No problems” and “A job that starts from this fixes these before it can publish”</td><td>A preset is never published; the words match the list’s “A job that starts from it fixes this before it can publish”.</td><td class="rejected">“Ready to publish” on a preset</td><td>6 Motion and detail</td></tr>
+<tr id="d-124" data-l="6"><td><span class="id">d-124</span> Preset form footer</td><td>Button “Save”, no hint: only “Saved” or the error</td><td>Saving a preset makes no draft; the sub line under the title already says jobs keep their copy (critique: the same line twice).</td><td class="rejected">“Save draft”, or the plan’s footer hint</td><td>6 Motion and detail</td></tr>
+<tr id="d-125" data-l="6"><td><span class="id">d-125</span> Preset sub line</td><td>“Flow preset · Jobs that already started from it keep their own copy.”</td><td>Critique: “Changes save here” promised autosave, but the Form tab saves with a button.</td><td class="rejected">The plan’s “Changes save here.”</td><td>6 Motion and detail</td></tr>
+<tr id="d-126" data-l="1"><td><span class="id">d-126</span> Problems in the list link to the editor</td><td>In a preset’s “Check after you use it” block, each problem’s step name links to that step in the editor (?node=)</td><td>Critique: the problems can now be fixed in the preset itself; the link is the one-step trip there.</td><td class="rejected">Problems as plain text</td><td>1 Bare structure</td></tr>
+<tr id="d-127" data-l="5"><td><span class="id">d-127</span> Loading skeleton</td><td>Title, sub line and two tab placeholders, then a canvas or form shape by tab</td><td>Critique: the header must not jump when the tabs arrive.</td><td class="rejected">A blank band where the tabs go</td><td>5 Use over time</td></tr>
+<tr id="d-128" data-l="5"><td><span class="id">d-128</span> Fresh load before editing</td><td>The preset editor opens only after the list loads without error; a failed load shows Retry even with an older list cached</td><td>The canvas copies the preset once and autosaves, so a stale copy could overwrite newer edits.</td><td class="rejected">Opening on the cached list</td><td>5 Use over time</td></tr>
 </tbody></table></div>
 </div>
 
@@ -882,6 +994,9 @@ details::details-content{content-visibility:visible;display:block}summary{list-s
 <tr tabindex="0"><td>Library row chosen</td><td><span class="dur" style="--ms:140"></span><span class="demo" style="--ms:140;--ease:cubic-bezier(.2,.8,.2,1)"></span>micro, 140 ms</td><td>often</td><td>the row tint changes; the detail swaps at once</td><td>instant</td><td>low</td><td>which flow is shown</td></tr>
 <tr tabindex="0"><td>Rename in place</td><td>none</td><td>rare</td><td>fields replace the title; focus moves to Name</td><td>same</td><td>low</td><td>you are editing</td></tr>
 <tr tabindex="0"><td>Empty requirements note</td><td>none</td><td>occasional</td><td>the note shrinks or leaves as fields are filled</td><td>same</td><td>medium</td><td>what is still empty</td></tr>
+<tr tabindex="0"><td>Preset editor opens from the list</td><td>none</td><td>occasional</td><td>a page change; skeleton until the list loads</td><td>same</td><td>medium</td><td>which preset you are editing</td></tr>
+<tr tabindex="0"><td>Preset saved (canvas or form)</td><td>none</td><td>often</td><td>“Saved” beside the toolbar or the Save button, as on jobs</td><td>same</td><td>high</td><td>the change is kept</td></tr>
+<tr tabindex="0"><td>Preset deleted while open</td><td>none</td><td>rare</td><td>a failed save reloads the list and the page shows “This flow preset doesn’t exist”</td><td>same</td><td>high</td><td>there is nothing left to save to</td></tr>
 </tbody></table></div>
 
 <details>
@@ -903,7 +1018,7 @@ details::details-content{content-visibility:visible;display:block}summary{list-s
 </section>
 
 <section class="chapter ask" id="decide">
-<h2><span class="key">For you to decide<span class="vh">:</span></span> 6 choices, and 1 things owed</h2>
+<h2><span class="key">For you to decide<span class="vh">:</span></span> 5 choices, and 1 things owed</h2>
 <p class="lede">You can reverse each one. Each card shows what it gains, what it costs, and the alternative if you do not agree.</p>
 <ol class="cards">
 <li><b>The name “Lanyard” and the badge mark</b><span>It gives the tool a face and ties it to the result, a person who starts work. It is a guess at your brand. <a href="#d-10">d-10</a></span><span class="alt">Your company name and logo, if the tool is internal only.</span></li>
@@ -911,7 +1026,6 @@ details::details-content{content-visibility:visible;display:block}summary{list-s
 <li><b>No server rendering</b><span>It keeps the app simple and made the faked-API reviews possible. Shared apply links show no job title in chat previews. <a href="#d-1">d-1</a></span><span class="alt">Server rendering for /apply only, if candidates share links in chat apps.</span></li>
 <li><b>Dots on the canvas</b><span>They are the 24 px snap grid. The reference images also had dots, which you asked to leave behind. <a href="#d-43">d-43</a></span><span class="alt">A plain canvas without snapping, if the dots read as the old look.</span></li>
 <li><b>Green for live jobs as well as hires</b><span>Green is one family: a good or finished state. Hired and live share it. <a href="#d-38">d-38</a></span><span class="alt">Ink for live, if you want green to mean hired only.</span></li>
-<li><b>Save as flow preset on archived jobs</b><span>Archived jobs often hold the flows that worked. The plan hides the whole menu there, so they cannot be saved as presets today. <a href="#d-4">d-4</a></span><span class="alt">Show only “Save as flow preset…” on archived jobs.</span></li>
 </ol>
 <h3>Still owed</h3>
 <ul class="owed">

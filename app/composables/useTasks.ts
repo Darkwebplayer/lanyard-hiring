@@ -11,7 +11,10 @@ export const useTasks = () => {
   const error = useState<ApiError | null>('inbox-error', () => null)
   async function refresh() {
     try {
-      inbox.value = await api<Inbox>('/api/tasks')
+      const res = await api<Inbox>('/api/tasks')
+      // anything else (an empty body, an HTML page mid-reload or mid-sign-in) is a failed load, not an empty inbox
+      if (!Array.isArray(res?.mine)) throw { status: 0, code: 'bad_response', message: 'Something went wrong on our side. Try again.', issues: [] } satisfies ApiError
+      inbox.value = res
       error.value = null
     }
     catch (e) {
