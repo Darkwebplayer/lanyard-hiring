@@ -82,7 +82,28 @@ export const settings = pgTable('settings', {
   replyToEmail: text('reply_to_email'),
   consentText: text('consent_text'),
   aiNoticeText: text('ai_notice_text'),
+  aiEnabled: boolean('ai_enabled').notNull().default(true), // off: AI steps fail with ai_off, Ask and flow drafts hide
+  careersIntro: text('careers_intro'), // the line under "Work with us" on /careers
+  // picked when closing as rejected; stored on the event, so renaming one never rewrites history
+  rejectReasons: jsonb('reject_reasons').$type<string[]>().notNull()
+    .default(['Not enough experience', 'Skills don’t match', 'Salary expectations', 'Position filled', 'Other']),
 }, t => [check('settings_single_row', sql`${t.id} = 1`)])
+
+// One interviewer's weekly hours for booking links: { mon: [['09:00', '17:00']], ... } in their own time zone.
+export const availability = pgTable('availability', {
+  userId: text('user_id').primaryKey().references(() => user.id),
+  timezone: text('timezone').notNull(),
+  hours: jsonb('hours').$type<Record<string, [string, string][]>>().notNull(),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+})
+
+// Library: offer letter templates, Markdown with {{candidate.*}}, {{job.*}}, {{offer.*}} holes.
+export const offerTemplates = pgTable('offer_templates', {
+  id: id(),
+  name: text('name').notNull(),
+  body: text('body').notNull(),
+  createdAt: createdAt(),
+})
 
 // ---------- step presets ----------
 
@@ -165,6 +186,8 @@ export const applications = pgTable('applications', {
   status: applicationStatus('status').notNull().default('active'),
   outcome: outcome('outcome'),
   currentNodeKey: text('current_node_key'), // display cache only; state lives in node_runs
+  source: text('source'), // where they came from: ?src / utm_source on apply, 'import', null if unknown
+  consent: jsonb('consent').$type<{ text: string, at: string }>(), // the consent text they agreed to; null = not collected (imports)
   createdAt: createdAt(),
 }, t => [
   uniqueIndex('applications_job_candidate_uq').on(t.jobId, t.candidateId),
@@ -226,6 +249,37 @@ export const applicationEvents = pgTable('application_events', {
   data: jsonb('data').notNull().default({}),
   createdAt: createdAt(),
 }, t => [index('application_events_app_idx').on(t.applicationId, t.seq)])
+
+// A candidate's link to pick a time for one human-task run. starts_at null until they book.
+export const bookings = pgTable('bookings', {
+  id: id(),
+  runId: uuid('run_id').notNull().references(() => nodeRuns.id).unique(),
+  token: text('token').notNull().unique(),
+  durationMin: integer('duration_min').notNull(),
+  startsAt: ts('starts_at'),
+  createdAt: createdAt(),
+})
+
+export const offerStatus = pgEnum('offer_status', ['sent', 'accepted', 'declined', 'withdrawn'])
+
+// The letter is rendered once when made, so later template edits never change what the candidate saw.
+export const offers = pgTable('offers', {
+  id: id(),
+  applicationId: uuid('application_id').notNull().references(() => applications.id),
+  token: text('token').notNull().unique(),
+  terms: jsonb('terms').$type<{ salary: string, start_date: string, location?: string }>().notNull(),
+  letter: text('letter').notNull(),
+  status: offerStatus('status').notNull().default('sent'),
+  expiresAt: ts('expires_at'),
+  signedName: text('signed_name'),
+  respondedAt: ts('responded_at'),
+  createdBy: text('created_by').notNull().references(() => user.id),
+  createdAt: createdAt(),
+}, t => [
+  index('offers_application_idx').on(t.applicationId),
+  // one live offer per application; a new one withdraws the old
+  uniqueIndex('offers_one_sent_uq').on(t.applicationId).where(sql`${t.status} = 'sent'`),
+])
 
 export const reminderLog = pgTable('reminder_log', {
   runId: uuid('run_id').notNull().references(() => nodeRuns.id),

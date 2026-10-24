@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { createAuthClient } from 'better-auth/vue'
 
-const { me, isManager, isAdmin } = useMe()
+const { me, isManager, isAdmin, canAsk } = useMe()
+const { open: asking, floats } = useAsk()
 const { inbox, refresh } = useTasks()
 const route = useRoute()
 if (!inbox.value) refresh()
@@ -26,7 +27,7 @@ async function signOut() {
 </script>
 
 <template>
-  <div class="shell">
+  <div class="shell" :class="{ asking: asking && !floats && (canAsk || isAdmin) }">
     <nav class="rail" aria-label="Main">
       <NuxtLink to="/inbox" class="mark" aria-label="Lanyard, go to inbox">
         <span class="mark-slot" />
@@ -52,11 +53,14 @@ async function signOut() {
     <main class="main">
       <slot />
     </main>
+    <AskPanel />
   </div>
 </template>
 
 <style scoped>
 .shell { display: grid; grid-template-columns: var(--rail) minmax(0, 1fr); min-height: 100dvh; min-width: 960px; }
+/* Ask docks beside the page when there is room for both; below 1280 px it lies over the right edge */
+@media (min-width: 1280px) { .shell.asking { grid-template-columns: var(--rail) minmax(0, 1fr) 392px; } }
 .rail {
   position: sticky; top: 0; height: 100dvh; display: flex; flex-direction: column; align-items: center; gap: 6px;
   padding: 14px 0 16px; border-right: 1px solid var(--line); background: var(--bg);

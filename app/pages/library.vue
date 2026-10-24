@@ -3,6 +3,7 @@ const route = useRoute()
 const tabs = [
   { to: '/library', label: 'Steps' },
   { to: '/library/flows', label: 'Flows' },
+  { to: '/library/offers', label: 'Offer letters' },
 ]
 </script>
 

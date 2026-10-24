@@ -113,7 +113,7 @@ const emptyRead = computed(() => {
   return jobFieldsRead(wf).filter(x => empty[x.path])
 })
 // AI review sends the requirements with the CV, so empty skills or years weaken its score
-const aiReads = computed(() => editable.value?.workflow.nodes.some(n => n.type === 'ai_review')
+const aiReads = computed(() => editable.value?.workflow.nodes.some(n => n.type === 'ai_review' || n.type === 'ai_check')
   ? emptyRead.value.filter(x => x.path === 'job.must_have_skills' || x.path === 'job.min_experience_years').map(x => x.label)
   : [])
 const listOf = (xs: string[]) => xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs.at(-1)}`

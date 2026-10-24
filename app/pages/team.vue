@@ -327,14 +327,15 @@ tr.off .who .avatar { background: var(--sunk); color: var(--ink-2); }
 /* switch: a checkbox drawn as a track and knob */
 .switch { display: inline-flex; gap: 10px; align-items: center; cursor: pointer; font-size: var(--t-sm); white-space: nowrap; }
 .switch input {
-  width: 34px; height: 20px; border-radius: 99px; border: 0; background: var(--line-2); position: relative;
+  /* a transparent 2px border grows the target to 38 × 24 (the 24 px minimum) while the track still draws 34 × 20 */
+  width: 38px; height: 24px; border-radius: 99px; border: 2px solid transparent; background: var(--line-2) padding-box; position: relative;
   display: inline-block; transition: background var(--t-micro) var(--ease);
 }
 .switch input::before {
   content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff;
   scale: 1; clip-path: none; box-shadow: 0 1px 2px oklch(0.3 0.04 330 / 0.3); transition: translate var(--t-micro) var(--ease);
 }
-.switch input:checked { background: var(--ink); }
+.switch input:checked { background: var(--ink) padding-box; border-color: transparent; }
 .switch input:checked::before { translate: 14px 0; }
 
 .roles td:first-child { width: 40%; }

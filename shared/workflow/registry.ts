@@ -7,7 +7,7 @@ import { type Field, type FieldType, type Issue, KEY_RE } from './types'
 // human: waits for submissions · terminal: closes the application
 export type NodeKind = 'trigger' | 'instant' | 'auto' | 'human' | 'terminal'
 
-export interface OutputField { key: string, type: FieldType, label: string }
+export interface OutputField { key: string, type: FieldType, label: string, options?: string[] }
 
 export interface NodeDef<C = any> {
   type: string
@@ -59,19 +59,47 @@ const trigger: NodeDef<Record<string, never>> = {
 
 // ---------- cv_parse ----------
 
-const cvParse: NodeDef<{ file_field: string }> = {
+const EXTRACT_TYPES = { text: 'string', number: 'number', date: 'date', list: 'list' } as const
+const CV_OUTPUTS: OutputField[] = [
+  { key: 'text', type: 'text', label: 'CV text' },
+  { key: 'skills', type: 'list', label: 'Skills' },
+  { key: 'years_experience', type: 'number', label: 'Years of experience' },
+  { key: 'current_title', type: 'string', label: 'Current title' },
+  { key: 'file_sha256', type: 'string', label: 'File checksum' },
+]
+
+const cvParse: NodeDef<{
+  file_field: string
+  extract?: { key: string, label: string, type: keyof typeof EXTRACT_TYPES, hint?: string }[]
+}> = {
   type: 'cv_parse',
   kind: 'auto',
   label: 'CV parse',
-  config: z.object({ file_field: key }).strict(),
-  outputs: () => [
-    { key: 'text', type: 'text', label: 'CV text' },
-    { key: 'skills', type: 'list', label: 'Skills' },
-    { key: 'years_experience', type: 'number', label: 'Years of experience' },
-    { key: 'current_title', type: 'string', label: 'Current title' },
-    { key: 'file_sha256', type: 'string', label: 'File checksum' },
+  config: z.object({
+    file_field: key,
+    // "Also pull out": owner-defined facts, e.g. notice period
+    extract: z.array(z.object({
+      key,
+      label: z.string().trim().min(1).max(100),
+      type: z.enum(['text', 'number', 'date', 'list']),
+      hint: z.string().max(300).optional(),
+    }).strict()).max(10).optional(),
+  }).strict(),
+  outputs: c => [...CV_OUTPUTS, ...(c.extract ?? []).map(f => ({ key: f.key, type: EXTRACT_TYPES[f.type], label: f.label }))],
+  check: (c, available, node) => [
+    ...uniqueKeys(c.extract ?? [], node, 'field', CV_OUTPUTS.map(o => o.key)),
+    ...checkRef(`form.${c.file_field}`, available, node, ['file']),
   ],
-  check: (c, available, node) => checkRef(`form.${c.file_field}`, available, node, ['file']),
+}
+
+// The AI only ever sees CV text or non-protected form text: never candidate.*, job.* or copies made by other nodes
+const checkAiInput = (ref: string | undefined, available: Map<string, Field>, node: string): Issue[] => {
+  if (!ref) return []
+  const issues = checkRef(ref, available, node, ['text', 'string'])
+  const f = available.get(ref)
+  const allowed = ref.startsWith('form.') ? !f?.protected : f?.nodeType === 'cv_parse'
+  if (!issues.length && !allowed) issues.push({ node, code: 'ai_input_not_allowed', message: `"${ref}" cannot be sent to the AI` })
+  return issues
 }
 
 // ---------- ai_review ----------
@@ -96,18 +124,41 @@ const aiReview: NodeDef<{
     { key: 'overall', type: 'number', label: 'Overall score (0–100)' },
     { key: 'summary', type: 'text', label: 'AI summary' },
   ],
-  check: (c, available, node) => {
-    const issues = uniqueKeys(c.criteria, node, 'criterion', AI_RESERVED)
-    if (!c.cv_text_ref) return issues
-    const ref = checkRef(c.cv_text_ref, available, node, ['text', 'string'])
-    const f = available.get(c.cv_text_ref)
-    // the AI only ever sees CV text or non-protected form text: never candidate.*, job.* or copies made by other nodes
-    const allowed = c.cv_text_ref.startsWith('form.') ? !f?.protected : f?.nodeType === 'cv_parse'
-    if (!ref.length && !allowed) {
-      ref.push({ node, code: 'ai_input_not_allowed', message: `"${c.cv_text_ref}" cannot be sent to the AI` })
-    }
-    return [...issues, ...ref]
-  },
+  check: (c, available, node) => [...uniqueKeys(c.criteria, node, 'criterion', AI_RESERVED), ...checkAiInput(c.cv_text_ref, available, node)],
+}
+
+// ---------- ai_check ----------
+
+const aiCheck: NodeDef<{
+  questions: { key: string, label: string, question: string, kind: 'yes_no' | 'choice', options?: { key: string, label: string }[] }[]
+  cv_text_ref?: string
+}> = {
+  type: 'ai_check',
+  kind: 'auto',
+  label: 'Check answers',
+  config: z.object({
+    questions: z.array(z.object({
+      key,
+      label: z.string().trim().min(1).max(100),
+      question: z.string().trim().min(1).max(500),
+      kind: z.enum(['yes_no', 'choice']),
+      options: z.array(z.object({ key, label: z.string().trim().min(1).max(100) }).strict()).optional(),
+    }).strict()).min(1).max(10),
+    cv_text_ref: z.string().optional(),
+  }).strict(),
+  outputs: c => c.questions.map((q): OutputField => q.kind === 'choice'
+    ? { key: q.key, type: 'enum', label: q.label, options: (q.options ?? []).map(o => o.key) }
+    : { key: q.key, type: 'boolean', label: q.label }),
+  check: (c, available, node) => [
+    ...uniqueKeys(c.questions, node, 'question'),
+    ...c.questions.flatMap((q): Issue[] => {
+      const n = q.options?.length ?? 0
+      if (q.kind === 'yes_no') return n ? [{ node, code: 'bad_options', message: `question "${q.key}": yes/no questions take no options` }] : []
+      if (n < 2 || n > 8) return [{ node, code: 'bad_options', message: `question "${q.key}": give 2 to 8 options` }]
+      return uniqueKeys(q.options!, node, `question "${q.key}": option`)
+    }),
+    ...checkAiInput(c.cv_text_ref, available, node),
+  ],
 }
 
 // ---------- set_variable ----------
@@ -189,6 +240,7 @@ export interface HumanTaskConfig {
   scorecard: ScorecardField[]
   min_submissions: number
   due_days?: number
+  booking?: { duration_min: number } // the candidate gets a link to pick a time with the assignees
 }
 
 const humanTask: NodeDef<HumanTaskConfig> = {
@@ -213,6 +265,7 @@ const humanTask: NodeDef<HumanTaskConfig> = {
     }).strict()).min(1).max(30),
     min_submissions: z.number().int().min(1).max(20).default(1),
     due_days: z.number().int().min(0).max(90).optional(),
+    booking: z.object({ duration_min: z.number().int().min(15).max(240) }).strict().optional(),
   }).strict() as z.ZodType<HumanTaskConfig>,
   outputs: c => [
     ...c.scorecard.flatMap((f): OutputField[] => f.type === 'boolean'
@@ -341,5 +394,5 @@ export function normalizeOutput(fields: OutputField[], output: Record<string, un
 }
 
 export const REGISTRY: Record<string, NodeDef> = Object.fromEntries(
-  [trigger, cvParse, aiReview, setVariable, condition, humanTask, sendEmail, end].map(d => [d.type, d]),
+  [trigger, cvParse, aiReview, aiCheck, setVariable, condition, humanTask, sendEmail, end].map(d => [d.type, d]),
 )

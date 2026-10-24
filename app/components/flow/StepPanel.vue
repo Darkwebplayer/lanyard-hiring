@@ -18,6 +18,9 @@ const props = defineProps<{
 const emit = defineEmits<{ rename: [key: string], connect: [branch: string | undefined, to: string], remove: [], close: [], savePreset: [] }>()
 
 const meta = computed(() => nodeMeta(props.node.type))
+const { canAsk } = useMe()
+const { ask } = useAsk()
+const explain = () => ask(`What does ${titleOf(props.node)} do in this flow?`, `node:${props.node.key}`)
 const refHint = computed(() => `{{nodes.${props.node.key}.…}}`)
 const c = computed(() => props.node.config as any)
 const fields = computed(() => fieldsAvailableAt(props.graph, props.node.key, props.form))
@@ -104,6 +107,30 @@ const cvTextRef = computed({
   },
 })
 
+// ---------- Read CV: also pull out ----------
+const EXTRACT_TYPES = [['text', 'Text'], ['number', 'Number'], ['date', 'Date'], ['list', 'List']] as const
+function addExtract() {
+  ;(c.value.extract ??= []).push({ key: '', label: '', type: 'text' })
+}
+function dropExtract(i: number) {
+  c.value.extract.splice(i, 1)
+  if (!c.value.extract.length) delete c.value.extract
+}
+const setHint = (f: any, v: string) => { if (v.trim()) f.hint = v; else delete f.hint }
+
+// ---------- Check answers ----------
+function setQuestionKind(q: any, kind: 'yes_no' | 'choice') {
+  q.kind = kind
+  if (kind === 'yes_no') delete q.options
+  else q.options ??= [{ key: 'option_1', label: 'Option 1' }, { key: 'option_2', label: 'Option 2' }]
+}
+const addQuestion = () => c.value.questions.push({ key: '', label: '', question: '', kind: 'yes_no' })
+const addOption = (q: any) => q.options.push({ key: uniqueKey('option', q.options.map((o: any) => o.key)), label: '' })
+// what each question hands the next Decision, in the words the Decision shows
+const givesText = (q: any) => q.kind === 'choice'
+  ? (q.options ?? []).map((o: any) => o.label || o.key).join(', ').replace(/, ([^,]*)$/, ' or $1')
+  : 'yes or no'
+
 // ---------- person step ----------
 const ht = computed(() => c.value as HumanTaskConfig)
 function toggle(list: string[], id: string, on: boolean) {
@@ -140,6 +167,14 @@ function setLiteral(f: any, raw: string) {
 }
 const addVar = () => c.value.fields.push({ key: uniqueKey('value', c.value.fields.map((f: any) => f.key)), type: 'string', source: { kind: 'literal', value: '' } })
 
+// booking link: off unless asked for; the server takes 15–240 minutes
+const booking = computed(() => c.value.booking as { duration_min: number } | undefined)
+function setBooking(on: boolean) {
+  if (on) c.value.booking = { duration_min: 30 }
+  else delete c.value.booking
+}
+const setDuration = (raw: string) => (c.value.booking.duration_min = Math.min(240, Math.max(15, Math.round(Number(raw) || 30))))
+
 const fileFields = computed(() => props.form.filter(f => f.type === 'file'))
 const OUTCOMES = [['hired', 'Hired'], ['rejected', 'Rejected'], ['withdrawn', 'Withdrawn']] as const
 const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
@@ -151,6 +186,7 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
       <div class="eyebrow"><Icon :name="meta.icon" :size="14" />{{ meta.noun }}</div>
       <h3>{{ titleOf(node) }}</h3>
       <div class="head-actions">
+        <button v-if="!preset && canAsk" type="button" class="btn btn-quiet btn-sm" @click="explain">Explain</button>
         <button v-if="!preset && node.type !== 'application_received'" type="button" class="btn btn-quiet btn-icon btn-sm" aria-label="Save as a preset in the step library" title="Save as preset (adds it to every job’s palette)" @click="emit('savePreset')">
           <Icon name="library" />
         </button>
@@ -194,7 +230,8 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
       </section>
 
       <!-- read CV -->
-      <section v-else-if="node.type === 'cv_parse'" class="sec">
+      <template v-else-if="node.type === 'cv_parse'">
+      <section class="sec">
         <div class="field">
           <label :for="`ff-${node.key}`">Read the file from</label>
           <select v-if="fileFields.length" :id="`ff-${node.key}`" v-model="c.file_field">
@@ -203,6 +240,44 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
           <p v-else class="hint">The form has no file field. <NuxtLink :to="formHref">Add a file field in the Form tab</NuxtLink></p>
         </div>
       </section>
+      <section class="sec">
+        <div class="legend">Always pulled out</div>
+        <ul class="fixed" aria-label="Always pulled out">
+          <li class="chip">Current title</li><li class="chip">Years of experience</li><li class="chip">Skills</li>
+        </ul>
+        <div class="legend">Also pull out <span class="faint">(up to 10)</span></div>
+        <div v-for="(f, i) in c.extract ?? []" :key="i" class="row-card">
+          <div class="rc-head">
+            <span class="legend">Fact {{ Number(i) + 1 }}</span>
+            <button type="button" class="btn btn-quiet btn-icon btn-sm" :aria-label="`Remove ${f.label || 'fact'}`" title="Remove fact" @click="dropExtract(Number(i))"><Icon name="x" /></button>
+          </div>
+          <div class="row-2 two">
+            <div class="field">
+              <label :for="`xl-${node.key}-${i}`">Name</label>
+              <input :id="`xl-${node.key}-${i}`" :value="f.label" placeholder="Notice period" @input="relabel(f, ($event.target as HTMLInputElement).value, 'fact')">
+            </div>
+            <div class="field">
+              <label :for="`xk-${node.key}-${i}`">Key</label>
+              <input :id="`xk-${node.key}-${i}`" v-model.trim="f.key" class="mono" spellcheck="false">
+            </div>
+          </div>
+          <div class="type-hint">
+            <div class="field">
+              <label :for="`xt-${node.key}-${i}`">Type</label>
+              <select :id="`xt-${node.key}-${i}`" v-model="f.type">
+                <option v-for="[v, l] in EXTRACT_TYPES" :key="v" :value="v">{{ l }}</option>
+              </select>
+            </div>
+            <div class="field">
+              <label :for="`xh-${node.key}-${i}`">Hint <span class="faint">(optional)</span></label>
+              <input :id="`xh-${node.key}-${i}`" :value="f.hint ?? ''" maxlength="300" :placeholder="f.type === 'list' ? 'e.g. Food hygiene, first aid' : 'e.g. How soon they can start'" @input="setHint(f, ($event.target as HTMLInputElement).value)">
+            </div>
+          </div>
+        </div>
+        <button v-if="(c.extract?.length ?? 0) < 10" type="button" class="btn btn-sm add" @click="addExtract"><Icon name="plus" />Add a fact</button>
+        <p class="hint">If the CV does not say, the fact stays empty. Read CV never guesses.</p>
+      </section>
+      </template>
 
       <!-- AI review -->
       <section v-else-if="node.type === 'ai_review'" class="sec">
@@ -241,6 +316,65 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
           <textarea :id="`in-${node.key}`" v-model="c.instructions" rows="3" placeholder="e.g. Count open-source work as experience" />
         </div>
       </section>
+
+      <!-- Check answers -->
+      <template v-else-if="node.type === 'ai_check'">
+      <section class="sec">
+        <div class="legend">What to check <span class="faint">(up to 10)</span></div>
+        <div v-for="(q, i) in c.questions" :key="i" class="row-card">
+          <div class="rc-head">
+            <span class="legend">Question {{ Number(i) + 1 }}</span>
+            <button v-if="c.questions.length > 1" type="button" class="btn btn-quiet btn-icon btn-sm" :aria-label="`Remove ${q.label || 'question'}`" title="Remove question" @click="c.questions.splice(i, 1)"><Icon name="x" /></button>
+          </div>
+          <div class="field">
+            <label :for="`qq-${node.key}-${i}`">Ask</label>
+            <textarea :id="`qq-${node.key}-${i}`" v-model="q.question" rows="2" maxlength="500" placeholder="Can they work Saturdays and Sundays?" />
+          </div>
+          <div class="row-2 two">
+            <div class="field">
+              <label :for="`ql-${node.key}-${i}`">Name</label>
+              <input :id="`ql-${node.key}-${i}`" :value="q.label" placeholder="Weekends" @input="relabel(q, ($event.target as HTMLInputElement).value, 'question')">
+            </div>
+            <div class="field">
+              <label :for="`qk-${node.key}-${i}`">Key</label>
+              <input :id="`qk-${node.key}-${i}`" v-model.trim="q.key" class="mono" spellcheck="false">
+            </div>
+          </div>
+          <div class="field">
+            <span class="legend" :id="`qa-${node.key}-${i}`">Answer</span>
+            <div class="seg" role="radiogroup" :aria-labelledby="`qa-${node.key}-${i}`">
+              <label><input type="radio" :name="`qa-${node.key}-${i}`" :checked="q.kind === 'yes_no'" @change="setQuestionKind(q, 'yes_no')"><span>Yes or no</span></label>
+              <label><input type="radio" :name="`qa-${node.key}-${i}`" :checked="q.kind === 'choice'" @change="setQuestionKind(q, 'choice')"><span>Pick one</span></label>
+            </div>
+          </div>
+          <div v-if="q.kind === 'choice'" class="field">
+            <span class="legend">Choices <span class="faint">(2 to 8)</span></span>
+            <div v-for="(o, j) in q.options" :key="j" class="opt">
+              <input :value="o.label" :aria-label="`Choice ${Number(j) + 1}`" @input="relabel(o, ($event.target as HTMLInputElement).value, 'option')">
+              <button v-if="q.options.length > 2" type="button" class="btn btn-quiet btn-icon btn-sm" :aria-label="`Remove ${o.label || 'choice'}`" title="Remove choice" @click="q.options.splice(j, 1)"><Icon name="x" /></button>
+            </div>
+            <button v-if="q.options.length < 8" type="button" class="btn btn-sm btn-quiet add" @click="addOption(q)"><Icon name="plus" />Add a choice</button>
+          </div>
+        </div>
+        <button v-if="c.questions.length < 10" type="button" class="btn btn-sm add" @click="addQuestion"><Icon name="plus" />Add a question</button>
+      </section>
+      <section class="sec">
+        <div class="field">
+          <label :for="`cv-${node.key}`">CV text from</label>
+          <select :id="`cv-${node.key}`" v-model="cvTextRef">
+            <option value="">None: check the form answers only</option>
+            <option v-for="f in cvTextOptions" :key="f.path" :value="f.path">{{ f.label }}</option>
+          </select>
+          <p class="hint">The AI only sees CV text and form answers that aren’t protected.</p>
+        </div>
+        <div class="gives">
+          <span class="legend">A Decision after this can use</span>
+          <dl>
+            <template v-for="(q, i) in c.questions" :key="i"><dt>{{ q.label || q.key || 'Unnamed' }}</dt><dd>{{ givesText(q) }}</dd></template>
+          </dl>
+        </div>
+      </section>
+      </template>
 
       <!-- decision -->
       <section v-else-if="node.type === 'condition'" class="sec">
@@ -370,6 +504,16 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
           </div>
         </div>
         <p class="hint">With 2 or more, the step waits for that many scorecards (a panel) and averages the numbers.</p>
+        <div class="row-card">
+          <label class="check">
+            <input type="checkbox" role="switch" :checked="!!booking" @change="setBooking(($event.target as HTMLInputElement).checked)">
+            <span><b>Let the candidate book a time</b><br><span class="hint">They get a link to pick a slot when the people above are free. Interviewers set their hours in their inbox, under <NuxtLink to="/inbox/hours">Your interview hours</NuxtLink>.</span></span>
+          </label>
+          <div v-if="booking" class="field dur">
+            <label :for="`book-${node.key}`">Length (minutes)</label>
+            <input :id="`book-${node.key}`" type="number" min="15" max="240" step="15" :value="booking.duration_min" @change="setDuration(($event.target as HTMLInputElement).value)">
+          </div>
+        </div>
       </section>
 
       <!-- email -->
@@ -468,6 +612,13 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
 .up { rotate: -90deg; }
 .down { rotate: 90deg; }
 .add { justify-self: start; }
+.fixed { display: flex; flex-wrap: wrap; gap: 6px; margin: -6px 0 0; padding: 0; list-style: none; }
+.type-hint { display: grid; grid-template-columns: 116px minmax(0, 1fr); gap: 8px; align-items: end; }
+.opt { display: grid; grid-template-columns: minmax(0, 1fr) var(--h-sm); gap: 6px; align-items: center; }
+.gives { display: grid; gap: 8px; padding: 12px 14px; border-radius: var(--r-panel); background: var(--sunk); font-size: var(--t-sm); }
+.gives dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 0; }
+.gives dt { font-weight: 600; }
+.gives dd { margin: 0; color: var(--ink-2); overflow-wrap: anywhere; }
 .goes { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: var(--t-sm); }
 .goes span { flex: none; }
 .people { display: grid; gap: 8px; max-height: 220px; overflow-y: auto; }
@@ -481,5 +632,6 @@ code { font-size: 12px; overflow-wrap: anywhere; }
 .pv-subject { font-weight: 600; }
 .pv-body { white-space: pre-wrap; font-size: var(--t-sm); color: var(--ink); }
 fieldset.field { gap: 10px; }
+.dur input { width: 120px; }
 fieldset.field > legend { margin-bottom: 10px; }
 </style>

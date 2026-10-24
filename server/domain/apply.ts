@@ -1,4 +1,6 @@
-import { and, eq, gt, isNull, min, or, sql } from 'drizzle-orm'
+import { and, desc, eq, gt, isNull, min, or, sql } from 'drizzle-orm'
+import { renderMarkdown } from '../../app/utils/markdown'
+import { jobType, splitLocation } from '../../shared/jobPosting'
 import { answersSchema, coreSchema, FILE_MIMES, type FileMeta, MAX_FILE_BYTES } from '../../shared/workflow/form'
 import type { Requirements } from '../../shared/workflow/job'
 import type { FormField, Issue } from '../../shared/workflow/types'
@@ -21,6 +23,56 @@ export async function openJob(db: Db, jobId: string, now: Date) {
   return row
 }
 
+// internal unless the recruiter opted in for this version
+export const publicSalary = (req: Requirements) => req.show_salary && (req.salary_min !== undefined || req.salary_max !== undefined)
+  ? { min: req.salary_min ?? null, max: req.salary_max ?? null, currency: req.salary_currency ?? null }
+  : null
+
+// Every job taking applications, newest first, for /careers and the job feed. Only public fields.
+export async function openJobs(db: Db, now: Date) {
+  const rows = await db.select({
+    id: jobs.id, title: jobs.title, description: jobs.description, closesAt: jobs.closesAt, requirements: jobVersions.requirements,
+    // "posted": the first publish, not the latest re-publish
+    postedAt: sql<string | null>`(select min(v.published_at) from ${jobVersions} v where v.job_id = ${jobs.id})`.mapWith(v => v === null ? null : new Date(v)),
+  }).from(jobs)
+    .innerJoin(jobVersions, eq(jobVersions.id, jobs.publishedVersionId))
+    .where(and(eq(jobs.status, 'open'), or(isNull(jobs.closesAt), gt(jobs.closesAt, now))))
+    .orderBy(desc(jobs.createdAt))
+  const [s] = await db.select().from(settings)
+  return {
+    company: { name: s?.companyName ?? null, careersIntro: s?.careersIntro ?? null },
+    jobs: rows.map(({ requirements, ...j }) => {
+      const req = requirements as Requirements
+      return {
+        ...j,
+        location: req.location ?? null,
+        workplaceType: req.workplace_type ?? null,
+        employmentType: req.employment_type ?? null,
+        salary: publicSalary(req),
+      }
+    }),
+  }
+}
+
+// Every text in CDATA: only "]]>" needs splitting, and characters XML forbids are dropped.
+// eslint-disable-next-line no-control-regex
+const cdata = (v: string | null | undefined) => `<![CDATA[${(v ?? '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, '').replaceAll(']]>', ']]]]><![CDATA[>')}]]>`
+
+// The open jobs as one Indeed-style XML feed (job boards and aggregators read this format). Links carry ?src=feed.
+export function jobsFeedXml(origin: string, { company, jobs: list }: Awaited<ReturnType<typeof openJobs>>, now: Date) {
+  const tag = (name: string, v: string | null | undefined) => `<${name}>${cdata(v)}</${name}>`
+  const jobsXml = list.map((j) => {
+    const place = splitLocation(j.location)
+    const s = j.salary
+    const salary = s && [s.min, s.max].filter(n => n !== null).join('-') + (s.currency ? ` ${s.currency}` : '')
+    return ['<job>', tag('title', j.title), tag('date', (j.postedAt ?? now).toUTCString()), tag('referencenumber', j.id),
+      tag('url', `${origin}/apply/${j.id}?src=feed`), tag('company', company.name), tag('city', place.city), tag('country', place.country),
+      tag('description', renderMarkdown(j.description) || j.title), tag('salary', salary), tag('jobtype', jobType(j.employmentType)),
+      j.workplaceType === 'remote' ? tag('remotetype', 'Fully remote') : '', '</job>'].join('')
+  })
+  return `<?xml version="1.0" encoding="utf-8"?>\n<source>${tag('publisher', company.name)}${tag('publisherurl', origin)}${tag('lastBuildDate', now.toUTCString())}\n${jobsXml.join('\n')}\n</source>\n`
+}
+
 // Public job page: only what an applicant should see.
 export async function publicJob(db: Db, jobId: string, now: Date) {
   const { job, version } = await openJob(db, jobId, now)
@@ -40,10 +92,7 @@ export async function publicJob(db: Db, jobId: string, now: Date) {
     workplaceType: req.workplace_type ?? null,
     openings: job.openings,
     postedAt,
-    // internal unless the recruiter opted in for this version
-    salary: req.show_salary && (req.salary_min !== undefined || req.salary_max !== undefined)
-      ? { min: req.salary_min ?? null, max: req.salary_max ?? null, currency: req.salary_currency ?? null }
-      : null,
+    salary: publicSalary(req),
     minExperienceYears: req.min_experience_years ?? null,
     mustHaveSkills: req.must_have_skills ?? [],
     closesAt: job.closesAt,
@@ -54,7 +103,7 @@ export async function publicJob(db: Db, jobId: string, now: Date) {
 }
 
 export interface Submission {
-  fields: Record<string, string | string[]> // core fields and non-file answers, as posted
+  fields: Record<string, string | string[]> // core fields, non-file answers, `source` and `consent`, as posted
   files: Record<string, { bytes: Uint8Array, name: string }>
 }
 
@@ -70,6 +119,15 @@ export async function submitApplication(db: Db, bucket: Bucket, jobId: string, s
   const issues: Issue[] = []
   const core = coreSchema.safeParse(sub.fields)
   if (!core.success) issues.push(...core.error.issues.map(i => issue(i.path.join('.'), i.message)))
+  // where they came from (?src / utm_source): free text from the URL, so trimmed, lowercased and capped
+  const tag = String(sub.fields.source ?? '').trim().toLowerCase().slice(0, 40)
+  // 'import' is reserved for spreadsheet imports (the engine and the hires report read it)
+  const source = tag && tag !== 'import' ? tag : null
+  // the apply page shows the consent checkbox only when Settings has a text, so that text is what they agreed to
+  // ponytail: the text is read at submit, not at page load; an edit in between stores the newer text
+  const [s] = await db.select({ consentText: settings.consentText }).from(settings)
+  const consent = s?.consentText ? { text: s.consentText, at: now.toISOString() } : null
+  if (consent && !['true', 'on'].includes(String(sub.fields.consent))) issues.push(issue('consent', 'Required'))
 
   // files: real type by magic bytes, size, hash — computed now, uploaded only if everything is valid
   const uploads: { field: string, bytes: Uint8Array, meta: FileMeta }[] = []
@@ -114,7 +172,7 @@ export async function submitApplication(db: Db, bucket: Bucket, jobId: string, s
         .onConflictDoUpdate({ target: candidates.email, set: { email: sql`excluded.email` } })
         .returning()
       await tx.insert(applications).values({
-        id: applicationId, jobId: job.id, candidateId: candidate!.id, jobVersionId: version.id, answers: answers.data,
+        id: applicationId, jobId: job.id, candidateId: candidate!.id, jobVersionId: version.id, answers: answers.data, source, consent,
       })
     })
   }

@@ -1,6 +1,7 @@
 <script lang="ts">
 import { CORE_FIELDS } from '~~/shared/workflow/form'
 import { JOB_FIELDS } from '~~/shared/workflow/graph'
+import type { Graph } from '~~/shared/workflow/types'
 import { type ConditionEvaluation, type Op, type TraceEntry, VALUELESS } from '~~/shared/workflow/rules'
 
 // GET /api/applications/:id (docs/backend.md, Operations). input/output/evaluation are managers only.
@@ -14,12 +15,14 @@ export interface Run {
 }
 export interface TimelineEvent { id: string, type: string, data: any, createdAt: string, actorId: string | null, actorName: string | null }
 export interface Timeline {
-  application: { id: string, status: 'active' | 'closed', outcome: string | null, currentNodeKey: string | null, createdAt: string, answers: Record<string, any> }
+  application: { id: string, status: 'active' | 'closed', outcome: string | null, currentNodeKey: string | null, createdAt: string, answers: Record<string, any>
+    source?: string | null, consent?: { text: string, at: string } | null }
   candidate: { firstName: string, lastName: string, email: string, phone: string | null }
   job: { id: string, title: string }
   version: number
   form: { key: string, label: string, type: string }[]
   nodes: { key: string, type: string, label?: string | null }[]
+  graph?: Graph // managers only: the pinned flow version
   runs: Run[]
   events: TimelineEvent[]
 }

@@ -2,6 +2,7 @@ export interface TaskRow {
   runId: string, nodeKey: string, nodeType: string, status: string, title: string
   dueAt: string | null, overdue: boolean, error: string | null, retries: number, createdAt: string
   applicationId: string, candidateName: string, jobId: string, jobTitle: string
+  booking?: { startsAt: string | null } | null // the step lets the candidate book a time; startsAt once they have
 }
 export interface Inbox { mine: TaskRow[], overdue?: TaskRow[], blocked?: TaskRow[], failed?: TaskRow[], stuck?: TaskRow[] }
 

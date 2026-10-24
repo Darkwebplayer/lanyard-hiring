@@ -8,7 +8,7 @@ const consent = defineModel<boolean>({ default: false })
   <div v-if="aiNoticeText || consentText" class="notices">
     <p v-if="aiNoticeText" class="ai"><Icon name="ai" :size="16" /><span>{{ aiNoticeText }}</span></p>
     <label v-if="consentText" class="check consent">
-      <input v-model="consent" type="checkbox" :tabindex="preview ? -1 : undefined" :required="!preview">
+      <input v-model="consent" name="consent" type="checkbox" :tabindex="preview ? -1 : undefined" :required="!preview">
       <span>{{ consentText }}</span>
     </label>
   </div>

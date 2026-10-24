@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { Pos } from '~/components/candidate/NextMenu.vue'
 import { type Run, type Timeline, type TimelineEvent, fmtVal, humanise, stepName } from '~/components/candidate/Trace.vue'
 
 const route = useRoute()
@@ -69,7 +70,11 @@ async function retry(run: Run) {
   }
 }
 
-const moveDlg = ref<{ open: () => void }>()
+const moveDlg = ref<{ open: (preset?: Pos | null) => void }>()
+const offerRef = ref<{ open: () => void }>()
+const flowRef = ref<{ focus: () => void }>()
+// the step they wait at with a person on it: the only place a booking can hang
+const bookingRun = computed(() => active.value && latest.value?.status === 'waiting_on_human' && latest.value.nodeType === 'human_task' ? latest.value : null)
 const badge = ref<HTMLElement>()
 async function onMoved(to: { node: string } | { close: string }) {
   actionError.value = ''
@@ -88,7 +93,7 @@ async function onMoved(to: { node: string } | { close: string }) {
 }
 
 // Steps and the things people did, in time order (ties: the event first, it caused the step).
-const SHOWN = new Set(['manual_move', 'run_retried', 'task_reassigned'])
+const SHOWN = new Set(['manual_move', 'run_retried', 'task_reassigned', 'imported', 'offer_made', 'offer_withdrawn', 'booked'])
 const items = computed(() => {
   const t = tl.value
   if (!t) return []
@@ -101,6 +106,14 @@ const items = computed(() => {
 function eventText(e: TimelineEvent) {
   const t = tl.value!
   const who = e.actorName ?? 'Someone'
+  if (e.type === 'imported') return `${who} imported ${t.candidate.firstName} from a spreadsheet${e.data?.node ? ` at ${stepName(t, e.data.node)}` : ''}`
+  if (e.type === 'offer_made') return `${who} made an offer${e.data?.replaced?.length ? ', replacing the earlier one' : ''}`
+  if (e.type === 'offer_withdrawn') return `${who} withdrew the offer`
+  if (e.type === 'booked') {
+    const r = t.runs.find(x => x.id === e.data?.runId)
+    const was = e.data?.previous ? `, moved from ${fmtDateTime(e.data.previous)}` : ''
+    return `${t.candidate.firstName} booked ${r ? stepName(t, r.nodeKey) : 'a time'} for ${fmtDateTime(e.data?.startsAt)}${was}`
+  }
   if (e.type === 'manual_move') {
     if (e.data?.to?.close) return `${who} closed this as ${e.data.to.close}`
     return `${who} ${e.data?.previous?.status === 'closed' ? 'reopened this at' : 'moved this to'} ${stepName(t, e.data?.to?.node ?? '')}`
@@ -121,6 +134,16 @@ const answers = computed(() => {
   if (!t) return []
   return t.form.map(f => ({ ...f, v: t.application.answers[f.key] }))
 })
+// A manual move's answers to the stage's questions, labelled from the pinned flow when we have it.
+function moveAnswers(e: TimelineEvent) {
+  const a = e.data?.answers as Record<string, unknown> | undefined
+  if (!a) return []
+  const asked = tl.value?.graph?.stages?.flatMap(s => s.ask ?? []) ?? []
+  return Object.entries(a).map(([k, v]) => ({ k, label: asked.find(f => f.key === k)?.label ?? humanise(k), v: fmtVal(v) }))
+}
+
+// Where they came from, as the recruiter would say it. Sources are free text from ?src= links.
+
 const fileUrl = (key: string) => `/api/applications/${id.value}/files/${key}`
 const isUrl = (v: unknown) => typeof v === 'string' && /^https?:\/\/\S+$/.test(v)
 </script>
@@ -128,6 +151,7 @@ const isUrl = (v: unknown) => typeof v === 'string' && /^https?:\/\/\S+$/.test(v
 <template>
   <div class="page">
     <div v-if="loading" class="skel" aria-busy="true" aria-label="Loading candidate">
+      <div class="skeleton" style="height: 14px; width: 200px; margin: 3px 0 11px" />
       <div class="skeleton" style="height: 128px; border-radius: var(--r-card)" />
       <div class="cols">
         <div class="stack">
@@ -153,6 +177,8 @@ const isUrl = (v: unknown) => typeof v === 'string' && /^https?:\/\/\S+$/.test(v
     </div>
 
     <template v-else-if="tl && app">
+      <NuxtLink v-if="isManager" :to="`/jobs/${tl.job.id}`" class="crumb"><Icon name="chevron-left" :size="14" />{{ tl.job.title }} · Pipeline</NuxtLink>
+      <NuxtLink v-else to="/inbox" class="crumb"><Icon name="chevron-left" :size="14" />Inbox</NuxtLink>
       <header v-if="!hired" class="head card" :data-slot="slot">
         <Avatar :name="name" :size="56" />
         <div class="who">
@@ -167,16 +193,23 @@ const isUrl = (v: unknown) => typeof v === 'string' && /^https?:\/\/\S+$/.test(v
           </p>
         </div>
         <div class="state">
-          <p v-if="active && app.currentNodeKey" class="now">
-            <span class="muted">Now at</span> <b>{{ stepName(tl, app.currentNodeKey) }}</b>
+          <div v-if="active && app.currentNodeKey" class="now">
             <RunStatus v-if="latest" :status="stuck ? 'failed' : latest.status" :overdue="latest.overdue" />
-          </p>
+            <CandidateNextMenu
+              v-if="isManager && tl.graph" :tl="tl" :graph="tl.graph" :at="app.currentNodeKey"
+              @pick="to => moveDlg?.open(to)" @flow="flowRef?.focus()"
+            />
+            <p v-else><span class="muted">At</span> <b>{{ stepName(tl, app.currentNodeKey) }}</b></p>
+          </div>
           <span v-else-if="app.outcome" class="chip big" :class="OUTCOME[app.outcome]?.chip">{{ OUTCOME[app.outcome]?.text ?? humanise(app.outcome) }}</span>
           <div v-if="isManager" class="actions">
             <button v-if="needsHand && latest" class="btn" :disabled="retrying" :aria-busy="retrying" @click="retry(latest)">
               <span v-if="retrying" class="spinner" /><Icon v-else name="retry" />Retry
             </button>
-            <button class="btn" :class="{ 'btn-primary': needsHand }" @click="moveDlg?.open()">
+            <button v-if="active" type="button" class="btn" @click="offerRef?.open()">
+              <Icon name="mail" />Make offer…
+            </button>
+            <button v-if="!active || !tl.graph" class="btn" :class="{ 'btn-primary': needsHand }" @click="moveDlg?.open()">
               <Icon :name="active ? 'move' : 'reopen'" />{{ active ? 'Move to…' : 'Reopen…' }}
             </button>
           </div>
@@ -215,8 +248,13 @@ const isUrl = (v: unknown) => typeof v === 'string' && /^https?:\/\/\S+$/.test(v
                 <li v-else-if="it.ev" class="event">
                   <span class="edot" aria-hidden="true" />
                   <div>
-                    <p><Avatar :name="it.ev.actorName" :size="20" /> <span>{{ eventText(it.ev) }}</span> <time class="when" :datetime="it.ev.createdAt">{{ fmtDateTime(it.ev.createdAt) }}</time></p>
-                    <p v-if="it.ev.data?.reason" class="reason">“{{ it.ev.data.reason }}”</p>
+                    <p><Avatar :name="it.ev.type === 'booked' ? name : it.ev.actorName" :size="20" /> <span>{{ eventText(it.ev) }}</span> <time class="when" :datetime="it.ev.createdAt">{{ fmtDateTime(it.ev.createdAt) }}</time></p>
+                    <p v-if="it.ev.data?.reasonCode || it.ev.data?.reason || it.ev.data?.note" class="reason">
+                      <b v-if="it.ev.data?.reasonCode">{{ it.ev.data.reasonCode }}</b><template v-if="it.ev.data?.reasonCode && (it.ev.data?.reason || it.ev.data?.note)"> · </template><template v-if="it.ev.data?.reason || it.ev.data?.note">“{{ it.ev.data.reason || it.ev.data.note }}”</template>
+                    </p>
+                    <dl v-if="moveAnswers(it.ev).length" class="ev-answers">
+                      <div v-for="a in moveAnswers(it.ev)" :key="a.k"><dt>{{ a.label }}</dt><dd>{{ a.v }}</dd></div>
+                    </dl>
                   </div>
                 </li>
               </template>
@@ -226,10 +264,13 @@ const isUrl = (v: unknown) => typeof v === 'string' && /^https?:\/\/\S+$/.test(v
         </div>
 
         <aside class="side">
+          <CandidateBooking v-if="bookingRun" :run-id="bookingRun.id" :first-name="tl.candidate.firstName" />
+          <CandidateOffer v-if="isManager" ref="offerRef" :tl="tl" @changed="load" />
+          <CandidateFlowPanel v-if="isManager && tl.graph" ref="flowRef" :tl="tl" :graph="tl.graph" />
           <section class="panel answers" aria-labelledby="ans-h">
             <h2 id="ans-h" class="sec">Application</h2>
             <dl v-if="answers.length">
-              <div v-for="f in answers" :key="f.key">
+              <div v-for="f in answers" :key="f.key" :data-ask="`field:${f.key}`">
                 <dt>{{ f.label }}</dt>
                 <dd v-if="f.type === 'file' && f.v">
                   <a :href="fileUrl(f.key)" download class="file"><Icon name="download" :size="16" /><span>{{ f.v.name ?? 'Download' }}</span></a>
@@ -240,6 +281,11 @@ const isUrl = (v: unknown) => typeof v === 'string' && /^https?:\/\/\S+$/.test(v
               </div>
             </dl>
             <p v-else class="muted">This job’s form only asks for contact details.</p>
+            <div v-if="app.source || app.consent" class="prov">
+              <p v-if="app.source">Source: {{ sourceLabel(app.source) }}</p>
+              <p v-if="app.consent">Agreed to “{{ app.consent.text }}” on {{ fmtDate(app.consent.at) }}</p>
+              <p v-else-if="app.source === 'import'">Imported, so consent wasn’t collected</p>
+            </div>
           </section>
         </aside>
       </div>
@@ -314,4 +360,11 @@ dd { margin: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 .file { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; min-width: 0; }
 .file span { overflow-wrap: anywhere; }
 .file svg { flex: none; }
+/* where they came from and what they agreed to: true, rarely needed, so quiet and last */
+.prov { border-top: 1px solid var(--line); padding: 10px 0; display: grid; gap: 4px; font-size: var(--t-xs); color: var(--ink-2); overflow-wrap: anywhere; }
+/* answers to the stage's questions: under the quote, aligned with its text, no second rule */
+.ev-answers { margin: 4px 0 0 42px; display: grid; gap: 2px; font-size: var(--t-sm); }
+.ev-answers div { display: flex; gap: 6px; padding: 0; border: 0; }
+.ev-answers dt { font-size: var(--t-sm); }
+.ev-answers dt::after { content: ":"; }
 </style>

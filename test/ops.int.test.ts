@@ -151,7 +151,7 @@ describe('application access', () => {
 
   it('a manual move is in the timeline with its reason and actor', async () => {
     const id = await apply(await panelJob())
-    await moveApplication(deps(), id, { close: 'withdrawn' }, 'candidate withdrew by email', 'owner')
+    await moveApplication(deps(), id, { close: 'withdrawn' }, { reason: 'candidate withdrew by email' }, 'owner')
     const tl = await timeline(db, owner, id, t)
     expect(tl.events.find(e => e.type === 'manual_move')).toMatchObject({ actorName: 'Owner', data: { reason: 'candidate withdrew by email' } })
     // the move closed i1's assignment before they submitted: access goes with it
@@ -291,16 +291,16 @@ describe('board', () => {
     expect(bd.preview.map(r => r.id)).toEqual((await pipeline(db, job.id, { step: 'interview' })).map(r => r.id))
 
     // a step missing from the pinned flow is counted out, not attempted
-    expect(await movable(db, job.id, { node: 'interview' }, { node: 'nope' })).toEqual({ ids: [], notInVersion: 2 })
+    expect(await movable(db, job.id, { node: 'interview' }, { node: 'nope' })).toMatchObject({ ids: [], notInVersion: 2 })
     expect((await movable(db, job.id, { node: 'interview' }, { close: 'rejected' }, [a])).ids).toEqual([a])
     expect((await movable(db, job.id, { node: 'interview' }, { close: 'rejected' }, undefined, [a])).ids).toEqual([b])
 
     // stale snapshot: the board saw `a` at cv, it is at interview, so nothing happens
-    expect(await moveApplication(deps(), a, { close: 'rejected' }, 'r', 'owner', { node: 'cv' })).toMatchObject({ moved: false, status: 'active', currentNodeKey: 'interview' })
-    expect(await moveApplication(deps(), a, { close: 'rejected' }, 'r', 'owner', { node: 'interview' })).toMatchObject({ moved: true, status: 'closed', outcome: 'rejected' })
+    expect(await moveApplication(deps(), a, { close: 'rejected' }, { reasonCode: 'Other', reason: 'r' }, 'owner', { node: 'cv' })).toMatchObject({ moved: false, status: 'active', currentNodeKey: 'interview' })
+    expect(await moveApplication(deps(), a, { close: 'rejected' }, { reasonCode: 'Other', reason: 'r' }, 'owner', { node: 'interview' })).toMatchObject({ moved: true, status: 'closed', outcome: 'rejected' })
     // a redelivered message finds it closed and does nothing
-    expect((await moveApplication(deps(), a, { close: 'rejected' }, 'r', 'owner', { node: 'interview' })).moved).toBe(false)
-    expect(await moveApplication(deps(), a, { node: 'manual_review' }, 'back', 'owner', { closed: 'rejected' })).toMatchObject({ moved: true, status: 'active', currentNodeKey: 'manual_review' })
+    expect((await moveApplication(deps(), a, { close: 'rejected' }, { reasonCode: 'Other', reason: 'r' }, 'owner', { node: 'interview' })).moved).toBe(false)
+    expect(await moveApplication(deps(), a, { node: 'manual_review' }, { reason: 'back' }, 'owner', { closed: 'rejected' })).toMatchObject({ moved: true, status: 'active', currentNodeKey: 'manual_review' })
   })
 })
 
@@ -321,7 +321,7 @@ describe('review round 2', () => {
     const id = await apply(await panelJob())
     const first = await taskOf(id)
     await submitTask(deps(), first.id, 'i1', score)
-    await moveApplication(deps(), id, { node: 'interview' }, 'redo interview', 'owner')
+    await moveApplication(deps(), id, { node: 'interview' }, { reason: 'redo interview' }, 'owner')
     const second = await taskOf(id)
     expect(second.id).not.toBe(first.id)
     const i1Old = (await timeline(db, emp('i2'), id, t)).runs.find(r => r.id === first.id)
@@ -333,8 +333,8 @@ describe('review round 2', () => {
 
   it('closing a closed application is refused; the outcome changes only through a reopen', async () => {
     const id = await apply(await panelJob())
-    await moveApplication(deps(), id, { close: 'rejected' }, 'not a fit', 'owner')
-    await rejects(moveApplication(deps(), id, { close: 'hired' }, 'oops', 'owner'), 409, 'already_closed')
+    await moveApplication(deps(), id, { close: 'rejected' }, { reasonCode: 'Other', reason: 'not a fit' }, 'owner')
+    await rejects(moveApplication(deps(), id, { close: 'hired' }, { reason: 'oops' }, 'owner'), 409, 'already_closed')
     expect(await db.query.applications.findFirst({ where: eq(s.applications.id, id) })).toMatchObject({ outcome: 'rejected' })
   })
 

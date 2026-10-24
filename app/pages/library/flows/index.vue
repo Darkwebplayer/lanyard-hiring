@@ -80,6 +80,23 @@ async function duplicate() {
   finally { duplicating.value = false }
 }
 
+// ---------- new: an empty flow, opened in its editor (which offers to draft it from a description) ----------
+const making = ref(false)
+async function newFlow() {
+  if (making.value) return
+  making.value = true
+  try {
+    const p = await create({
+      name: 'New flow', description: '', form: [],
+      // the same start a blank job gets
+      workflow: { nodes: [{ key: 'start', type: 'application_received', config: {}, position: { x: 0, y: 0 } }], edges: [], stages: [{ id: 'screening', name: 'Screening', nodeKeys: [] }, { id: 'interview', name: 'Interview', nodeKeys: [] }, { id: 'offer', name: 'Offer', nodeKeys: [] }] },
+    })
+    await navigateTo(`/library/flows/${p.id}`)
+  }
+  catch (e) { toast.show(toApiError(e).message) }
+  finally { making.value = false }
+}
+
 // ---------- name and description: edited in place, explicit Save ----------
 const renaming = ref(false)
 const draft = reactive({ name: '', description: '' })
@@ -162,8 +179,11 @@ async function confirmDelete() {
           </template>
         </ul>
         <p v-if="flowPresets && !flowPresets.length" class="none">
-          No flow presets yet. Open a job’s Flow tab and choose <b>Flow presets › Save as flow preset…</b>
+          No flow presets yet. Start a new one here, or open a job’s Flow tab and choose <b>Flow presets › Save as flow preset…</b>
         </p>
+        <div class="new-row">
+          <button type="button" class="btn btn-sm btn-quiet" :disabled="making" :aria-busy="making" @click="newFlow"><span v-if="making" class="spinner" /><Icon v-else name="plus" />New flow</button>
+        </div>
       </section>
 
       <div class="detail">
@@ -288,6 +308,7 @@ async function confirmDelete() {
 .sk .skeleton { height: 12px; }
 .none { padding: 12px 14px 14px; font-size: var(--t-sm); color: var(--ink-2); text-wrap: pretty; }
 .none b { font-weight: 600; color: var(--ink); }
+.new-row { padding: 4px 6px 6px; border-top: 1px solid var(--line); margin-top: 4px; }
 
 .detail { position: sticky; top: 24px; min-width: 0; }
 /* as tall as its content: nothing (least of all what a job must fill in) hides in an inner scroll */

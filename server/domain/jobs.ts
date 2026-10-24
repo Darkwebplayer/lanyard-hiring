@@ -4,7 +4,7 @@ import { formSchemaDef } from '../../shared/workflow/form'
 import { checkVersionCompat, fieldsAvailableAt, graphSchema, validateVersion } from '../../shared/workflow/graph'
 import type { HumanTaskConfig } from '../../shared/workflow/registry'
 import { REGISTRY } from '../../shared/workflow/registry'
-import { STANDARD_HIRE } from '../../shared/workflow/templates'
+import { STANDARD_HIRE, TEMPLATES, type TemplateId } from '../../shared/workflow/templates'
 import type { FormField, Graph, Issue } from '../../shared/workflow/types'
 import type { Db, Tx } from '../db/client'
 import { flowPresets, jobs, jobVersions, roles, user } from '../db/schema'
@@ -32,7 +32,7 @@ const BLANK: { form: FormField[], workflow: Graph } = {
   },
 }
 
-export type StartFrom = { kind: 'blank' } | { kind: 'standard_hire' } | { kind: 'job', jobId: string } | { kind: 'preset', presetId: string }
+export type StartFrom = { kind: 'blank' } | { kind: 'standard_hire' } | { kind: 'template', id: TemplateId } | { kind: 'job', jobId: string } | { kind: 'preset', presetId: string }
 
 export async function createJob(
   db: Db,
@@ -45,15 +45,17 @@ export async function createJob(
     ? BLANK
     : from.kind === 'standard_hire'
       ? STANDARD_HIRE
-      : from.kind === 'preset'
-        ? await db.select().from(flowPresets).where(eq(flowPresets.id, from.presetId)).then(([p]) => {
-            if (!p) throw new DomainError(404, 'flow_preset_not_found')
-            return { form: p.form as FormField[], workflow: p.workflow as Graph }
-          })
-        : await latestVersion(db, from.jobId).then((v) => {
-            if (!v) throw new DomainError(404, 'source_job_not_found')
-            return { form: v.form as FormField[], workflow: v.workflow as Graph }
-          })
+      : from.kind === 'template'
+        ? TEMPLATES.find(t => t.id === from.id)!
+        : from.kind === 'preset'
+          ? await db.select().from(flowPresets).where(eq(flowPresets.id, from.presetId)).then(([p]) => {
+              if (!p) throw new DomainError(404, 'flow_preset_not_found')
+              return { form: p.form as FormField[], workflow: p.workflow as Graph }
+            })
+          : await latestVersion(db, from.jobId).then((v) => {
+              if (!v) throw new DomainError(404, 'source_job_not_found')
+              return { form: v.form as FormField[], workflow: v.workflow as Graph }
+            })
   return db.transaction(async (tx) => {
     const [job] = await tx.insert(jobs).values({ ...input, ownerId }).returning()
     const [draft] = await tx.insert(jobVersions).values({

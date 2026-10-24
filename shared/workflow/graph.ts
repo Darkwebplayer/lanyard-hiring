@@ -1,8 +1,9 @@
 import { z } from 'zod'
-import { CORE_FIELDS, formFields, formSchemaDef, validateForm } from './form'
+import { CORE_FIELDS, formFieldSchema, formFields, formSchemaDef, validateForm } from './form'
 import { type NodeDef, REGISTRY, conditionBranchKeys } from './registry'
 import type { ConditionConfig } from './rules'
 import { type Field, type FormField, type Graph, type GraphNode, type Issue, KEY_RE } from './types'
+import { nodeLabel } from '../../app/utils/nodes'
 
 // Shape only. Drafts are saved with this (they may be invalid); publish runs validateVersion.
 export const graphSchema = z.object({
@@ -18,6 +19,7 @@ export const graphSchema = z.object({
     id: z.string().min(1).max(40),
     name: z.string().trim().min(1).max(40),
     nodeKeys: z.array(z.string()).max(200),
+    ask: z.array(formFieldSchema).max(10).optional(),
   })).max(30).optional(),
 }) satisfies z.ZodType<Graph>
 
@@ -77,7 +79,7 @@ function dominators(order: string[], edges: Graph['edges'], trigger: string) {
 
 const outputsOf = (p: Parsed): Field[] =>
   p.def && p.config !== undefined
-    ? p.def.outputs(p.config).map(o => ({ path: `nodes.${p.node.key}.${o.key}`, type: o.type, label: `${p.node.label ?? p.node.key}: ${o.label}`, nodeType: p.node.type }))
+    ? p.def.outputs(p.config).map(o => ({ path: `nodes.${p.node.key}.${o.key}`, type: o.type, label: `${nodeLabel(p.node)}: ${o.label}`, nodeType: p.node.type, ...(o.options && { options: o.options }) }))
     : []
 
 const baseFields = (form: FormField[]) => [...CORE_FIELDS, ...formFields(form), ...JOB_FIELDS]

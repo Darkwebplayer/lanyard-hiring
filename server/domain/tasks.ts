@@ -2,7 +2,7 @@ import { and, asc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm'
 import { type HumanTaskConfig, REGISTRY } from '../../shared/workflow/registry'
 import type { Graph } from '../../shared/workflow/types'
 import type { Db } from '../db/client'
-import { applications, candidates, jobs, jobVersions, nodeRuns, reminderLog, roles, taskAssignments, user } from '../db/schema'
+import { applications, bookings, candidates, jobs, jobVersions, nodeRuns, reminderLog, roles, taskAssignments, user } from '../db/schema'
 import type { Email } from '../engine/email'
 import { LOST_PENDING_MS, STALE_RUNNING_MS } from '../engine/engine'
 import { accessLevel, atLeastManager } from './access'
@@ -14,10 +14,12 @@ const runRows = (db: Db) => db.select({
   dueAt: nodeRuns.dueAt, error: nodeRuns.error, retries: nodeRuns.retries, createdAt: nodeRuns.createdAt,
   applicationId: applications.id, jobVersionId: applications.jobVersionId,
   firstName: candidates.firstName, lastName: candidates.lastName, jobId: jobs.id, jobTitle: jobs.title,
+  bookingId: bookings.id, bookedAt: bookings.startsAt,
 }).from(nodeRuns)
   .innerJoin(applications, eq(applications.id, nodeRuns.applicationId))
   .innerJoin(candidates, eq(candidates.id, applications.candidateId))
   .innerJoin(jobs, eq(jobs.id, applications.jobId))
+  .leftJoin(bookings, eq(bookings.runId, nodeRuns.id))
 type RunRow = Awaited<ReturnType<ReturnType<typeof runRows>['execute']>>[number]
 
 const view = (r: RunRow, now: Date) => ({
@@ -25,6 +27,7 @@ const view = (r: RunRow, now: Date) => ({
   title: (r.input as { title?: string } | null)?.title ?? r.nodeKey,
   dueAt: r.dueAt, overdue: isOverdue(r, now), error: r.error, retries: r.retries, createdAt: r.createdAt,
   applicationId: r.applicationId, candidateName: `${r.firstName} ${r.lastName}`, jobId: r.jobId, jobTitle: r.jobTitle,
+  booking: r.bookingId ? { startsAt: r.bookedAt } : null, // the candidate's booking link exists; startsAt once they picked
 })
 
 async function humanConfigs(db: Db, versionIds: string[]) {

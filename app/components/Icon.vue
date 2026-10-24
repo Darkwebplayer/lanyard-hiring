@@ -51,6 +51,9 @@ const P: Record<string, string> = {
   edit: 'M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16zM13.5 6.5l4 4',
   sliders: 'M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0M14 4v4M8 10v4M16 16v4',
   reopen: 'M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5',
+  // Ask: a speech bubble with a question mark, not the usual AI sparkle
+  ask: 'M5 5h14a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 19 17h-7l-4.5 3.5V17H5a1.5 1.5 0 0 1-1.5-1.5v-9A1.5 1.5 0 0 1 5 5zM10 9.1a2 2 0 1 1 2.6 1.9c-.4.2-.6.5-.6 1v.5M12 14.4v.1',
+  halt: 'M8.5 7.5h7a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1z',
   pin: 'M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21zM12 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z',
 }
 defineProps<{ name: string, size?: number }>()

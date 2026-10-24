@@ -42,6 +42,21 @@ watch(id, () => {
 }, { immediate: true })
 useHead({ title: () => task.value?.title ?? 'Inbox' })
 
+// the booked interview, with its weekday; the link for a candidate who hasn't picked yet (email sending is still a mock)
+const bookedAt = (iso: string) => new Date(iso).toLocaleString(undefined, { weekday: 'long', day: 'numeric', month: 'long', hour: 'numeric', minute: '2-digit' })
+const copying = ref(false)
+const copied = ref<boolean | 'failed'>(false)
+async function copyBookingLink() {
+  copying.value = true
+  try {
+    const b = await api<{ url: string }>(`/api/runs/${id.value}/booking`)
+    copied.value = (await copyText(b.url)) || 'failed'
+  }
+  catch { copied.value = 'failed' }
+  finally { copying.value = false }
+  setTimeout(() => (copied.value = false), copied.value === 'failed' ? 4000 : 2000)
+}
+
 const mine = computed(() => task.value?.assignments.find(a => a.userId === me.value?.id))
 const submitted = computed(() => task.value?.assignments.filter(a => a.submittedAt).length ?? 0)
 const isPanel = computed(() => !!task.value && (task.value.minSubmissions > 1 || task.value.assignments.length > 1))
@@ -157,6 +172,16 @@ async function submit() {
             <RunStatus v-if="task.status !== 'waiting_on_human'" :status="task.status" />
             <DueChip v-else :due="task.dueAt" :overdue="task.overdue" />
           </p>
+          <p v-if="task.booking" class="booking" :class="{ waiting: !task.booking.startsAt }">
+            <Icon name="calendar" :size="16" />
+            <template v-if="task.booking.startsAt"><span>Interview booked for <b>{{ bookedAt(task.booking.startsAt) }}</b></span></template>
+            <template v-else>
+              <span>Waiting for the candidate to book a time</span>
+              <button type="button" class="btn btn-sm btn-quiet" :aria-busy="copying" @click="copyBookingLink">
+                <Icon :name="copied === true ? 'check' : copied ? 'alert' : 'copy'" /><span aria-live="polite">{{ copied === true ? 'Copied' : copied ? 'Couldn’t copy it' : 'Copy their booking link' }}</span>
+              </button>
+            </template>
+          </p>
         </div>
       </div>
       <p v-if="task.instructions" class="instructions">{{ task.instructions }}</p>
@@ -259,6 +284,11 @@ async function submit() {
 .title { font-size: var(--t-2xl); letter-spacing: -0.015em; line-height: 1.15; overflow-wrap: anywhere; }
 .job-line { font-size: var(--t-sm); font-weight: 500; color: var(--ink-2); margin-bottom: 4px; }
 .job-line a { color: inherit; }
+.booking { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-top: 12px; padding: 8px 8px 8px 12px; border-radius: var(--r-panel); background: var(--accent-tint); color: var(--ink); }
+.booking > svg { color: var(--accent-ink); flex: none; }
+.booking.waiting { background: var(--sunk); color: var(--ink-2); }
+.booking.waiting > svg { color: var(--ink-3); }
+.booking .btn { margin-left: auto; }
 .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: 10px; }
 .who { font-weight: 600; }
 .instructions { margin-top: 18px; padding: 14px 16px; border-radius: var(--r-field); background: var(--sunk); white-space: pre-line; color: var(--ink); max-width: 70ch; }

@@ -2,11 +2,15 @@ import { and, desc, eq, inArray, isNull, lt, lte, max, or, sql } from 'drizzle-o
 import { aggregateScorecard, type HumanTaskConfig, normalizeOutput, REGISTRY, runSetVariable, scorecardSchema } from '../../shared/workflow/registry'
 import { type ConditionConfig, pickBranch } from '../../shared/workflow/rules'
 import { render } from '../../shared/workflow/template'
+import { answersSchema } from '../../shared/workflow/form'
+import { relation } from '../../shared/workflow/stages'
 import type { Context, FormField, Graph, GraphNode } from '../../shared/workflow/types'
 import type { Db, Tx } from '../db/client'
-import { applicationEvents, applications, jobs, jobVersions, nodeRuns, roles, taskAssignments, user } from '../db/schema'
+import { applicationEvents, applications, bookings, jobs, jobVersions, nodeRuns, offers, roles, taskAssignments, user } from '../db/schema'
+import { newBookingToken } from '../domain/bookings'
 import { accessLevel } from '../domain/access'
 import { DomainError } from '../domain/errors'
+import { getSettings } from '../domain/settings'
 import { ZodError } from 'zod'
 import { buildContext } from './context'
 
@@ -65,6 +69,13 @@ async function flush(deps: EngineDeps, out: Enqueued[]) {
 
 async function event(tx: Tx, applicationId: string, type: string, data: Record<string, unknown> = {}, actorId?: string | null) {
   await tx.insert(applicationEvents).values({ applicationId, type, data, actorId: actorId ?? null })
+}
+
+// An offer can't outlive its application: every close withdraws it, so a later reopen never revives it.
+async function withdrawOffers(tx: Tx, applicationId: string, actorId?: string | null) {
+  const gone = await tx.update(offers).set({ status: 'withdrawn' })
+    .where(and(eq(offers.applicationId, applicationId), eq(offers.status, 'sent'))).returning({ id: offers.id })
+  for (const o of gone) await event(tx, applicationId, 'offer_withdrawn', { offerId: o.id }, actorId)
 }
 
 async function lockApplication(tx: Tx, applicationId: string) {
@@ -133,6 +144,7 @@ async function activate(w: Walk, nodeKey: string) {
       const outcome = (config as { outcome: Outcome }).outcome
       await tx.insert(nodeRuns).values({ ...base, status: 'completed', output: { outcome }, completedAt: t })
       await tx.update(applications).set({ status: 'closed', outcome }).where(eq(applications.id, app.id))
+      await withdrawOffers(tx, app.id, w.actorId)
       await event(tx, app.id, 'closed', { outcome, node: key }, w.actorId)
       return
     }
@@ -161,6 +173,7 @@ async function activateHumanTask(w: Walk, node: GraphNode, config: HumanTaskConf
   const instructions = config.instructions ? render(config.instructions, w.ctx) : undefined
   const [run] = await tx.insert(nodeRuns).values({ ...base, status: 'waiting_on_human', dueAt, input: { title, instructions } }).returning()
   await tx.insert(taskAssignments).values(assignees.map(userId => ({ runId: run!.id, userId })))
+  if (config.booking) await tx.insert(bookings).values({ runId: run!.id, token: newBookingToken(), durationMin: config.booking.duration_min })
   await event(tx, app.id, 'task_assigned', { node: node.key, runId: run!.id, assignees })
 }
 
@@ -192,8 +205,9 @@ export async function startApplication(deps: EngineDeps, applicationId: string) 
     if (any) return
     const graph = await loadGraph(tx, app.jobVersionId)
     const trigger = graph.nodes.find(n => REGISTRY[n.type]?.kind === 'trigger')!
-    await event(tx, app.id, 'application_submitted', { jobVersionId: app.jobVersionId })
-    await activate({ tx, deps, app, graph, ctx: await buildContext(tx, app.id), out }, trigger.key)
+    // an import may pre-set where the person begins (earlier steps never run); its `imported` event is already written
+    if (app.source !== 'import') await event(tx, app.id, 'application_submitted', { jobVersionId: app.jobVersionId })
+    await activate({ tx, deps, app, graph, ctx: await buildContext(tx, app.id), out }, app.currentNodeKey ?? trigger.key)
   })
   await flush(deps, out)
 }
@@ -358,8 +372,38 @@ const isAt = (app: Application, from: MoveFrom) => 'node' in from
   ? app.status === 'active' && app.currentNodeKey === from.node
   : app.status === 'closed' && app.outcome === from.closed
 
+// What the mover says: a free-text reason, a reason from settings.reject_reasons (closing as rejected),
+// and answers to the target stage's `ask`.
+export interface MoveInput { reason?: string, reasonCode?: string, answers?: Record<string, unknown> }
+
+// Checks a move against the flow and settings; returns what goes on the event. Throws 422.
+// Rejecting needs a listed reasonCode (reason is then an optional note); any other move needs a
+// reason unless it is the flow's own next step. A move into a step that ends in a rejection may carry
+// a reasonCode too; any code sent must be on the list, so the "why rejected" counts stay clean.
+export function checkMove(graph: Graph, at: MoveFrom | null, target: MoveTarget, input: MoveInput, rejectReasons: string[]) {
+  const { reason, reasonCode } = input
+  if ('close' in target && target.close === 'rejected') {
+    if (!reasonCode) throw new DomainError(422, 'reason_code_required')
+  }
+  else if (!reason) {
+    const to = 'node' in target ? { node: target.node } : { closed: target.close }
+    if (!at || relation(graph, at, to).kind !== 'next') throw new DomainError(422, 'reason_required')
+  }
+  if (reasonCode && !rejectReasons.includes(reasonCode)) throw new DomainError(422, 'unknown_reason_code')
+  const ask = 'node' in target ? graph.stages?.find(st => st.nodeKeys.includes(target.node))?.ask : undefined
+  let answers: Record<string, unknown> | undefined
+  if (ask?.length) {
+    const parsed = answersSchema(ask).safeParse(input.answers ?? {})
+    if (!parsed.success) {
+      throw new DomainError(422, 'invalid_answers', parsed.error.issues.map(i => ({ code: 'invalid_answer', message: `${i.path.join('.')}: ${i.message}` })))
+    }
+    answers = parsed.data
+  }
+  return { reason: reason || null, ...(reasonCode && { reasonCode }), ...(answers && { answers }) }
+}
+
 // Manual override: cancel whatever is active, then jump to any node (or close). Also reopens.
-export async function moveApplication(deps: EngineDeps, applicationId: string, target: MoveTarget, reason: string, actorId: string, from?: MoveFrom): Promise<MoveResult> {
+export async function moveApplication(deps: EngineDeps, applicationId: string, target: MoveTarget, input: MoveInput, actorId: string, from?: MoveFrom): Promise<MoveResult> {
   const out: Enqueued[] = []
   const moved = await deps.db.transaction(async (tx) => {
     const app = await lockApplication(tx, applicationId)
@@ -368,6 +412,8 @@ export async function moveApplication(deps: EngineDeps, applicationId: string, t
     if ('node' in target) findNode(graph, target.node) // 422 before changing anything
     // changing a recorded outcome goes through a reopen, so a hire can't flip with a single call
     else if (app.status === 'closed') throw new DomainError(409, 'already_closed')
+    const at: MoveFrom | null = app.status === 'closed' ? { closed: app.outcome! } : app.currentNodeKey ? { node: app.currentNodeKey } : null
+    const said = checkMove(graph, at, target, input, (await getSettings(tx)).rejectReasons)
 
     const t = now(deps)
     const cancelled = await tx.update(nodeRuns).set({ status: 'cancelled', completedAt: t, error: 'manual_move' })
@@ -377,18 +423,19 @@ export async function moveApplication(deps: EngineDeps, applicationId: string, t
         .where(and(inArray(taskAssignments.runId, cancelled.map(c => c.id)), isNull(taskAssignments.closedAt)))
     }
     await event(tx, app.id, 'manual_move', {
-      reason, to: target,
+      ...said, to: target,
       previous: { status: app.status, outcome: app.outcome, node: app.currentNodeKey, cancelledRuns: cancelled.map(c => c.id) },
     }, actorId)
 
     if ('close' in target) {
       await tx.update(applications).set({ status: 'closed', outcome: target.close }).where(eq(applications.id, app.id))
+      await withdrawOffers(tx, app.id, actorId)
       await event(tx, app.id, 'closed', { outcome: target.close, manual: true }, actorId)
       return true
     }
     if (app.status === 'closed') {
       await tx.update(applications).set({ status: 'active', outcome: null }).where(eq(applications.id, app.id))
-      await event(tx, app.id, 'reopened', { reason }, actorId)
+      await event(tx, app.id, 'reopened', { reason: said.reason }, actorId)
     }
     await walkFrom(tx, deps, { ...app, status: 'active', outcome: null }, target.node, out, actorId)
     return true

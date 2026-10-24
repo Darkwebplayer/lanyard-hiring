@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { requirementsSchema } from '../../../shared/workflow/job'
+import { TEMPLATES } from '../../../shared/workflow/templates'
 import { createJob } from '../../domain/jobs'
 
 const body = z.object({
@@ -11,6 +12,7 @@ const body = z.object({
   from: z.discriminatedUnion('kind', [
     z.object({ kind: z.literal('blank') }),
     z.object({ kind: z.literal('standard_hire') }),
+    z.object({ kind: z.literal('template'), id: z.enum(TEMPLATES.map(t => t.id)) }),
     z.object({ kind: z.literal('job'), jobId: z.uuid() }),
     z.object({ kind: z.literal('preset'), presetId: z.uuid() }),
   ]).default({ kind: 'standard_hire' }),

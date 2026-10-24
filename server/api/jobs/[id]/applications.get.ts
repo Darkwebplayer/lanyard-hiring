@@ -7,6 +7,9 @@ const query = z.object({
   step: z.string().max(4000).optional(),
   limit: z.coerce.number().int().min(1).max(100).optional(),
   offset: z.coerce.number().int().min(0).optional(),
+  minScore: z.coerce.number().min(0).max(100).optional(),
+  maxScore: z.coerce.number().min(0).max(100).optional(),
+  source: z.string().max(100).optional(), // exact; 'none' = unknown
 })
 
 export default defineEventHandler(async (event) => {

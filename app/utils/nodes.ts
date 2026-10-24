@@ -4,6 +4,7 @@ export const NODE_META: Record<string, { icon: string, noun: string, slot: 'acce
   application_received: { icon: 'enter', noun: 'Start', slot: 'line' },
   cv_parse: { icon: 'scan', noun: 'Read CV', slot: 'ink' },
   ai_review: { icon: 'ai', noun: 'AI review', slot: 'ink' },
+  ai_check: { icon: 'check', noun: 'Check answers', slot: 'ink' },
   set_variable: { icon: 'braces', noun: 'Set values', slot: 'line' },
   condition: { icon: 'split', noun: 'Decision', slot: 'line' },
   human_task: { icon: 'person', noun: 'Person', slot: 'accent' },

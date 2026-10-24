@@ -24,7 +24,7 @@ const fakeBucket = {
 }
 let n = 0
 const sub = (over: Partial<Submission['fields']> = {}, files: Submission['files'] = { cv: { bytes: pdf, name: 'cv.pdf' } }): Submission => ({
-  fields: { first_name: 'Jane', last_name: 'Doe', email: `Jane${++n}@Example.test`, notice_period_weeks: '4', ...over },
+  fields: { first_name: 'Jane', last_name: 'Doe', email: `Jane${++n}@Example.test`, notice_period_weeks: '4', consent: 'on', ...over },
   files,
 })
 const fails = async (p: Promise<unknown>, status: number, message: string) => {

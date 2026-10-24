@@ -1,8 +1,8 @@
 import type { FileMeta } from '../../../shared/workflow/form'
 import { MissingRefError, render } from '../../../shared/workflow/template'
 import type { Context, FormField } from '../../../shared/workflow/types'
-import type { Ai, Criterion, ReviewInput } from '../ai'
-import { PROMPT_VERSION, reviewMessages } from '../ai'
+import type { Ai, CheckQuestion, Criterion, ReviewInput } from '../ai'
+import { checkRequest, PROMPT_VERSION, reviewRequest } from '../ai'
 import type { Email } from '../email'
 import { EmailError } from '../email'
 import { type AutoHandler, HandlerError } from '../engine'
@@ -13,13 +13,17 @@ export interface HandlerDeps {
   ai: Ai | null
   sendEmail: (idempotencyKey: string, email: Email) => Promise<unknown>
   replyTo: () => Promise<string | null>
+  aiEnabled?: () => Promise<boolean> // the admin's switch in Settings; left out = on
 }
 
 const MIN_CV_TEXT = 50 // below this the file has no usable text layer (scanned PDF)
 
-const requireAi = (ai: Ai | null) => {
-  if (!ai) throw new HandlerError('ai_not_configured', false)
-  return ai
+const hashJson = (v: unknown) => sha256Hex(new TextEncoder().encode(JSON.stringify(v)))
+
+const requireAi = async (deps: HandlerDeps) => {
+  if (!deps.ai) throw new HandlerError('ai_not_configured', false)
+  if (deps.aiEnabled && !(await deps.aiEnabled())) throw new HandlerError('ai_off', false)
+  return deps.ai
 }
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -71,21 +75,32 @@ export function createHandlers(deps: HandlerDeps): Record<string, AutoHandler> {
       // a corrupt file won't parse any better on retry
       const text = await extractCvText(bytes, mime).catch((e: Error) => { throw new HandlerError('unreadable_cv', false, e.message) })
       if (text.replace(/\s/g, '').length < MIN_CV_TEXT) throw new HandlerError('unreadable_cv', false, 'no text layer (scanned?)')
-      const facts = await requireAi(deps.ai).parseCv(redactIdentity(text, ctx.candidate))
+      const facts = await (await requireAi(deps)).parseCv(redactIdentity(text, ctx.candidate), config.extract ?? [])
       return { output: { text, ...facts, file_sha256: meta.sha256 } }
     },
 
     ai_review: async ({ config, ctx, form }) => {
-      const ai = requireAi(deps.ai)
+      const ai = await requireAi(deps)
       const criteria = config.criteria as Criterion[]
       const input = aiReviewInput(ctx, form, config.cv_text_ref)
-      const { scores, summary } = await ai.review(input, criteria, config.instructions)
+      const { scores, sure, summary } = await ai.review(input, criteria, config.instructions)
       // overall is the mean of the criteria, not a separate model opinion: explainable and stable
       const overall = Math.round(criteria.reduce((sum, c) => sum + scores[c.key]!, 0) / criteria.length)
       return {
         output: { ...scores, overall, summary },
-        // the hash covers exactly what the model was sent (system prompt, criteria, instructions, truncated CV)
-        input: { model: ai.model, prompt_version: PROMPT_VERSION, input_sha256: await sha256Hex(new TextEncoder().encode(JSON.stringify(reviewMessages(input, criteria, config.instructions)))) },
+        // the hash covers exactly what the model was sent (questions, criteria, instructions, truncated CV)
+        input: { model: ai.model, prompt_version: PROMPT_VERSION, input_sha256: await hashJson(reviewRequest(input, criteria, config.instructions)), sure },
+      }
+    },
+
+    ai_check: async ({ config, ctx, form }) => {
+      const ai = await requireAi(deps)
+      const questions = config.questions as CheckQuestion[]
+      const input = aiReviewInput(ctx, form, config.cv_text_ref)
+      const { answers, sure } = await ai.check(input, questions)
+      return {
+        output: answers,
+        input: { model: ai.model, prompt_version: PROMPT_VERSION, input_sha256: await hashJson(checkRequest(input, questions)), sure },
       }
     },
 

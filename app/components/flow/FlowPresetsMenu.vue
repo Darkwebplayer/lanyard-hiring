@@ -35,6 +35,8 @@ function openLoad() {
   pick.value = ''
   loadDlg.value?.showModal()
 }
+// the empty canvas's "Use a preset" opens this same picker
+defineExpose({ openLoad })
 function load() {
   const c = choices.value.find(x => x.id === pick.value)
   if (!c) return

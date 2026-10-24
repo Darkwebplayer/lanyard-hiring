@@ -114,3 +114,148 @@ export const STANDARD_HIRE: { form: FormField[], workflow: Graph } = {
     ],
   },
 }
+
+// ---------- the new-job picker: Standard hire plus three more starting points ----------
+
+type Template = { form: FormField[], workflow: Graph }
+const owner = { users: [], roles: [], job_owner: true }
+const node = (key: string, type: string, config: unknown) => ({ key, type, config })
+const byKey = (key: string) => STANDARD_HIRE.workflow.nodes.find(n => n.key === key)!
+const CV = STANDARD_HIRE.form[0]!
+const hireIf = (task: string) => node('decision', 'condition', {
+  branches: [{ key: 'hire', label: 'Hire', rule: { ref: `nodes.${task}.hire`, op: 'is_true' } }], on_missing: false,
+})
+// every template ends the same way: an offer or a rejection email, then the outcome
+const ENDINGS = [byKey('offer_email'), byKey('rejection_email'), byKey('hired'), byKey('rejected')]
+const ENDING_EDGES = [{ from: 'offer_email', to: 'hired' }, { from: 'rejection_email', to: 'rejected' }]
+
+// No AI: the owner reads every application.
+const SIMPLE: Template = {
+  form: [CV, STANDARD_HIRE.form[1]!],
+  workflow: {
+    nodes: [
+      byKey('start'),
+      node('review', 'human_task', {
+        title: 'Review {{candidate.first_name}} {{candidate.last_name}}',
+        assignees: owner,
+        scorecard: [
+          { key: 'advance', label: 'Invite to interview?', type: 'boolean', required: true },
+          { key: 'notes', label: 'Notes', type: 'text', required: false },
+        ],
+        min_submissions: 1,
+        due_days: 3,
+      }),
+      node('review_decision', 'condition', {
+        branches: [{ key: 'advance', label: 'Advance', rule: { ref: 'nodes.review.advance', op: 'is_true' } }], on_missing: false,
+      }),
+      node('interview', 'human_task', { ...HUMAN_TASK_PRESETS.interview!.config, assignees: owner }),
+      hireIf('interview'),
+      ...ENDINGS,
+    ],
+    edges: [
+      { from: 'start', to: 'review' },
+      { from: 'review', to: 'review_decision' },
+      { from: 'review_decision', to: 'interview', branch: 'advance' },
+      { from: 'review_decision', to: 'rejection_email', branch: 'default' },
+      { from: 'interview', to: 'decision' },
+      { from: 'decision', to: 'offer_email', branch: 'hire' },
+      { from: 'decision', to: 'rejection_email', branch: 'default' },
+      ...ENDING_EDGES,
+    ],
+    stages: [
+      { id: 'review', name: 'Review', nodeKeys: ['review'] },
+      { id: 'interview', name: 'Interview', nodeKeys: ['interview'] },
+      { id: 'decision', name: 'Decision', nodeKeys: ['offer_email', 'rejection_email'] },
+    ],
+  },
+}
+
+// Hourly and entry roles: AI sorts, one short call decides. Missing or middling scores still get the call.
+const HIGH_VOLUME: Template = {
+  form: [CV, { key: 'right_to_work', label: 'Do you have the right to work here?', type: 'boolean', required: true }],
+  workflow: {
+    nodes: [
+      byKey('start'),
+      byKey('cv'),
+      node('ai', 'ai_review', {
+        criteria: [
+          { key: 'experience', label: 'Relevant experience', description: 'Experience that fits this role, paid or unpaid' },
+          { key: 'reliability', label: 'Reliability', description: 'Signs of reliability: tenure, references, responsibilities' },
+        ],
+        cv_text_ref: 'nodes.cv.text',
+      }),
+      node('screen', 'condition', {
+        branches: [{ key: 'reject', label: 'Reject', rule: { ref: 'nodes.ai.overall', op: 'lt', value: 35 } }],
+        on_missing: true,
+      }),
+      node('call', 'human_task', {
+        title: 'Call {{candidate.first_name}} {{candidate.last_name}}',
+        assignees: owner,
+        scorecard: [
+          { key: 'hire', label: 'Hire?', type: 'boolean', required: true },
+          { key: 'notes', label: 'Notes', type: 'text', required: false },
+        ],
+        min_submissions: 1,
+        due_days: 2,
+      }),
+      hireIf('call'),
+      ...ENDINGS,
+    ],
+    edges: [
+      { from: 'start', to: 'cv' },
+      { from: 'cv', to: 'ai' },
+      { from: 'ai', to: 'screen' },
+      { from: 'screen', to: 'rejection_email', branch: 'reject' },
+      { from: 'screen', to: 'call', branch: 'default' },
+      { from: 'screen', to: 'call', branch: 'missing' },
+      { from: 'call', to: 'decision' },
+      { from: 'decision', to: 'offer_email', branch: 'hire' },
+      { from: 'decision', to: 'rejection_email', branch: 'default' },
+      ...ENDING_EDGES,
+    ],
+    stages: [
+      { id: 'screening', name: 'Screening', nodeKeys: ['cv', 'ai'] },
+      { id: 'call', name: 'Call', nodeKeys: ['call'] },
+      { id: 'decision', name: 'Decision', nodeKeys: ['offer_email', 'rejection_email'] },
+    ],
+  },
+}
+
+// Senior roles: Standard hire with a phone screen before a panel. The panel starts with the job owner;
+// add the other interviewers on the step (everyone assigned scores blind).
+const PANEL: Template = (() => {
+  const t = structuredClone(STANDARD_HIRE)
+  const w = t.workflow
+  const panel = w.nodes.find(n => n.key === 'interview')!
+  panel.label = 'Panel interview'
+  ;(panel.config as { instructions?: string }).instructions = 'Add everyone on the panel to this step. Each person scores on their own.'
+  w.nodes.push(node('phone_screen', 'human_task', {
+    title: 'Phone screen {{candidate.first_name}} {{candidate.last_name}}',
+    assignees: owner,
+    scorecard: [
+      { key: 'advance', label: 'Invite to the panel?', type: 'boolean', required: true },
+      { key: 'notes', label: 'Notes', type: 'text', required: false },
+    ],
+    min_submissions: 1,
+    due_days: 3,
+  }), node('phone_decision', 'condition', {
+    branches: [{ key: 'advance', label: 'Advance', rule: { ref: 'nodes.phone_screen.advance', op: 'is_true' } }], on_missing: false,
+  }))
+  // everything that went to the interview now goes to the phone screen first
+  for (const e of w.edges) if (e.to === 'interview') e.to = 'phone_screen'
+  w.edges.push(
+    { from: 'phone_screen', to: 'phone_decision' },
+    { from: 'phone_decision', to: 'interview', branch: 'advance' },
+    { from: 'phone_decision', to: 'rejection_email', branch: 'default' },
+  )
+  w.stages!.find(s => s.id === 'interview')!.nodeKeys = ['phone_screen', 'interview']
+  return t
+})()
+
+export const TEMPLATES = [
+  { id: 'simple', name: 'Simple', description: 'You review every applicant yourself. No AI.', ...SIMPLE },
+  { id: 'ai_screening', name: 'AI screening', description: 'AI scores CVs. You only look at the strong and borderline ones.', ...STANDARD_HIRE },
+  { id: 'high_volume', name: 'Lots of applicants', description: 'Hourly or entry roles: a short form, AI screen, one quick call.', ...HIGH_VOLUME },
+  { id: 'panel', name: 'Panel interview', description: 'Senior roles: a phone screen, then a panel that scores blind.', ...PANEL },
+] as const
+export type TemplateId = typeof TEMPLATES[number]['id']

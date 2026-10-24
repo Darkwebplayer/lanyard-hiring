@@ -5,7 +5,7 @@ import type { AppEnv } from '../env'
 import { createAi } from './ai'
 import { sendEmail } from './email'
 import { DomainError } from '../domain/errors'
-import { type EngineDeps, executeAutoRun, moveApplication, type MoveFrom, type MoveTarget, sweep } from './engine'
+import { type EngineDeps, executeAutoRun, moveApplication, type MoveFrom, type MoveInput, type MoveTarget, startApplication, sweep } from './engine'
 import { createHandlers } from './handlers'
 
 export function engineDeps(env: AppEnv, db: Db): EngineDeps {
@@ -16,6 +16,7 @@ export function engineDeps(env: AppEnv, db: Db): EngineDeps {
       ai: createAi(env),
       sendEmail: (key, email) => sendEmail(env, key, email),
       replyTo: async () => (await db.select({ r: settings.replyToEmail }).from(settings))[0]?.r ?? null,
+      aiEnabled: async () => (await db.select({ on: settings.aiEnabled }).from(settings))[0]?.on ?? true,
     }),
     adminEmail: env.ADMIN_EMAIL,
     disabledTypes: new Set((env.DISABLED_NODE_TYPES ?? '').split(',').map(s => s.trim()).filter(Boolean)),
@@ -26,8 +27,8 @@ export function engineDeps(env: AppEnv, db: Db): EngineDeps {
 }
 
 // A board drop of a whole step: one message per application, so thousands never sit in one request.
-export interface MoveMessage { applicationId: string, from: MoveFrom, to: MoveTarget, reason: string, actorId: string }
-export type EngineMessage = { runId: string } | { move: MoveMessage }
+export interface MoveMessage extends MoveInput { applicationId: string, from: MoveFrom, to: MoveTarget, actorId: string }
+export type EngineMessage = { runId: string } | { move: MoveMessage } | { start: string } // start: an imported application id
 
 // Messages are only triggers; Postgres is the source of truth. The engine records its own failures
 // and retries, so a message is acked once handled. Only infrastructure errors (db down) redeliver.
@@ -36,12 +37,13 @@ export async function consume(batch: MessageBatch<EngineMessage>, env: AppEnv) {
   const deps = engineDeps(env, db)
   try {
     for (const msg of batch.messages) {
-      const label = 'move' in msg.body ? `move ${msg.body.move.applicationId}` : `run ${msg.body.runId}`
+      const label = 'move' in msg.body ? `move ${msg.body.move.applicationId}` : 'start' in msg.body ? `start ${msg.body.start}` : `run ${msg.body.runId}`
       try {
-        if ('move' in msg.body) {
+        if ('start' in msg.body) await startApplication(deps, msg.body.start) // idempotent, so redelivery is harmless
+        else if ('move' in msg.body) {
           const m = msg.body.move
           // `from` makes a redelivery or a candidate who moved on meanwhile a no-op
-          const result = await moveApplication(deps, m.applicationId, m.to, m.reason, m.actorId, m.from)
+          const result = await moveApplication(deps, m.applicationId, m.to, m, m.actorId, m.from)
             .catch((e) => { if (e instanceof DomainError) return e.message; throw e })
           console.log('[engine]', label, result)
         }

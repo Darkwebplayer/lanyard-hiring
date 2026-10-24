@@ -2,15 +2,21 @@
 export default defineNuxtConfig({
   compatibilityDate: '2026-10-01',
   devtools: { enabled: true },
-  // every recruiter page sits behind a session cookie, and the apply page is one small form, so no SSR
-  ssr: false,
+  // Recruiter pages sit behind a session cookie: client-only. The public pages render on the server so
+  // crawlers (Google job search) see the job and its JSON-LD. ssr must be on globally for any route to
+  // render on the server (ssr: false builds no server renderer), so '/**' turns it off and the public pages back on.
+  ssr: true,
+  routeRules: {
+    '/**': { ssr: false },
+    '/apply/**': { ssr: true },
+    '/careers': { ssr: true },
+  },
   // the dev key always passes; set NUXT_PUBLIC_TURNSTILE_SITE_KEY in production
   runtimeConfig: { public: { turnstileSiteKey: '1x00000000000000000000AA' } },
   css: ['@vue-flow/core/dist/style.css', '~/assets/css/main.css'],
   app: {
     head: {
       htmlAttrs: { lang: 'en' },
-      titleTemplate: t => (t ? `${t} · Hiring` : 'Hiring'),
       meta: [
         { name: 'viewport', content: 'width=device-width, initial-scale=1' },
         { name: 'theme-color', content: '#f8f6f8' },

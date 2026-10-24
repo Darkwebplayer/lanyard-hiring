@@ -9,7 +9,7 @@ const id = computed(() => String(route.params.id))
 const { detail, editable, error, refresh, saveDraft } = useJob(id.value)
 const source = useJobFlowSource(id.value)
 if (!detail.value) refresh()
-useHead({ title: () => (detail.value ? `Flow · ${detail.value.job.title}` : 'Flow') })
+useHead({ title: () => (detail.value ? `Stages · ${detail.value.job.title}` : 'Stages') })
 
 // ---------- replacing the draft with a preset: remount the editor on the new draft, with Undo ----------
 type Flow = { form: FormField[], workflow: Graph }
@@ -49,8 +49,8 @@ function onEdit() {
 
 <template>
   <div class="flow-page">
-    <h2 class="sr-only">Flow</h2>
-    <FlowEditor v-if="editable" ref="editor" :key="`${id}:${rev}`" :source="source" @edit="onEdit" @replace="replace" />
+    <h2 class="sr-only">Stages</h2>
+    <FlowEditor v-if="editable" ref="editor" :key="`${id}:${rev}`" :source="source" stages-first @edit="onEdit" @replace="replace" />
     <div v-else-if="error" class="empty" role="alert">
       <h3>The flow didn’t load</h3>
       <p>{{ error.message }}</p>

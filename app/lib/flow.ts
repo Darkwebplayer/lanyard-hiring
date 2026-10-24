@@ -58,12 +58,17 @@ export function summaryOf(n: GraphNode, form: FormField[], roles: Role[]): strin
     case 'application_received': return 'When someone applies'
     case 'cv_parse': {
       const f = form.find(x => x.key === c.file_field)
-      return f ? `From: ${f.label}` : 'Choose the file to read'
+      if (!f) return 'Choose the file to read'
+      return c.extract?.length ? `From: ${f.label} · ${plural(c.extract.length, 'extra fact')}` : `From: ${f.label}`
     }
     case 'ai_review': {
       const ref: string | undefined = c.cv_text_ref
       const src = !ref ? 'no CV text' : ref.endsWith('.text') && ref.startsWith('nodes.') ? 'CV text' : form.find(x => `form.${x.key}` === ref)?.label ?? ref
       return `${plural(c.criteria?.length ?? 0, 'criterion', 'criteria')} · ${src}`
+    }
+    case 'ai_check': {
+      const qs: { question: string }[] = c.questions ?? []
+      return qs.length === 1 ? qs[0]!.question : plural(qs.length, 'question')
     }
     case 'condition': {
       const k = branchKeys(n)
@@ -203,7 +208,7 @@ export interface Preset { id: string, type: string, label: string, description: 
 export interface PaletteItem { id: string, type: string, label: string, icon: string, presetId?: string, config?: unknown }
 
 const BLANK_LABEL: Record<string, string> = {
-  cv_parse: 'Read CV', ai_review: 'AI review', send_email: 'Email', condition: 'Decision', set_variable: 'Set values',
+  cv_parse: 'Read CV', ai_review: 'AI review', ai_check: 'Check answers', send_email: 'Email', condition: 'Decision', set_variable: 'Set values',
   human_task: 'Custom person step', end: 'Ending',
 }
 // The blank step's name inside a sentence: "an email", "an AI review", "a read CV" (acronyms keep their capitals)
@@ -226,7 +231,7 @@ export function buildPalette(presets: Preset[]) {
   }))
 }
 
-const BASE_KEY: Record<string, string> = { cv_parse: 'read_cv', ai_review: 'ai_review', send_email: 'email', condition: 'decision', set_variable: 'values', human_task: 'person_step', end: 'end' }
+const BASE_KEY: Record<string, string> = { cv_parse: 'read_cv', ai_review: 'ai_review', ai_check: 'check', send_email: 'email', condition: 'decision', set_variable: 'values', human_task: 'person_step', end: 'end' }
 
 // A blank step's settings, passing validation where that's possible.
 export function blankConfig(type: string, g: Graph, form: FormField[]): unknown {
@@ -235,6 +240,10 @@ export function blankConfig(type: string, g: Graph, form: FormField[]): unknown 
     cv_parse: { file_field: form.find(f => f.type === 'file')?.key ?? 'cv' },
     ai_review: {
       criteria: [{ key: 'skills_match', label: 'Skills match', description: 'How well the CV matches the must-have skills' }],
+      ...(cv && { cv_text_ref: `nodes.${cv.key}.text` }),
+    },
+    ai_check: {
+      questions: [{ key: 'meets_requirement', label: 'Meets the main requirement', question: 'Does the applicant meet the main requirement for this job?', kind: 'yes_no' }],
       ...(cv && { cv_text_ref: `nodes.${cv.key}.text` }),
     },
     send_email: { subject: 'About your application for {{job.title}}', body: 'Hi {{candidate.first_name}},\n\n' },
@@ -258,7 +267,7 @@ export function makeNode(item: PaletteItem, g: Graph, form: FormField[]): GraphN
   const config = structuredClone(toRaw(item.config)) as any
   // a preset made against Standard hire reads the CV text from "cv"; point it at this flow's Read CV step
   const cv = g.nodes.find(n => n.type === 'cv_parse')
-  if (item.type === 'ai_review' && cv && typeof config.cv_text_ref === 'string' && config.cv_text_ref.startsWith('nodes.')) config.cv_text_ref = `nodes.${cv.key}.text`
+  if ((item.type === 'ai_review' || item.type === 'ai_check') && cv && typeof config.cv_text_ref === 'string' && config.cv_text_ref.startsWith('nodes.')) config.cv_text_ref = `nodes.${cv.key}.text`
   return { key, type: item.type, label: item.label, config }
 }
 
@@ -316,3 +325,38 @@ export function sampleContext(fields: Field[], job: { title: string, openings: n
 }
 
 export const isComparison = (r: Rule): r is Extract<Rule, { ref: string }> => 'ref' in r
+
+// ---------- stage editor ----------
+
+// One rule in the recruiter's words: "AI review: Overall is at least 70".
+export function ruleWords(r: Rule, fields: Field[]): string {
+  if ('all' in r) return r.all.map(x => ruleWords(x, fields)).join(' and ')
+  if ('any' in r) return r.any.map(x => ruleWords(x, fields)).join(' or ')
+  if (!isComparison(r)) return 'a rule with nested groups'
+  const f = fields.find(x => x.path === r.ref)
+  const v = Array.isArray(r.value) ? r.value.join(r.op === 'between' ? ' and ' : ', ') : r.value
+  // the score range helps in a picker; in a sentence it is noise ("AI review: Overall score is at least 70")
+  return [f?.label.replace(/ \(0–100\)$/, '') ?? r.ref, opWords(r.op, f?.type), v === undefined || v === null ? '' : String(v)].filter(Boolean).join(' ')
+}
+
+// Put `node` in front of `beforeKey`: everything that led to it now passes through the new step first.
+// Used where insertAfter has nowhere to hang on (an empty stage, a stage that starts after a decision).
+export function insertBefore(g: Graph, beforeKey: string, node: GraphNode, stageId: string): Graph {
+  return {
+    ...g,
+    nodes: [...g.nodes, node],
+    edges: [...g.edges.map(e => e.to === beforeKey ? { ...e, to: node.key } : e), { from: node.key, to: beforeKey }],
+    stages: (g.stages ?? []).map(s => ({
+      ...s,
+      nodeKeys: s.id === stageId ? [node.key, ...s.nodeKeys.filter(k => k !== node.key)] : s.nodeKeys.filter(k => k !== node.key),
+    })),
+  }
+}
+
+// Why removeStep said no, in words. Only asked after it returned null.
+export function removeBlocker(g: Graph, key: string): string {
+  const reader = g.nodes.find(x => x.key !== key && JSON.stringify(x.config ?? {}).includes(`nodes.${key}.`))
+  return reader
+    ? `“${titleOf(reader)}” uses its answers, so it can’t go. Change that step first.`
+    : 'It has more than one way in or out. Remove it on the canvas.'
+}

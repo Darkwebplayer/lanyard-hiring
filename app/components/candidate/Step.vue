@@ -21,11 +21,14 @@ const hasDetail = computed(() => {
   if (r.status === 'cancelled' || r.status === 'failed' || human.value) return true
   if (r.nodeType === 'condition') return !!r.evaluation
   if (r.nodeType === 'send_email') return r.status === 'completed'
-  return ['ai_review', 'cv_parse', 'set_variable'].includes(r.nodeType) && !!out.value
+  return ['ai_review', 'ai_check', 'cv_parse', 'set_variable'].includes(r.nodeType) && !!out.value
 })
 // an older stopped step was retried or moved past, so only the latest one opens
 const open = props.latest || waiting.value
 const icon = computed(() => props.run.status === 'failed' ? 'stop' : meta.value.icon)
+// Read CV's "Also pull out" facts: everything past the fixed outputs
+const CV_FIXED = new Set(['text', 'skills', 'years_experience', 'current_title', 'file_sha256'])
+const cvExtras = computed(() => Object.entries(out.value ?? {}).filter(([k]) => !CV_FIXED.has(k)))
 const tone = computed(() => props.run.status === 'failed' ? 'bad' : props.run.status === 'cancelled' ? 'off' : meta.value.slot)
 
 // Reassign: managers add and remove people while the task waits.
@@ -57,7 +60,7 @@ const scoreRows = (v: Record<string, unknown>) => Object.entries(v).filter(([k])
 </script>
 
 <template>
-  <li class="step" :data-tone="tone">
+  <li class="step" :data-tone="tone" :data-ask="`node:${run.nodeKey}`">
     <span class="dot" aria-hidden="true"><Icon :name="icon" :size="16" /></span>
     <details v-if="hasDetail" :open="open">
       <summary>
@@ -78,7 +81,7 @@ const scoreRows = (v: Record<string, unknown>) => Object.entries(v).filter(([k])
           </button>
         </div>
 
-        <CandidateScores v-else-if="run.nodeType === 'ai_review' && out" :output="out" />
+        <CandidateScores v-else-if="run.nodeType === 'ai_review' && out" :output="out" :node-key="run.nodeKey" />
 
         <CandidateTrace v-else-if="run.nodeType === 'condition'" :tl="tl" :run="run" />
 
@@ -91,9 +94,16 @@ const scoreRows = (v: Record<string, unknown>) => Object.entries(v).filter(([k])
           <ul v-if="Array.isArray(out.skills) && out.skills.length" class="skills" aria-label="Skills">
             <li v-for="s in out.skills" :key="String(s)" class="chip">{{ s }}</li>
           </ul>
+          <dl v-if="cvExtras.length" class="kv">
+            <div v-for="[k, v] in cvExtras" :key="k"><dt>{{ humanise(k) }}</dt><dd>{{ v == null ? 'Not in the CV' : fmtVal(v) }}</dd></div>
+          </dl>
         </div>
 
         <p v-else-if="run.nodeType === 'send_email'" class="muted"><Icon name="check" :size="14" class="inl" />Sent to {{ tl.candidate.email }}</p>
+
+        <dl v-else-if="run.nodeType === 'ai_check' && out" class="kv">
+          <div v-for="(v, k) in out" :key="k"><dt>{{ humanise(String(k)) }}</dt><dd>{{ typeof v === 'string' ? humanise(v) : fmtVal(v) }}</dd></div>
+        </dl>
 
         <dl v-else-if="run.nodeType === 'set_variable' && out" class="kv">
           <div v-for="(v, k) in out" :key="k"><dt>{{ humanise(String(k)) }}</dt><dd>{{ fmtVal(v) }}</dd></div>

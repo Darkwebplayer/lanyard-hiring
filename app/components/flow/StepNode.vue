@@ -28,7 +28,7 @@ const at = (i: number) => `${((i + 0.5) / d.value.branches!.length) * 100}%`
 
 <template>
   <div
-    class="step card" :class="{ selected: d.selected, broken: d.issues > 0, [`stage-${d.stage}`]: !!d.stage }" :data-slot="d.issues ? 'bad' : d.slot"
+    :data-ask="`node:${id}`" class="step card" :class="{ selected: d.selected, broken: d.issues > 0, [`stage-${d.stage}`]: !!d.stage }" :data-slot="d.issues ? 'bad' : d.slot"
     :style="{ width: `${d.width}px` }"
   >
     <Handle v-if="d.type !== 'application_received'" type="target" :position="Position.Top" :connectable="!d.readOnly" />

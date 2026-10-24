@@ -58,7 +58,7 @@ const versionLine = computed(() => {
 const base = `/jobs/${id}`
 const tabs = computed(() => [
   { to: base, label: 'Pipeline', count: board.value?.counts.reduce((n, c) => n + c.n, 0) },
-  { to: `${base}/flow`, label: 'Flow' },
+  { to: `${base}/flow`, label: 'Stages' },
   { to: `${base}/form`, label: 'Form' },
   { to: `${base}/details`, label: 'Details' },
 ])
@@ -203,6 +203,7 @@ function askArchive() {
 
         <div v-if="job && !archived" class="actions">
           <JobApplyActions v-if="job.status === 'open'" :job-id="id" />
+          <JobShareMenu :job-id="id" :title="job.title" :status="job.status" :published="!!published" />
           <button class="btn status-btn" popovertarget="job-status-menu" :aria-busy="changing">
             <span v-if="changing" class="spinner" />Status<Icon name="chevron-down" />
           </button>

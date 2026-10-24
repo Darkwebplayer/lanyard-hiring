@@ -33,6 +33,6 @@ const READABLE = JOB_FIELDS.filter(f => !ALWAYS_SET.has(f.path))
 // AI review sends every requirement to the model, so it counts as reading skills and years.
 export function jobFieldsRead(workflow: Graph) {
   const used = new Set(workflow.nodes.flatMap(n => strings(n.config).flatMap(s => [s, ...refsInTemplate(s)])))
-  if (workflow.nodes.some(n => n.type === 'ai_review')) used.add('job.must_have_skills').add('job.min_experience_years')
+  if (workflow.nodes.some(n => n.type === 'ai_review' || n.type === 'ai_check')) used.add('job.must_have_skills').add('job.min_experience_years')
   return READABLE.filter(f => used.has(f.path))
 }

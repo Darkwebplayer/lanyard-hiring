@@ -242,6 +242,9 @@ describe('graph validation', () => {
     expect(paths('rejection_email')).not.toContain('nodes.interview.hire')
     expect(paths('decision')).toEqual(expect.arrayContaining(['nodes.interview.hire', 'nodes.interview.hire_any', 'form.cv', 'job.title']))
     expect(paths('start')).not.toContain('nodes.cv.text')
+    // step outputs read under the step's name, never its key
+    const label = (k: string, path: string) => fieldsAvailableAt(STANDARD_HIRE.workflow, k, STANDARD_HIRE.form).find(f => f.path === path)?.label
+    expect(label('screen', 'nodes.ai.overall')).toMatch(/^AI review: /)
   })
 })
 
@@ -327,6 +330,42 @@ describe('review regressions', () => {
     for (const ref of ['candidate.email', 'candidate.first_name', 'job.title']) {
       expect(issuesFor(g => { (node(g, 'ai').config as any).cv_text_ref = ref })).toEqual(['ai_input_not_allowed'])
     }
+  })
+
+  const aiCheck = (questions: unknown[], cv_text_ref?: string) => (g: Graph) => {
+    g.nodes.push({ key: 'chk', type: 'ai_check', config: { questions, ...(cv_text_ref && { cv_text_ref }) } })
+    g.edges = g.edges.filter(e => e.from !== 'cv')
+    g.edges.push({ from: 'cv', to: 'chk' }, { from: 'chk', to: 'ai' })
+  }
+  const yes = { key: 'weekends', label: 'Weekends', question: 'Can they work weekends?', kind: 'yes_no' }
+  const role = (n: number) => ({ key: 'role', label: 'Role', question: 'Which role?', kind: 'choice', options: ['barista', 'kitchen', 'floor'].slice(0, n).map(k => ({ key: k, label: k })) })
+
+  it('ai_check: choices need 2+ options, yes/no none; same AI input rules as ai_review', () => {
+    expect(issuesFor(aiCheck([yes, role(2)], 'nodes.cv.text'))).toEqual([])
+    expect(issuesFor(aiCheck([role(1)]))).toEqual(['bad_options'])
+    expect(issuesFor(aiCheck([{ ...yes, options: role(2).options }]))).toEqual(['bad_options'])
+    expect(issuesFor((g, form) => {
+      form.push({ key: 'gender', label: 'G', type: 'string', required: false, protected: true })
+      aiCheck([yes], 'form.gender')(g)
+    })).toEqual(['ai_input_not_allowed'])
+  })
+
+  it('ai_check outputs are typed booleans and enums a condition can offer', () => {
+    const t = clone()
+    aiCheck([yes, role(3)])(t.workflow)
+    const f = fieldsAvailableAt(t.workflow, 'ai', t.form)
+    expect(f.find(x => x.path === 'nodes.chk.weekends')).toMatchObject({ type: 'boolean' })
+    expect(f.find(x => x.path === 'nodes.chk.role')).toMatchObject({ type: 'enum', options: ['barista', 'kitchen', 'floor'] })
+  })
+
+  it('cv_parse extra fields: typed outputs, no clash with built-in ones', () => {
+    const extract = [{ key: 'notice', label: 'Notice', type: 'number' }, { key: 'start', label: 'Start', type: 'date' }]
+    expect(REGISTRY.cv_parse!.outputs({ file_field: 'cv', extract }).slice(-2)).toEqual([
+      { key: 'notice', type: 'number', label: 'Notice' },
+      { key: 'start', type: 'date', label: 'Start' },
+    ])
+    expect(issuesFor(g => { (node(g, 'cv').config as any).extract = extract })).toEqual([])
+    expect(issuesFor(g => { (node(g, 'cv').config as any).extract = [{ key: 'skills', label: 'S', type: 'list' }] })).toEqual(['duplicate_key'])
   })
 
   it('human task titles and instructions cannot show protected answers to assignees', () => {

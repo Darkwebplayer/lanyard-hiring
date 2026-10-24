@@ -3,19 +3,23 @@ import { Background } from '@vue-flow/background'
 import { ConnectionMode, MarkerType, VueFlow, useVueFlow, type Connection, type Edge, type Node } from '@vue-flow/core'
 import { fieldsAvailableAt, validateVersion } from '~~/shared/workflow/graph'
 import type { ConditionConfig } from '~~/shared/workflow/rules'
+import { insertAfter, removeStep, stageView } from '~~/shared/workflow/stages'
 import type { FormField, Graph, GraphEdge, Issue } from '~~/shared/workflow/types'
 import { resting } from '~/lib/board'
 import {
-  GRID, blankNoun, buildPalette, type PaletteItem, type Person, type Preset, type Role, branchKeys, branchLabel, cardWidth, freeSlot, issueText,
-  layout, makeNode, reaches, spotBelow, summaryOf, titleOf,
+  GRID, blankNoun, buildPalette, type PaletteItem, type Person, type Preset, type Role, branchKeys, branchLabel, cardWidth, freeSlot, insertBefore, issueText,
+  layout, makeNode, reaches, removeBlocker, spotBelow, summaryOf, titleOf,
 } from '~/lib/flow'
 import type { FlowSource } from '~/composables/useFlowSource'
+import DescribeFlow from './DescribeFlow.vue'
 import FlowPresetsMenu from './FlowPresetsMenu.vue'
 import StepNode, { STAGE_ACTIONS, type StepData } from './StepNode.vue'
+import StageList from './StageList.vue'
 import StagesPanel from './StagesPanel.vue'
 import StepPanel from './StepPanel.vue'
 
-const props = defineProps<{ source: FlowSource }>()
+// stagesFirst: open on the stage list (a job's Stages tab); the canvas is the advanced view, at ?view=canvas
+const props = defineProps<{ source: FlowSource, stagesFirst?: boolean }>()
 const emit = defineEmits<{ edit: [], replace: [next: { form: FormField[], workflow: Graph }, name: string] }>()
 const toast = useToast()
 const route = useRoute()
@@ -29,6 +33,16 @@ const readOnly = computed(() => props.source.readOnly.value)
 const isJob = props.source.kind === 'job'
 const reduced = import.meta.client && matchMedia('(prefers-reduced-motion: reduce)').matches
 const ms = (n: number) => (reduced ? 0 : n)
+
+// ---------- describe your flow: state (the steps are under "problems") ----------
+const { canAsk: aiOn } = useMe()
+const description = ref('')
+// the draft the server sent back, shown unsaved; `before` is the graph to put back on Discard
+const aiDraft = ref<{ summary: string, before: Graph } | null>(null)
+const startedEmpty = ref(false) // "Start empty" puts the card away for this visit
+const isEmpty = computed(() => wf.value.nodes.every(n => n.type === 'application_received'))
+const describeInline = computed(() => aiOn.value && !readOnly.value && isEmpty.value && !startedEmpty.value && !aiDraft.value)
+let quiet = false
 
 // ---------- people to assign ----------
 const roles = ref<Role[]>([])
@@ -197,16 +211,20 @@ watch(wf, () => {
   clearTimeout(validateTimer)
   validateTimer = setTimeout(() => (issues.value = validateVersion(form.value, wf.value)), 150)
   if (readOnly.value) return
-  dirty.value = true
-  emit('edit')
-  clearTimeout(saveTimer)
-  saveTimer = setTimeout(save, 800)
+  // a draft from a description stays unsaved until Save flow; a discarded one puts back what the server already has
+  if (quiet) quiet = false
+  else if (!aiDraft.value) {
+    dirty.value = true
+    emit('edit')
+    clearTimeout(saveTimer)
+    saveTimer = setTimeout(save, 800)
+  }
   if (restoring) return void (restoring = false)
   clearTimeout(historyTimer)
   historyTimer = setTimeout(record, 400)
 }, { deep: true })
 
-const onUnload = (e: BeforeUnloadEvent) => { if (dirty.value) e.preventDefault() }
+const onUnload = (e: BeforeUnloadEvent) => { if (dirty.value || aiDraft.value) e.preventDefault() }
 onMounted(() => window.addEventListener('beforeunload', onUnload))
 onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', onUnload)
@@ -225,6 +243,17 @@ function select(key: string | null) {
   selectedEdge.value = null
   if (key === selectedKey.value) return
   router.replace({ query: { ...route.query, node: key ?? undefined } })
+}
+
+// ---------- which view: the stage list when the flow reads honestly as one, else the canvas ----------
+const sv = computed(() => stageView(wf.value))
+// the describe card and a draft from it live on the canvas
+const onCanvas = computed(() => route.query.view === 'canvas' || describeInline.value || !!aiDraft.value)
+const view = computed(() => props.stagesFirst && !onCanvas.value && sv.value.fits ? 'stages' : 'canvas')
+const fitNote = computed(() => props.stagesFirst && !onCanvas.value && !sv.value.fits ? sv.value.reason : null)
+function setView(v: 'stages' | 'canvas') {
+  router.replace({ query: { ...route.query, view: v === 'canvas' ? 'canvas' : undefined, stage: undefined } })
+  if (v === 'canvas') leftTab.value = 'steps'
 }
 
 // ---------- stages: board columns, display only. The picked one lives in the URL (?stage=id) ----------
@@ -267,6 +296,66 @@ function moveStage(id: string, dir: -1 | 1) {
   list.splice(i + dir, 0, ...list.splice(i, 1))
   wf.value.stages = list
 }
+// The stage list adds a stage between two others; its name is selected there, ready to type over.
+function addStageAt(at: number) {
+  record()
+  const list = [...stages.value]
+  list.splice(at, 0, { id: `s_${Math.random().toString(36).slice(2, 8)}`, name: `Stage ${list.length + 1}`, nodeKeys: [] })
+  wf.value.stages = list
+}
+// From the stage list: its steps join the stage before it (or after it, for the first), so none is left in no stage.
+function mergeStage(id: string) {
+  const list = stages.value
+  const i = list.findIndex(s => s.id === id)
+  const st = list[i]!
+  const into = list[i - 1] ?? list[i + 1]
+  if (!into) return removeStage(id)
+  record()
+  wf.value.stages = list.filter(s => s !== st).map(s => s === into ? { ...s, nodeKeys: [...s.nodeKeys, ...st.nodeKeys] } : s)
+  record()
+  toast.show(st.nodeKeys.length ? `Deleted stage “${st.name}”. Its steps joined “${into.name}”.` : `Deleted stage “${st.name}”`, { label: 'Undo', run: undo })
+}
+// A step added in the stage list goes after the stage's last step of its kind; with nothing to hang on to
+// (an empty stage, a fork), in front of the first step it would come before.
+// ponytail: a stage people enter in two places gets the step on one path only; the canvas handles that case.
+function addInStage(stageId: string, kind: 'auto' | 'people', item: PaletteItem) {
+  if (readOnly.value) return
+  const g = wf.value
+  const info = sv.value.stages.find(s => s.id === stageId)
+  const i = sv.value.stages.findIndex(s => s.id === stageId)
+  if (!info) return
+  const node = makeNode(item, g, form.value)
+  const outs = (k: string) => g.edges.filter(e => e.from === k).length
+  const firstOf = (keys: string[]) => keys.find(k => !keys.some(o => o !== k && reaches(g, o, k)))
+  const lastOf = (keys: string[]) => keys.find(k => !keys.some(o => o !== k && reaches(g, k, o)))
+  const auto = info.auto.map(s => s.key)
+  const people = info.people.map(s => s.key)
+  const after = kind === 'auto' ? lastOf(auto) : lastOf(people) ?? lastOf(auto)
+  let next: Graph | null = null
+  if (after && outs(after) === 1) next = insertAfter(g, after, node)
+  else {
+    const later = sv.value.stages.slice(i + 1).map(s => [...s.auto, ...s.people].map(x => x.key)).find(k => k.length)
+    const before = auto.length + people.length ? firstOf([...auto, ...people]) : later ? firstOf(later) : g.nodes.find(n => n.type === 'end' && (n.config as any)?.outcome === 'hired')?.key
+    if (before) next = insertBefore(g, before, node, stageId)
+  }
+  if (!next) return toast.show('There’s no place for a step here yet. Add it on the canvas.')
+  record()
+  wf.value = next
+  select(node.key)
+}
+// The stage list removes a step only when the flow closes up around it; otherwise it says why.
+function removeInStages(key: string) {
+  const n = wf.value.nodes.find(x => x.key === key)
+  if (!n || readOnly.value) return
+  const next = removeStep(wf.value, key)
+  if (!next) return toast.show(removeBlocker(wf.value, key))
+  record()
+  wf.value = next
+  record()
+  select(null)
+  toast.show(`Deleted “${titleOf(n)}”`, { label: 'Undo', run: undo })
+}
+
 // A step sits in one stage at most, so adding it here takes it out of any other.
 function toggleInStage(key: string) {
   const st = activeStage.value
@@ -505,6 +594,8 @@ async function fitOnLoad() {
 }
 // fires again whenever a new step gets measured; only the first time is "load"
 let loaded = false
+// the canvas sits hidden behind the stage list and measures nothing there; fit it once it shows
+watch(view, v => v === 'canvas' && nextTick(() => requestAnimationFrame(() => requestAnimationFrame(() => fitOnLoad()))))
 onNodesInitialized(async () => {
   if (loaded) return
   loaded = true
@@ -528,7 +619,7 @@ function onKey(e: KeyboardEvent) {
   const onStep = (e.target as HTMLElement).closest?.('.vue-flow__node') as HTMLElement | null
   if (e.key === 'Enter' && onStep?.dataset.id) return e.preventDefault(), onNodeClick(onStep.dataset.id)
   const inCanvas = e.target === document.body || !!canvasEl.value?.contains(e.target as HTMLElement)
-  if ((e.key === 'Delete' || e.key === 'Backspace') && inCanvas) {
+  if ((e.key === 'Delete' || e.key === 'Backspace') && inCanvas && view.value === 'canvas') {
     if (selectedEdge.value) return e.preventDefault(), removeEdge(selectedEdge.value)
     const k = onStep?.dataset.id ?? selectedKey.value
     if (k) return e.preventDefault(), removeNode(k)
@@ -557,6 +648,93 @@ onMounted(() => {
 })
 onBeforeUnmount(() => window.removeEventListener('resize', measure))
 
+// ---------- describe your flow: draft, then Save or Discard ----------
+const describeDlg = ref<HTMLDialogElement>()
+const presetsMenu = ref<InstanceType<typeof FlowPresetsMenu>>()
+const drafting = ref<AbortController | null>(null)
+const draftError = ref<string | null>(null)
+const replacingNote = computed(() => aiDraft.value
+  ? 'A new draft replaces this one. Your saved flow stays as it is until you save.'
+  : 'The draft replaces the flow on the canvas until you save it. Discard brings this flow back.')
+function openDescribe() {
+  draftError.value = null
+  describeDlg.value?.showModal()
+}
+function stopDrafting() {
+  drafting.value?.abort()
+  drafting.value = null
+}
+async function draftFlow() {
+  if (drafting.value || !description.value.trim()) return
+  const ctl = new AbortController()
+  drafting.value = ctl
+  draftError.value = null
+  try {
+    await flush() // a pending edit must reach the server before the draft takes the canvas
+    const res = await api<{ workflow: Graph, issues: Issue[], summary: string }>('/api/flows/generate', {
+      method: 'POST', body: { description: description.value.trim(), form: form.value }, signal: ctl.signal,
+    })
+    if (ctl.signal.aborted) return
+    // a reply the server couldn't read at all comes back with no steps; never let it wipe the canvas
+    if (!res.workflow.nodes.some(n => n.type === 'application_received')) {
+      draftError.value = 'The draft didn’t come out right. Try again, or say it another way.'
+      return
+    }
+    const pos = layout(res.workflow)
+    const next: Graph = { ...res.workflow, nodes: res.workflow.nodes.map(n => ({ ...n, position: pos.get(n.key) ?? { x: 0, y: 0 } })) }
+    aiDraft.value = { summary: res.summary, before: aiDraft.value?.before ?? clone(wf.value) }
+    describeDlg.value?.close()
+    select(null)
+    resetHistory(next)
+    nextTick(() => requestAnimationFrame(() => requestAnimationFrame(() => {
+      fitOnLoad()
+      draftBar.value?.focus()
+    })))
+  }
+  catch (e) {
+    if (!ctl.signal.aborted) draftError.value = toApiError(e).message
+  }
+  finally {
+    if (drafting.value === ctl) drafting.value = null
+  }
+}
+// The draft is a fresh start: Undo works inside it, and Discard (not Undo) brings the old flow back.
+function resetHistory(g: Graph) {
+  undoStack.length = 0
+  redoStack.length = 0
+  canUndo.value = canRedo.value = false
+  last = JSON.stringify(g)
+  restoring = true
+  wf.value = g
+}
+function discardDraft() {
+  const d = aiDraft.value
+  if (!d) return
+  aiDraft.value = null
+  quiet = true
+  resetHistory(d.before)
+  select(null)
+  // the description is still in the box; an empty flow shows the card on the canvas by itself
+  if (!isEmpty.value) nextTick(openDescribe)
+  else nextTick(() => requestAnimationFrame(() => fitOnLoad()))
+}
+function saveDraftFlow() {
+  if (!aiDraft.value) return
+  aiDraft.value = null
+  emit('edit')
+  save()
+}
+onBeforeRouteLeave(() => !aiDraft.value || confirm('Leave without saving the draft? The steps from your description will be lost.'))
+const draftBar = ref<HTMLElement>()
+const draftCheck = computed(() => {
+  const p = problemList.value[0]
+  if (!p) return 'No problems found'
+  const n = problemList.value.length
+  // "Trial shift isn’t connected to a next step": the step's name starts the sentence issueText would start
+  const what = p.node ? `${p.where} ${p.text.charAt(0).toLowerCase()}${p.text.slice(1)}` : p.text
+  return `${n} thing${n === 1 ? '' : 's'} to check: ${what}`
+})
+
 // ---------- problems ----------
 const problemsMenu = ref<HTMLElement>()
 const problemList = computed(() => issues.value.map(i => {
@@ -567,13 +745,13 @@ function goTo(key?: string) {
   problemsMenu.value?.hidePopover()
   if (!key) return
   select(key)
-  focusStep(key)
+  if (view.value === 'canvas') focusStep(key)
 }
 </script>
 
 <template>
-  <div ref="root" class="flow" :class="{ 'has-panel': !!selected, 'read-only': readOnly, editing }" :style="{ height: `${height}px`, marginBottom: `${-pullUp}px` }">
-    <nav v-if="!readOnly" class="palette" :class="{ editing, 'on-stages': leftTab === 'stages' }" :aria-label="leftTab === 'steps' ? 'Add a step' : 'Stages'">
+  <div ref="root" class="flow" :class="{ 'has-panel': !!selected, 'read-only': readOnly, editing, 'stages-view': view === 'stages' }" :style="{ height: `${height}px`, marginBottom: `${-pullUp}px` }">
+    <nav v-if="!readOnly && view === 'canvas'" class="palette" :class="{ editing, 'on-stages': leftTab === 'stages' }" :aria-label="leftTab === 'steps' ? 'Add a step' : 'Stages'">
       <div class="seg left-tabs" role="radiogroup" aria-label="Show in this column">
         <label><input type="radio" name="left-tab" :checked="leftTab === 'steps'" @change="showTab('steps')"><span>Steps</span></label>
         <label><input type="radio" name="left-tab" :checked="leftTab === 'stages'" @change="showTab('stages')"><span>Stages <b v-if="stages.length" class="tab-n">{{ stages.length }}</b></span></label>
@@ -626,7 +804,39 @@ function goTo(key?: string) {
       </template>
     </nav>
 
-    <div ref="canvasEl" class="canvas" :class="{ staging: !!activeStage }" @dragover.prevent @drop.prevent="onDrop">
+    <StageList
+      v-if="view === 'stages'" class="stage-main" :graph="wf" :view="sv" :form="form" :issues-by="issuesBy" :roles="roles" :people="people"
+      :selected-key="selectedKey" :read-only="readOnly" :form-href="source.formHref" :palette="palette"
+      @select="select" @add="addInStage" @remove="removeInStages" @rename="renameStage" @move="moveStage" @remove-stage="mergeStage"
+      @add-stage="addStageAt" @canvas="setView('canvas')"
+    >
+      <template #status>
+        <div class="panel box status" role="group" aria-label="Draft">
+          <div class="status-row">
+            <span v-if="readOnly" class="locked" role="status"><Icon name="lock" :size="14" />Archived: read-only</span>
+            <button v-else-if="issues.length" type="button" class="btn btn-sm problems-btn" popovertarget="flow-problems">
+              <Icon name="alert" />{{ issues.length }} problem{{ issues.length === 1 ? '' : 's' }}
+            </button>
+            <span v-else class="ready"><Icon name="check" :size="14" />Ready to publish</span>
+            <template v-if="!readOnly">
+              <button type="button" class="btn btn-quiet btn-icon btn-sm push" :disabled="!canUndo" aria-label="Undo" title="Undo (⌘Z)" @click="undo"><Icon name="reopen" /></button>
+              <button type="button" class="btn btn-quiet btn-icon btn-sm" :disabled="!canRedo" aria-label="Redo" title="Redo (⇧⌘Z)" @click="redo"><Icon name="reopen" class="flip" /></button>
+            </template>
+          </div>
+          <span v-if="!readOnly" class="save" aria-live="polite">
+            <template v-if="saveState === 'saving'"><span class="spinner" />Saving…</template>
+            <template v-else-if="saveState === 'saved'">Saved to the draft. Publish to use it for new applicants.</template>
+            <template v-else-if="saveState === 'error'">
+              <span class="save-err">Not saved: {{ saveError }}</span>
+              <button type="button" class="btn btn-sm" @click="save">Retry</button>
+            </template>
+            <template v-else>Changes save as you go.</template>
+          </span>
+        </div>
+      </template>
+    </StageList>
+
+    <div v-show="view === 'canvas'" ref="canvasEl" class="canvas" :class="{ staging: !!activeStage }" @dragover.prevent @drop.prevent="onDrop">
       <VueFlow
         :nodes="vfNodes" :edges="vfEdges" :min-zoom="0.2" :max-zoom="1.6"
         :nodes-draggable="!readOnly" :nodes-connectable="!readOnly" :elements-selectable="false"
@@ -644,7 +854,23 @@ function goTo(key?: string) {
         <Background variant="dots" :gap="GRID" :size="1.2" color="oklch(0.89 0.008 330)" />
       </VueFlow>
 
-      <div class="toolbar" role="toolbar" aria-label="Canvas">
+      <!-- a draft from a description: unsaved until Save flow (mock frame 5) -->
+      <div v-if="aiDraft" ref="draftBar" class="draft-bar" role="region" aria-label="Unsaved draft" tabindex="-1">
+        <p :title="`${aiDraft.summary} · ${draftCheck}`">Draft from your description <span class="dim">· {{ aiDraft.summary }} · {{ draftCheck }}</span></p>
+        <button type="button" class="btn btn-sm btn-quiet" @click="discardDraft">Discard</button>
+        <button type="button" class="btn btn-sm btn-primary" @click="saveDraftFlow">Save flow</button>
+      </div>
+      <section v-if="aiDraft" class="card your-words" aria-labelledby="your-words-h">
+        <h3 id="your-words-h" class="eyebrow">Your description</h3>
+        <p>“{{ description.trim() }}”</p>
+        <button type="button" class="btn btn-sm" @click="openDescribe">Edit and redraft</button>
+      </section>
+
+      <div class="toolbar" :class="{ 'under-bar': aiDraft }" role="toolbar" aria-label="Canvas">
+        <template v-if="stagesFirst && sv.fits">
+          <button type="button" class="btn btn-quiet btn-sm" @click="setView('stages')"><Icon name="arrow-left" />Stage list</button>
+          <span class="sep" />
+        </template>
         <button type="button" class="btn btn-quiet btn-icon btn-sm" aria-label="Zoom out" title="Zoom out" @click="zoomOut({ duration: ms(160) })"><Icon name="zoom-out" /></button>
         <button type="button" class="btn btn-quiet btn-icon btn-sm" aria-label="Zoom in" title="Zoom in" @click="zoomIn({ duration: ms(160) })"><Icon name="zoom-in" /></button>
         <button type="button" class="btn btn-quiet btn-icon btn-sm" aria-label="Fit the whole flow" title="Fit the whole flow" @click="fitView({ padding: 0.12, duration: ms(260) })"><Icon name="fit" /></button>
@@ -654,8 +880,12 @@ function goTo(key?: string) {
           <button type="button" class="btn btn-quiet btn-icon btn-sm" :disabled="!canRedo" aria-label="Redo" title="Redo (⇧⌘Z)" @click="redo"><Icon name="reopen" class="flip" /></button>
         </template>
         <span class="sep" />
-        <template v-if="isJob">
-          <FlowPresetsMenu :source="presetSource" :form="form" :workflow="wf" :live-version="source.lockVersion.value" :save-only="readOnly" @replace="(next, name) => emit('replace', next, name)" />
+        <template v-if="aiOn && !readOnly && !isEmpty && !aiDraft">
+          <button type="button" class="btn btn-quiet btn-sm" @click="openDescribe"><Icon name="edit" />Draft from a description</button>
+          <span class="sep" />
+        </template>
+        <template v-if="isJob && !aiDraft">
+          <FlowPresetsMenu ref="presetsMenu" :source="presetSource" :form="form" :workflow="wf" :live-version="source.lockVersion.value" :save-only="readOnly" @replace="(next, name) => emit('replace', next, name)" />
           <span class="sep" />
         </template>
         <span v-if="readOnly" class="locked" role="status"><Icon name="lock" :size="14" />Archived: read-only</span>
@@ -663,7 +893,7 @@ function goTo(key?: string) {
           <Icon name="alert" />{{ issues.length }} problem{{ issues.length === 1 ? '' : 's' }}
         </button>
         <span v-else class="ready"><Icon name="check" :size="14" />{{ isJob ? 'Ready to publish' : 'No problems' }}</span>
-        <span v-if="!readOnly" class="save" aria-live="polite">
+        <span v-if="!readOnly && !aiDraft" class="save" aria-live="polite">
           <template v-if="saveState === 'saving'"><span class="spinner" />Saving…</template>
           <template v-else-if="saveState === 'saved'">Saved</template>
           <template v-else-if="saveState === 'error'">
@@ -673,20 +903,39 @@ function goTo(key?: string) {
         </span>
       </div>
 
-      <div id="flow-problems" ref="problemsMenu" popover class="menu problems-menu">
-        <div class="pm-head eyebrow">{{ isJob ? 'Fix these before you publish' : 'A job that starts from this fixes these before it can publish' }}</div>
-        <button v-for="(p, i) in problemList" :key="i" type="button" :disabled="!p.node" @click="goTo(p.node)">
-          <span class="pm-where">{{ p.where }}</span>
-          <span class="pm-text">{{ p.text }}</span>
-        </button>
+      <div v-if="describeInline" class="describe-wrap">
+        <DescribeFlow
+          v-model="description" class="card" data-slot="ink" mode="inline" :is-job="isJob" :busy="!!drafting" :error="draftError" :replacing="null"
+          :can-preset="isJob" @draft="draftFlow" @stop="stopDrafting" @preset="presetsMenu?.openLoad()" @close="startedEmpty = true"
+        />
       </div>
+
+      <p v-if="fitNote" class="fit-note" role="note">
+        <Icon name="split" :size="16" />
+        <span><b>Shown as a diagram.</b> {{ fitNote }} The stage list needs each step people wait at in one stage, with people only moving forward.</span>
+      </p>
+    </div>
+
+    <dialog ref="describeDlg" class="dialog describe-dlg" aria-label="Draft from a description" @close="stopDrafting" @click.self="describeDlg?.close()">
+      <DescribeFlow
+        v-model="description" mode="dialog" :is-job="isJob" :busy="!!drafting" :error="draftError" :replacing="replacingNote"
+        :can-preset="false" @draft="draftFlow" @stop="stopDrafting" @close="describeDlg?.close()"
+      />
+    </dialog>
+
+    <div id="flow-problems" ref="problemsMenu" popover class="menu problems-menu">
+      <div class="pm-head eyebrow">{{ isJob ? 'Fix these before you publish' : 'A job that starts from this fixes these before it can publish' }}</div>
+      <button v-for="(p, i) in problemList" :key="i" type="button" :disabled="!p.node" @click="goTo(p.node)">
+        <span class="pm-where">{{ p.where }}</span>
+        <span class="pm-text">{{ p.text }}</span>
+      </button>
     </div>
 
     <StepPanel
       v-if="selected" :key="selected.key" class="side" :node="selected" :graph="wf" :form="form" :roles="roles" :people="people"
       :issues="issuesBy.get(selected.key) ?? []" :key-locked="source.lockedKeys.value.has(selected.key)" :read-only="readOnly"
       :form-href="source.formHref" :job="source.sample.value"
-      @rename="renameNode" @connect="(b, to) => connect(selected!.key, to, b)" @remove="removeNode(selected!.key)" @close="select(null)"
+      @rename="renameNode" @connect="(b, to) => connect(selected!.key, to, b)" @remove="view === 'stages' ? removeInStages(selected!.key) : removeNode(selected!.key)" @close="select(null)"
       @save-preset="saveAsPreset(selected!.key)"
     />
   </div>
@@ -701,6 +950,21 @@ function goTo(key?: string) {
 /* edit mode needs room for the move and hide buttons beside each name */
 .flow.read-only { grid-template-columns: minmax(0, 1fr); }
 .flow.read-only.has-panel { grid-template-columns: minmax(0, 1fr) 380px; }
+.flow.stages-view, .flow.stages-view.read-only { grid-template-columns: minmax(0, 1fr); }
+.flow.stages-view.has-panel, .flow.stages-view.has-panel:not(.read-only) { grid-template-columns: minmax(0, 1fr) 380px; }
+.stage-main { min-height: 0; }
+.status { display: grid; gap: 8px; padding: 16px 18px; border-radius: var(--r-card); }
+.status-row { display: flex; align-items: center; gap: 2px; }
+.status .ready, .status .locked { padding-left: 0; }
+.status .save { padding: 0; }
+.push { margin-left: auto; }
+.fit-note {
+  position: absolute; z-index: 5; left: 14px; bottom: 14px; display: flex; gap: 10px; max-width: min(560px, calc(100% - 28px));
+  padding: 12px 14px; border-radius: var(--r-panel); background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow-2);
+  font-size: var(--t-sm); color: var(--ink-2);
+}
+.fit-note svg { flex: none; margin-top: 2px; color: var(--ink-3); }
+.fit-note b { color: var(--ink); }
 
 .left-tabs { display: flex; }
 .left-tabs label { flex: 1; }
@@ -744,6 +1008,27 @@ function goTo(key?: string) {
 }
 
 .canvas { position: relative; min-width: 0; min-height: 0; background: var(--bg); }
+
+/* describe your flow: the card sits over the empty canvas; the start step stays drawn behind it */
+.describe-wrap { position: absolute; z-index: 6; inset: 0; display: grid; place-items: center; padding: 72px 24px 24px; overflow-y: auto; pointer-events: none; }
+.describe-wrap > * { pointer-events: auto; }
+.describe-dlg { width: min(560px, calc(100vw - 32px)); }
+/* ink, like the system's own slot colour: this draft is the system's work until a person saves it */
+.draft-bar {
+  position: absolute; z-index: 7; top: 14px; left: 14px; right: 14px; display: flex; align-items: center; gap: 8px;
+  padding: 6px 6px 6px 18px; border-radius: var(--r-pill); background: var(--ink); color: #fff; box-shadow: var(--shadow-3);
+}
+.draft-bar:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.draft-bar p { flex: 1; min-width: 0; font-weight: 600; font-size: var(--t-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.draft-bar .dim { font-weight: 500; color: oklch(1 0 0 / 0.72); }
+.draft-bar .btn-quiet { color: oklch(1 0 0 / 0.85); }
+@media (hover: hover) { .draft-bar .btn-quiet:hover { --b-bg: oklch(1 0 0 / 0.12); color: #fff; } }
+.toolbar.under-bar { top: 66px; }
+.your-words {
+  position: absolute; z-index: 5; left: 14px; bottom: 14px; display: grid; justify-items: start; gap: 8px;
+  width: min(300px, calc(100% - 28px)); padding: 14px; border-radius: var(--r-panel); font-size: var(--t-sm);
+}
+.your-words p { color: var(--ink-2); display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 .side { min-width: 0; min-height: 0; }
 
 .toolbar {

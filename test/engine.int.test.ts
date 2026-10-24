@@ -325,7 +325,7 @@ describe('manual control', () => {
     const id = await apply(await publishedJob())
     await drain()
     const task = await latest(id)
-    await moveApplication(deps(), id, { node: 'decision' }, 'skip interview', 'owner')
+    await moveApplication(deps(), id, { node: 'decision' }, { reason: 'skip interview' }, 'owner')
     expect(await latest(id, 'interview')).toMatchObject({ status: 'cancelled' })
     await rejects(submitTask(deps(), task.id, 'owner', { technical: 4, communication: 4, hire: true }), 409, 'task_closed')
     // decision has no on_missing branch, so missing interview data falls to default → rejection email
@@ -342,7 +342,7 @@ describe('manual control', () => {
     const slow = deps({ handlers: { ...handlers, cv_parse: async (a) => { await stuck; return handlers.cv_parse!(a) } } })
     const pending = executeAutoRun(slow, cv.id)
     await new Promise(r => setTimeout(r, 50))
-    await moveApplication(deps(), id, { close: 'withdrawn' }, 'candidate withdrew', 'owner')
+    await moveApplication(deps(), id, { close: 'withdrawn' }, { reason: 'candidate withdrew' }, 'owner')
     release()
     expect(await pending).toBe('stale')
     expect(await app(id)).toMatchObject({ status: 'closed', outcome: 'withdrawn' })
@@ -351,11 +351,11 @@ describe('manual control', () => {
 
   it('31/32. close directly, then reopen into review (appeal)', async () => {
     const id = await apply(await publishedJob())
-    await moveApplication(deps(), id, { close: 'rejected' }, 'not a fit', 'owner')
+    await moveApplication(deps(), id, { close: 'rejected' }, { reasonCode: 'Other', reason: 'not a fit' }, 'owner')
     expect(await app(id)).toMatchObject({ status: 'closed', outcome: 'rejected' })
     expect(await executeAutoRun(deps(), (await latest(id, 'cv')).id)).toBe('noop') // cv was cancelled by the move
 
-    await moveApplication(deps(), id, { node: 'manual_review' }, 'appeal', 'owner')
+    await moveApplication(deps(), id, { node: 'manual_review' }, { reason: 'appeal' }, 'owner')
     expect(await app(id)).toMatchObject({ status: 'active', outcome: null })
     expect(await latest(id)).toMatchObject({ nodeKey: 'manual_review', status: 'waiting_on_human' })
     expect(await events(id)).toEqual(expect.arrayContaining(['manual_move', 'closed', 'reopened', 'task_assigned']))
@@ -367,7 +367,7 @@ describe('manual control', () => {
     await drain()
     const failed = await latest(id)
     await rejects(retryRun(deps(), (await latest(id, 'cv')).id, 'owner'), 409, 'not_latest_run')
-    await moveApplication(deps(), id, { node: 'manual_review' }, 'manual', 'owner')
+    await moveApplication(deps(), id, { node: 'manual_review' }, { reason: 'manual' }, 'owner')
     await rejects(retryRun(deps(), failed.id, 'owner'), 409, 'not_latest_run')
     await rejects(retryRun(deps(), (await latest(id)).id, 'owner'), 409, 'not_retryable')
   })
@@ -384,7 +384,7 @@ describe('manual control', () => {
 
   it('34. the move target must exist in the pinned version', async () => {
     const id = await apply(await publishedJob())
-    await rejects(moveApplication(deps(), id, { node: 'nope' }, 'x', 'owner'), 422, 'node_not_in_version')
+    await rejects(moveApplication(deps(), id, { node: 'nope' }, { reason: 'x' }, 'owner'), 422, 'node_not_in_version')
     expect((await latest(id)).status).toBe('pending') // nothing changed
   })
 })

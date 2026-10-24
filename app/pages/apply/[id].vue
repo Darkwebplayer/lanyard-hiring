@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { MAX_FILE_BYTES } from '~~/shared/workflow/form'
 import type { FormField } from '~~/shared/workflow/types'
+import { jobPostingLd } from '~~/shared/jobPosting'
 
 definePageMeta({ layout: 'bare' })
 
@@ -14,9 +15,28 @@ interface PublicJob {
 
 const route = useRoute()
 const id = route.params.id as string
-const job = ref<PublicJob | null>(null)
-const loadError = ref<{ code: string, message: string } | null>(null)
-useHead({ title: () => job.value ? [job.value.title, job.value.companyName].filter(Boolean).join(' at ') : 'Apply' })
+// Rendered on the server (routeRules), so crawlers see the post and its JSON-LD. useFetch carries the request
+// context on the server and hands the result to the browser, which does not fetch again.
+const { data: job, error: fetchError, refresh: load } = await useFetch<PublicJob>(`/api/public/jobs/${id}`)
+const closedWhileOpen = ref(false) // the job closed between loading and sending
+const loadError = computed<{ code: string, message: string } | null>(() => {
+  if (closedWhileOpen.value) return { code: 'job_not_open', message: '' }
+  if (!fetchError.value) return null
+  const err = toApiError(fetchError.value)
+  return { code: err.status === 404 ? 'job_not_open' : err.code, message: err.message }
+})
+// the canonical link, without ?src, so every tagged link counts as one posting
+const canonical = `${useRequestURL().origin}/apply/${id}`
+useHead({
+  title: () => job.value ? [job.value.title, job.value.companyName].filter(Boolean).join(' at ') : 'Apply',
+  link: [{ rel: 'canonical', href: canonical }],
+  // "<" escaped so a description can never close the script tag
+  script: () => job.value
+    ? [{ type: 'application/ld+json', innerHTML: JSON.stringify(jobPostingLd(job.value, job.value.companyName, canonical)).replace(/</g, '\\u003c') }]
+    : [],
+})
+// where the candidate came from: ?src=linkedin from the share menu, or a campaign's utm_source
+const source = [route.query.src, route.query.utm_source].flat().find(v => typeof v === 'string' && v.trim())?.trim().slice(0, 60)
 
 // Two steps on one page: read the job, then apply. The step is in the URL so Back returns to the job.
 // The form stays mounted (v-show) while the job shows, so going back never loses answers.
@@ -33,18 +53,6 @@ watch(step, async () => {
   await nextTick()
   ;(step.value === 'job' ? postH : formH).value?.focus()
 })
-
-async function load() {
-  loadError.value = null
-  try {
-    job.value = await api<PublicJob>(`/api/public/jobs/${id}`)
-  }
-  catch (e) {
-    const err = toApiError(e)
-    loadError.value = { code: err.status === 404 ? 'job_not_open' : err.code, message: err.message }
-  }
-}
-load()
 
 const CORE = [
   { key: 'first_name', label: 'First name', required: true, auto: 'given-name', type: 'text' },
@@ -67,29 +75,24 @@ function mark(f: { label: string, required: boolean, type?: string }) {
 const meta = computed(() => {
   const j = job.value
   if (!j) return []
-  const type = j.employmentType ? j.employmentType.replace(/_/g, ' ').replace(/^./, c => c.toUpperCase()) : null
-  const work = j.workplaceType ? { on_site: 'On-site', hybrid: 'Hybrid', remote: 'Remote' }[j.workplaceType] : null
-  return [j.location, work, type].filter(Boolean) as string[]
+  return [j.location, workplaceLabel(j.workplaceType), typeLabel(j.employmentType)].filter(Boolean) as string[]
 })
-// the second line: what a candidate weighs before applying
+// The second line: what a candidate weighs before applying. "Posted yesterday" and the closing date depend on the
+// reader's clock, zone and locale, which the server doesn't know: the dated parts fill in once the page runs in the
+// browser, in a line already reserved, so nothing moves and hydration sees the same text.
+const inBrowser = ref(false)
+onMounted(() => { inBrowser.value = true })
+const hasFacts = computed(() => !!job.value && (job.value.openings > 1 || !!job.value.postedAt || !!job.value.closesAt))
 const facts = computed(() => {
   const j = job.value
   if (!j) return []
   return [
     j.openings > 1 ? `${j.openings} openings` : null,
-    j.postedAt ? `Posted ${fmtAgo(j.postedAt).replace(/^just now$/, 'today')}` : null,
-    j.closesAt ? `Applications close ${fmtDate(j.closesAt)}` : null,
+    inBrowser.value && j.postedAt ? `Posted ${fmtAgo(j.postedAt).replace(/^just now$/, 'today')}` : null,
+    inBrowser.value && j.closesAt ? `Applications close ${fmtDate(j.closesAt)}` : null,
   ].filter(Boolean) as string[]
 })
-const salary = computed(() => {
-  const s = job.value?.salary
-  if (!s) return null
-  const fmt = (n: number) => s.currency
-    ? new Intl.NumberFormat(undefined, { style: 'currency', currency: s.currency, maximumFractionDigits: 0 }).format(n)
-    : new Intl.NumberFormat().format(n)
-  if (s.min !== null && s.max !== null) return `${fmt(s.min)} – ${fmt(s.max)}`
-  return s.min !== null ? `From ${fmt(s.min)}` : `Up to ${fmt(s.max!)}`
-})
+const salary = computed(() => salaryText(job.value?.salary ?? null))
 const descriptionHtml = computed(() => renderMarkdown(job.value?.description ?? ''))
 
 function numberHint(f: FormField) {
@@ -194,6 +197,7 @@ async function submit() {
   for (const f of job.value!.form) {
     if (f.type === 'boolean') fd.set(f.key, (form.elements.namedItem(f.key) as HTMLInputElement).checked ? 'true' : 'false')
   }
+  if (source) fd.set('source', source)
   busy.value = true
   try {
     const res = await fetch(`/api/public/jobs/${id}/apply`, { method: 'POST', body: fd, headers: { 'cf-turnstile-response': token.value } })
@@ -219,7 +223,7 @@ async function submit() {
       focusFirst()
     }
     else if (err.code === 'job_not_open') {
-      loadError.value = { code: 'job_not_open', message: err.message }
+      closedWhileOpen.value = true
     }
     else formError.value = err.message
   }
@@ -249,7 +253,7 @@ function focusFirst() {
     <div v-else-if="loadError" class="ending" role="alert">
       <h1>This page didn’t load.</h1>
       <p class="muted">{{ loadError.message }}</p>
-      <button class="btn" @click="load">Try again</button>
+      <button class="btn" @click="load()">Try again</button>
     </div>
 
     <div v-else-if="sentTo" class="ending" aria-live="polite">
@@ -268,7 +272,7 @@ function focusFirst() {
             <span v-for="m in meta" :key="m">{{ m }}</span>
           </p>
           <p v-if="salary" class="salary">{{ salary }}</p>
-          <p v-if="facts.length" class="meta facts">
+          <p v-if="hasFacts" class="meta facts">
             <span v-for="f in facts" :key="f">{{ f }}</span>
           </p>
         </header>
@@ -418,7 +422,8 @@ function focusFirst() {
 .meta span::before { content: "·"; display: inline-block; width: 4px; margin-left: -8px; margin-right: 4px; text-align: center; color: var(--ink-3); }
 .desc { font-size: var(--t-lg); }
 .salary { margin-top: 10px; font-size: var(--t-lg); font-weight: 600; font-variant-numeric: tabular-nums; }
-.facts { margin-top: 4px; font-size: var(--t-sm); }
+/* min-height: the dated facts arrive after hydration into this line */
+.facts { margin-top: 4px; font-size: var(--t-sm); min-height: 1lh; }
 .post { display: grid; gap: 24px; }
 .company { font-weight: 600; color: var(--ink-2); margin-bottom: 6px; }
 h1:focus { outline: none; }

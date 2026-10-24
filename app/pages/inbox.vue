@@ -83,7 +83,10 @@ watch(selected, async (id) => {
   <div class="inbox">
     <aside ref="list" class="list" aria-label="Tasks">
       <header class="list-head">
-        <h1>Inbox</h1>
+        <div class="title-row">
+          <h1>Inbox</h1>
+          <NuxtLink to="/inbox/hours" class="btn btn-sm btn-quiet hours-link" :aria-current="route.path === '/inbox/hours' ? 'page' : undefined"><Icon name="calendar" />Your interview hours</NuxtLink>
+        </div>
         <div v-if="isManager && inbox" class="seg" role="radiogroup" aria-label="Show">
           <label><input type="radio" name="list" :checked="view === 'mine'" @change="setView('mine')"><span>Yours <b class="n">{{ mine.length }}</b></span></label>
           <label><input type="radio" name="list" :checked="view === 'attention'" @change="setView('attention')"><span>Needs attention <b v-if="attentionCount" class="n n-bad">{{ attentionCount }}</b></span></label>
@@ -167,6 +170,9 @@ watch(selected, async (id) => {
 }
 .list-head { position: sticky; top: 0; z-index: 1; display: grid; gap: 14px; padding: 28px 8px 14px; background: var(--bg); }
 .list-head .seg { justify-self: start; }
+.title-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.hours-link { margin-right: -8px; }
+.hours-link[aria-current] { --b-bg: var(--accent-tint); color: var(--accent-ink); }
 .n { font-weight: 600; color: var(--ink-3); font-variant-numeric: tabular-nums; }
 .n-bad { color: var(--bad); }
 .sec { display: flex; gap: 8px; align-items: baseline; margin: 16px 8px 6px; font-size: var(--t-sm); font-weight: 600; color: var(--ink-2); letter-spacing: 0; }

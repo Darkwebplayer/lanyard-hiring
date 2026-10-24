@@ -1,7 +1,7 @@
-import { settings } from '../db/schema'
+import { getSettings } from '../domain/settings'
 
 export default defineEventHandler(async (event) => {
-  await requireAdmin(event)
-  const [row] = await useDb(event).select().from(settings)
-  return row ?? { id: 1, companyName: null, replyToEmail: null, consentText: null, aiNoticeText: null }
+  // managers read it too: the reject dialogs need rejectReasons. Writing stays admin-only.
+  await requireManager(event)
+  return getSettings(useDb(event))
 })

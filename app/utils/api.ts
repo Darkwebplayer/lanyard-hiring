@@ -38,6 +38,23 @@ const MESSAGES: Record<string, string> = {
   application_closed: 'This application is closed.',
   bad_assignee: 'One of those people can’t take tasks (inactive or without a role).',
   below_min_submissions: 'That would leave too few people to finish the task.',
+  reason_code_required: 'Pick a reason for the rejection.',
+  unknown_reason_code: 'That reason was renamed or removed. Pick one from the list.',
+  invalid_answers: 'Some answers need another look.',
+  job_not_published: 'Publish the job before you import people into it.',
+  template_not_found: 'That offer letter was deleted. Pick another.',
+  expires_in_past: 'Pick an end date in the future.',
+  offer_not_found: 'This offer doesn’t exist any more.',
+  offer_not_open: 'This offer has already been answered or withdrawn.',
+  offer_expired: 'This offer has expired.',
+  name_mismatch: 'Type your full name as it appears on the offer.',
+  booking_not_found: 'This booking link doesn’t exist any more.',
+  booking_closed: 'This interview has moved on, so the time can’t change.',
+  too_late_to_change: 'It’s less than 12 hours away, so the time can’t change here.',
+  slot_unavailable: 'Someone just took that time. Pick another.',
+  ai_off: 'AI is off. An admin can turn it on in Settings.',
+  ai_not_configured: 'AI isn’t set up on the server yet.',
+  ai_error: 'The AI didn’t answer this time. Try again in a moment.',
 }
 
 export interface ApiError { status: number, code: string, message: string, issues: Issue[] }
@@ -74,7 +91,8 @@ export function runErrorText(error: string | null | undefined): { what: string, 
   if (e.startsWith('no_assignees')) return { what: 'Nobody could be assigned', fix: 'Give someone the role this step uses, then retry.' }
   if (/^(missing_file|file_not_found|checksum_mismatch)/.test(e)) return { what: 'The CV is missing or was changed', fix: 'Move the candidate on by hand.' }
   if (e.startsWith('unreadable_cv')) return { what: 'The CV can’t be read', fix: 'It may be a scan. Move it to a manual review.' }
-  if (/^(ai_not_configured|ai_error)/.test(e)) return { what: 'The AI review couldn’t run', fix: 'Check the AI settings, then retry.' }
+  if (e.startsWith('ai_off')) return { what: 'AI is off', fix: 'An admin can turn on Use AI in Settings, then retry.' }
+  if (/^(ai_not_configured|ai_error)/.test(e)) return { what: 'The AI step couldn’t run', fix: 'Check the AI settings, then retry.' }
   if (e.startsWith('missing_ref')) return { what: 'The email had an empty field', fix: 'Move the candidate on, or fix their data and retry.' }
   if (e.startsWith('email_failed')) return { what: 'The email provider refused the email', fix: 'Retry.' }
   if (e.startsWith('disabled')) return { what: 'This kind of step is switched off', fix: 'Switch it back on, then retry.' }

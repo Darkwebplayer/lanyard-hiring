@@ -2,7 +2,7 @@
 useHead({ title: 'Hires' })
 
 interface Row { id: string, title: string, status: 'draft' | 'open' | 'closed' | 'archived', openings: number, applications: number, hired: number, fillRate: number }
-interface Report { jobs: Row[], totals: { jobs: number, openings: number, hires: number, fillRate: number } }
+interface Report { jobs: Row[], totals: { jobs: number, openings: number, hires: number, fillRate: number }, bySource?: { source: string | null, applied: number, hired: number }[] }
 
 const report = ref<Report | null>(null)
 const error = ref('')
@@ -27,6 +27,9 @@ const head = computed(() => {
   const hires = set.reduce((s, j) => s + j.hired, 0)
   return { live: live.length > 0, openings, hires, rate: openings ? hires / openings : 0 }
 })
+// Where hires came from: most hires first, then most applications; the bar shares one scale (the busiest source).
+const sources = computed(() => [...report.value?.bySource ?? []].sort((a, b) => b.hired - a.hired || b.applied - a.applied))
+const mostApplied = computed(() => Math.max(1, ...sources.value.map(s => s.applied)))
 const applications = computed(() => (report.value?.jobs ?? []).reduce((s, j) => s + j.applications, 0))
 
 </script>
@@ -98,6 +101,31 @@ const applications = computed(() => (report.value?.jobs ?? []).reduce((s, j) => 
           </tbody>
         </table>
       </section>
+
+      <section v-if="sources.length" class="panel table-wrap src" aria-labelledby="by-src">
+        <header class="src-head">
+          <h2 id="by-src">Where hires came from</h2>
+          <p class="muted">From the tag on each apply link, across every job. Links without a tag show as “No source tag”.</p>
+        </header>
+        <table class="table">
+          <thead>
+            <tr><th>Source</th><th><span class="sr-only">Share hired</span></th><th class="num">Applications</th><th class="num">Hired</th><th class="num">Hire rate</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="s in sources" :key="s.source ?? ''">
+              <td class="title" :class="{ faint: s.source === null }">{{ sourceLabel(s.source, 'No source tag') }}</td>
+              <td>
+                <span class="sbar" aria-hidden="true">
+                  <i class="applied" :style="{ width: pct(s.applied / mostApplied) }"><i class="hired" :style="{ width: pct(s.applied ? s.hired / s.applied : 0) }" /></i>
+                </span>
+              </td>
+              <td class="num">{{ s.applied.toLocaleString() }}</td>
+              <td class="num"><b v-if="s.hired">{{ s.hired }}</b><span v-else class="faint">0</span></td>
+              <td class="num">{{ s.applied ? pct(s.hired / s.applied) : '—' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
     </template>
   </div>
 </template>
@@ -119,4 +147,13 @@ const applications = computed(() => (report.value?.jobs ?? []).reduce((s, j) => 
 .bar { width: 177px; height: 6px; border-radius: 9px; background: var(--sunk); box-shadow: inset 0 0 0 1px var(--line-2); overflow: hidden; }
 .bar i { display: block; height: 100%; background: var(--ok); border-radius: 9px; }
 .seat-text { font-size: var(--t-sm); }
+.src { margin-top: 24px; }
+.src-head { padding: 20px 20px 4px; display: grid; gap: 4px; }
+.src-head h2 { font-size: var(--t-lg); }
+.src-head .muted { font-size: var(--t-sm); }
+/* one bar per source: its length is applications (against the busiest source), the green inside is the share hired,
+   so a small source that hires well still shows its green */
+.sbar { display: block; width: 177px; height: 6px; }
+.sbar .applied { display: block; height: 100%; min-width: 6px; border-radius: 9px; background: var(--sunk); box-shadow: inset 0 0 0 1px var(--line-2); overflow: hidden; }
+.sbar .hired { display: block; height: 100%; background: var(--ok); border-radius: 9px; }
 </style>

@@ -15,12 +15,14 @@
     "db:migrate": "drizzle-kit migrate",
     "cf:types": "wrangler types",
     "test:pg": "TEST_PG=1 vitest run -t \"\\[race\\]\" test/*.int.test.ts",
-    "db:seed": "tsx scripts/seed-dev.mts"
+    "db:seed": "tsx scripts/seed-dev.mts",
+    "ai:smoke": "tsx --env-file=.env scripts/ai-smoke.mts"
   },
   "dependencies": {
+    "@ai-sdk/google": "^4.0.104",
     "@vue-flow/background": "^1.3.2",
     "@vue-flow/core": "^1.48.2",
-    "ai": "^7.0.143",
+    "ai": "^7.0.152",
     "better-auth": "^1.7.11",
     "drizzle-orm": "^0.45.4",
     "fflate": "^0.8.3",

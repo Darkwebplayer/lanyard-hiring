@@ -6,7 +6,7 @@ import type { Context, FormField } from '../shared/workflow/types'
 import type { Db } from '../server/db/client'
 import * as s from '../server/db/schema'
 import { createJob, publish, saveDraft } from '../server/domain/jobs'
-import { type Ai, mockAi } from '../server/engine/ai'
+import { type Ai, cloudflareAi, mockAi } from '../server/engine/ai'
 import { EmailError, type Email } from '../server/engine/email'
 import { type AutoHandlerArgs, type Enqueued, executeAutoRun, HandlerError, startApplication } from '../server/engine/engine'
 import { sha256Hex } from '../server/engine/handlers/extract'
@@ -73,6 +73,12 @@ describe('cv_parse', () => {
     const meta = await fileMeta(pdf)
     await failsWith(handlers().cv_parse!(args({ config: { file_field: 'cv' }, ctx: ctx({ form: { cv: meta } }) })), 'ai_not_configured', false)
   })
+
+  it('with AI turned off in Settings it stops without retry', async () => {
+    deps.aiEnabled = async () => false
+    const meta = await fileMeta(pdf)
+    await failsWith(handlers().cv_parse!(args({ config: { file_field: 'cv' }, ctx: ctx({ form: { cv: meta } }) })), 'ai_off', false)
+  })
 })
 
 describe('ai_review', () => {
@@ -111,7 +117,8 @@ describe('ai_review', () => {
   it('scores per criterion, overall is their mean, and the audit records model and input hash', async () => {
     const { output, input } = await handlers().ai_review!(args({ config, ctx: c, form }))
     expect(output).toMatchObject({ skills: 50, exp: 50, overall: 50 })
-    expect(input).toMatchObject({ model: 'mock', prompt_version: 'v2', input_sha256: expect.stringMatching(/^[0-9a-f]{64}$/) })
+    expect(input).toMatchObject({ model: 'mock', prompt_version: 'v3', input_sha256: expect.stringMatching(/^[0-9a-f]{64}$/), sure: { skills: 0.5, exp: 0.5 } })
+    expect(output).not.toHaveProperty('sure')
     const again = await handlers().ai_review!(args({ config, ctx: c, form }))
     expect(again.input).toEqual(input) // same input, same hash
   })
@@ -119,6 +126,81 @@ describe('ai_review', () => {
   it('provider errors propagate so the engine retries them', async () => {
     deps.ai = { ...mockAi, review: async () => { throw new Error('503') } } satisfies Ai
     await expect(handlers().ai_review!(args({ config, ctx: c, form }))).rejects.toThrow('503')
+  })
+})
+
+describe('ai_check', () => {
+  const config = {
+    questions: [
+      { key: 'weekends', label: 'Weekends', question: 'Can they work weekends?', kind: 'yes_no' },
+      { key: 'role', label: 'Role', question: 'Which role fits best?', kind: 'choice', options: [{ key: 'barista', label: 'Barista' }, { key: 'kitchen', label: 'Kitchen' }] },
+    ],
+  }
+
+  it('outputs one answer per question; the audit records model, hash and how sure', async () => {
+    const { output, input } = await handlers().ai_check!(args({ config }))
+    expect(output).toEqual({ weekends: true, role: 'barista' })
+    expect(input).toMatchObject({ model: 'mock', prompt_version: 'v3', input_sha256: expect.stringMatching(/^[0-9a-f]{64}$/), sure: { weekends: 0.5, role: 0.5 } })
+  })
+
+  it('without AI configured it fails visibly', async () => {
+    deps.ai = null
+    await failsWith(handlers().ai_check!(args({ config })), 'ai_not_configured', false)
+  })
+})
+
+describe('cloudflareAi (fake binding)', () => {
+  const input = { job: { title: 'Barista', requirements: {} }, answers: [], cv_text: 'x'.repeat(40_000) }
+  const fake = (answers: object) => {
+    const calls: { model: string, body: any }[] = []
+    return { calls, binding: { run: async (model: string, body: any) => { calls.push({ model, body }); return { answers } } } as any }
+  }
+  const failing = async () => { throw new Error('gemini 503') }
+
+  it('review: level index → 0–100, confidence → sure; a failed summary keeps the scores', async () => {
+    const { binding, calls } = fake({
+      coffee: { type: 'score', score: 2, confidence: 0.6 },
+      hygiene: { type: 'score', score: 4, confidence: 0.9 },
+    })
+    const criteria = [{ key: 'coffee', label: 'Coffee', description: 'Espresso experience' }, { key: 'hygiene', label: 'Hygiene', description: '' }]
+    expect(await cloudflareAi(binding, failing).review(input, criteria, 'Weekend cover matters'))
+      .toEqual({ scores: { coffee: 50, hygiene: 100 }, sure: { coffee: 0.6, hygiene: 0.9 }, summary: '' })
+    expect(calls[0]!.model).toBe('@cf/cloudflare/clef-flash')
+    expect(calls[0]!.body.questions.coffee).toMatchObject({ type: 'score', instructions: 'Coffee: Espresso experience\nWeekend cover matters' })
+    expect(calls[0]!.body.questions.coffee.criteria).toHaveLength(5)
+    expect(JSON.parse(calls[0]!.body.state).cv_text).toHaveLength(30_000)
+  })
+
+  it('check: noul → boolean with sure max(p, 1-p); choice → option key', async () => {
+    const { binding, calls } = fake({
+      weekends: { type: 'noul', noul: 0.3 },
+      role: { type: 'choice', choice: 'kitchen', probabilities: { barista: 0.2, kitchen: 0.8 }, confidence: 0.7 },
+    })
+    const out = await cloudflareAi(binding).check(input, [
+      { key: 'weekends', label: 'W', question: 'Weekends?', kind: 'yes_no' },
+      { key: 'role', label: 'R', question: 'Role?', kind: 'choice', options: [{ key: 'barista', label: 'Barista' }, { key: 'kitchen', label: 'Kitchen' }] },
+    ])
+    expect(out).toEqual({ answers: { weekends: false, role: 'kitchen' }, sure: { weekends: 0.7, role: 0.8 } })
+    expect(calls[0]!.body.questions.role).toEqual({ type: 'choice', instructions: 'Role?', criteria: { barista: 'Barista', kitchen: 'Kitchen' } })
+  })
+
+  it('parseCv: one Clairic call with the extra fields; values come back, null when not stated', async () => {
+    const { binding, calls } = fake({
+      current_title: { type: 'text', value: 'Barista' },
+      years_experience: { type: 'duration', value: 1.5 },
+      skills: { type: 'list', value: ['espresso'], confidence: 0.29 },
+      notice: { type: 'number', value: null, p_null: 0.9 },
+      towns: { type: 'list', value: ['Leeds'] },
+    })
+    const out = await cloudflareAi(binding).parseCv('y'.repeat(40_000), [
+      { key: 'notice', label: 'Notice period in weeks', type: 'number' },
+      { key: 'towns', label: 'Towns', type: 'list', hint: 'Where they have worked' },
+    ])
+    expect(out).toEqual({ current_title: 'Barista', years_experience: 1.5, skills: ['espresso'], notice: null, towns: ['Leeds'] })
+    expect(calls[0]!.model).toBe('@cf/cloudflare/clairic')
+    expect(calls[0]!.body.state).toHaveLength(30_000)
+    expect(calls[0]!.body.fields.towns).toEqual({ type: 'list', items: 'text', instructions: 'Towns: Where they have worked' })
+    expect(calls[0]!.body.fields.notice).toEqual({ type: 'number', instructions: 'Notice period in weeks' })
   })
 })
 

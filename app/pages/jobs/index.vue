@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { TEMPLATES } from '~~/shared/workflow/templates'
 import type { JobStatus } from '~/composables/useJob'
 
 interface JobRow {
@@ -47,7 +48,7 @@ function closes(j: JobRow) {
 
 // ---- new job ----
 const dlg = ref<HTMLDialogElement>()
-const form = reactive({ title: '', openings: 1, from: 'standard_hire' as 'standard_hire' | 'blank' | 'job' | 'preset', jobId: '', presetId: '' })
+const form = reactive({ title: '', openings: 1, from: 'template' as 'template' | 'blank' | 'job' | 'preset', templateId: 'simple', jobId: '', presetId: '' })
 const creating = ref(false)
 const createError = ref<string | null>(null)
 const presetGone = ref(false)
@@ -56,16 +57,29 @@ const { flowPresets, error: presetsError, refresh: refreshPresets } = useFlowPre
 refreshPresets()
 const counts = (p: { form: unknown[], workflow: { nodes: { type: string }[] } }) =>
   `${plural(p.workflow.nodes.filter(n => n.type !== 'application_received').length, 'step')} · ${plural(p.form.length, 'field')}`
-// one radio group: the built-ins, then each preset as preset:<id>
+// one radio group: template:<id>, blank, job, then each saved flow as preset:<id>
 const choice = computed({
-  get: () => (form.from === 'preset' ? `preset:${form.presetId}` : form.from),
-  set: (v: string) => v.startsWith('preset:') ? Object.assign(form, { from: 'preset', presetId: v.slice(7) }) : (form.from = v as typeof form.from),
+  get: () => (form.from === 'preset' ? `preset:${form.presetId}` : form.from === 'template' ? `template:${form.templateId}` : form.from),
+  set: (v: string) => v.startsWith('preset:') ? Object.assign(form, { from: 'preset', presetId: v.slice(7) })
+    : v.startsWith('template:') ? Object.assign(form, { from: 'template', templateId: v.slice(9) })
+    : (form.from = v as typeof form.from),
 })
+// the templates' stages, as the board's columns; a stage with an AI review says so
+const TEMPLATE_CARDS = TEMPLATES.map(t => ({
+  ...t,
+  stages: (t.workflow.stages ?? []).map(s => ({ name: s.name, ai: s.nodeKeys.some(k => t.workflow.nodes.find(n => n.key === k)?.type === 'ai_review') })),
+}))
+const otherOpen = ref(false)
 
-function openNew(start = 'standard') {
-  const preset = flowPresets.value?.find(p => p.id === start)
-  presetGone.value = start !== 'standard' && !preset
-  Object.assign(form, { title: '', openings: 1, from: preset ? 'preset' : 'standard_hire', presetId: preset?.id ?? '', jobId: copyable.value[0]?.id ?? '' })
+// ?new=standard (the library's Standard hire) is the AI screening template; ?new=<id> a saved flow; nothing = Simple
+function openNew(start?: string) {
+  const preset = start && start !== 'standard' ? flowPresets.value?.find(p => p.id === start) : undefined
+  presetGone.value = !!start && start !== 'standard' && !preset
+  Object.assign(form, {
+    title: '', openings: 1, from: preset ? 'preset' : 'template', templateId: start === 'standard' ? 'ai_screening' : 'simple',
+    presetId: preset?.id ?? '', jobId: copyable.value[0]?.id ?? '',
+  })
+  otherOpen.value = !!preset
   createError.value = null
   dlg.value?.showModal()
 }
@@ -79,10 +93,14 @@ async function create() {
   creating.value = true
   createError.value = null
   try {
-    const from = form.from === 'job' ? { kind: 'job', jobId: form.jobId } : form.from === 'preset' ? { kind: 'preset', presetId: form.presetId } : { kind: form.from }
+    const from = form.from === 'job' ? { kind: 'job', jobId: form.jobId }
+      : form.from === 'preset' ? { kind: 'preset', presetId: form.presetId }
+      : form.from === 'template' ? { kind: 'template', id: form.templateId }
+      : { kind: form.from }
     const { job } = await api<{ job: { id: string } }>('/api/jobs', { method: 'POST', body: { title: form.title, openings: form.openings, from } })
     dlg.value?.close()
-    await navigateTo(form.from === 'preset' ? `/jobs/${job.id}/details?check=1` : `/jobs/${job.id}/details`)
+    // straight to its stages: the flow is what they just chose; a saved flow may leave things to fix
+    await navigateTo(form.from === 'preset' ? `/jobs/${job.id}/flow?check=1` : `/jobs/${job.id}/flow`)
   }
   catch (e) { createError.value = toApiError(e).message }
   finally { creating.value = false }
@@ -156,35 +174,52 @@ async function create() {
       </div>
     </template>
 
-    <dialog ref="dlg" class="dialog" aria-labelledby="new-job-title" @click.self="dlg?.close()">
+    <dialog ref="dlg" class="dialog new-job" aria-labelledby="new-job-title" @click.self="dlg?.close()">
       <form @submit.prevent="create">
         <div class="dialog-body">
           <h2 id="new-job-title">New job</h2>
-          <div class="field">
-            <label for="nj-title">Title</label>
-            <input id="nj-title" v-model="form.title" required maxlength="200" autocomplete="off" placeholder="e.g. Senior Product Designer">
-          </div>
-          <div class="field openings">
-            <label for="nj-openings">Openings</label>
-            <input id="nj-openings" v-model.number="form.openings" type="number" min="1" max="10000" required>
+          <div class="title-row">
+            <div class="field">
+              <label for="nj-title">Job title</label>
+              <input id="nj-title" v-model="form.title" required maxlength="200" autocomplete="off" placeholder="e.g. Shop assistant">
+            </div>
+            <div class="field openings">
+              <label for="nj-openings">Openings</label>
+              <input id="nj-openings" v-model.number="form.openings" type="number" min="1" max="10000" required>
+            </div>
           </div>
           <fieldset class="field">
-            <legend class="legend">Start from</legend>
-            <p v-if="presetGone" class="gone" role="status"><Icon name="alert" :size="14" />That flow preset was deleted, so this starts from Standard hire.</p>
-            <label class="check"><input v-model="choice" type="radio" value="standard_hire"><span><b>Standard hire</b><span class="hint">CV read, AI review, shortlist, interview, offer. Already wired up.</span></span></label>
-            <label class="check"><input v-model="choice" type="radio" value="blank"><span><b>Blank flow</b><span class="hint">Only the start. You build every step.</span></span></label>
-            <div v-if="flowPresets?.length" class="presets" role="group" aria-labelledby="nj-presets">
-              <span id="nj-presets" class="eyebrow">Your flow presets</span>
-              <label v-for="p in flowPresets" :key="p.id" class="check"><input v-model="choice" type="radio" :value="`preset:${p.id}`"><span><b>{{ p.name }} <span class="n">{{ counts(p) }}</span></b><span v-if="p.description" class="hint">{{ p.description }}</span></span></label>
+            <legend class="legend">How do you want to hire?</legend>
+            <p v-if="presetGone" class="gone" role="status"><Icon name="alert" :size="14" />That saved flow was deleted, so pick another way to start.</p>
+            <div class="tpls">
+              <label v-for="t in TEMPLATE_CARDS" :key="t.id" class="tpl">
+                <input v-model="choice" type="radio" name="nj-from" :value="`template:${t.id}`">
+                <b class="tpl-name">{{ t.name }}</b>
+                <span class="tpl-desc">{{ t.description }}</span>
+                <span class="tpl-stages" :aria-label="`Stages: ${t.stages.map(s => s.name).join(', ')}`">
+                  <span v-for="s in t.stages" :key="s.name" class="chip" :class="{ 'chip-ink': s.ai }"><Icon v-if="s.ai" name="ai" />{{ s.name }}</span>
+                </span>
+              </label>
             </div>
-            <label class="check"><input v-model="choice" type="radio" value="job" :disabled="!copyable.length"><span><b>Copy another job</b><span class="hint">Its form and flow, not its candidates.</span></span></label>
-            <select v-if="form.from === 'job'" v-model="form.jobId" aria-label="Job to copy" required class="copy-from">
-              <option v-for="j in copyable" :key="j.id" :value="j.id">{{ j.title }}</option>
-            </select>
+            <details class="other" :open="otherOpen" @toggle="otherOpen = ($event.target as HTMLDetailsElement).open">
+              <summary>Other ways to start</summary>
+              <div class="other-body">
+                <label class="check"><input v-model="choice" type="radio" name="nj-from" value="blank"><span><b>Blank flow</b><span class="hint">Only the start. You build every step.</span></span></label>
+                <div v-if="flowPresets?.length" class="presets" role="group" aria-labelledby="nj-presets">
+                  <span id="nj-presets" class="eyebrow">Your saved flows</span>
+                  <label v-for="p in flowPresets" :key="p.id" class="check"><input v-model="choice" type="radio" name="nj-from" :value="`preset:${p.id}`"><span><b>{{ p.name }} <span class="n">{{ counts(p) }}</span></b><span v-if="p.description" class="hint">{{ p.description }}</span></span></label>
+                </div>
+                <label class="check"><input v-model="choice" type="radio" name="nj-from" value="job" :disabled="!copyable.length"><span><b>Copy another job</b><span class="hint">Its form and flow, not its candidates.</span></span></label>
+                <select v-if="form.from === 'job'" v-model="form.jobId" aria-label="Job to copy" required class="copy-from">
+                  <option v-for="j in copyable" :key="j.id" :value="j.id">{{ j.title }}</option>
+                </select>
+              </div>
+            </details>
           </fieldset>
           <p v-if="createError" class="form-error" role="alert"><Icon name="alert" />{{ createError }}</p>
         </div>
         <div class="dialog-foot">
+          <span class="foot-note">You can change any stage later.</span>
           <button type="button" class="btn btn-quiet" @click="dlg?.close()">Cancel</button>
           <button class="btn btn-primary" :aria-busy="creating" :disabled="creating"><span v-if="creating" class="spinner" />Create job</button>
         </div>
@@ -207,10 +242,30 @@ async function create() {
 .sk-row:last-child { border-bottom: 0; }
 .sk-row .skeleton { height: 14px; }
 .form-error .btn { margin-left: auto; }
+dialog.new-job { width: min(760px, calc(100vw - 32px)); }
+.new-job form { display: flex; flex-direction: column; max-height: calc(100dvh - 48px); }
+.new-job .dialog-body { overflow-y: auto; }
+.title-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; }
 .openings input { width: 120px; }
+.tpls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.tpl {
+  position: relative; display: grid; gap: 4px; align-content: start; padding: 14px 16px; border-radius: var(--r-panel);
+  border: 1px solid var(--line); background: var(--surface); cursor: pointer; transition: border-color var(--t-micro) var(--ease), box-shadow var(--t-micro) var(--ease);
+}
+.tpl:hover { border-color: var(--line-2); }
+.tpl input { position: absolute; opacity: 0; inset: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.tpl:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-tint); }
+.tpl:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tpl-name { font-size: var(--t-lg); font-weight: 600; }
+.tpl-desc { font-size: var(--t-sm); color: var(--ink-2); }
+.tpl-stages { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.other summary { cursor: pointer; font-size: var(--t-sm); font-weight: 600; color: var(--ink-2); padding: 4px 0; }
+.other-body { display: grid; gap: 10px; padding-top: 8px; }
+.foot-note { margin-right: auto; align-self: center; font-size: var(--t-sm); color: var(--ink-2); }
+@media (prefers-reduced-motion: reduce) { .tpl { transition: none; } }
 fieldset.field { gap: 10px; }
 /* radios read as choices, not as field labels (the global .field > label rule), same as the grouped presets */
-.field > .check { font-weight: 400; font-size: var(--t-md); }
+.field .check { font-weight: 400; font-size: var(--t-md); }
 .check > span { display: grid; gap: 1px; }
 .check b { font-weight: 600; }
 .check b .n { margin-left: 4px; font-weight: 400; font-size: var(--t-sm); color: var(--ink-2); }

@@ -9,7 +9,8 @@ export type AppEnv = Env & {
   GOOGLE_CLIENT_SECRET: string
   TURNSTILE_SECRET: string
   DISABLED_NODE_TYPES?: string
-  AI_MODEL?: string // gateway model id, e.g. anthropic/claude-sonnet-5-5
-  AI_GATEWAY_API_KEY?: string
+  GEMINI_API_KEY?: string
+  GEMINI_MODEL?: string // flow drafts; default gemini-3.5-flash (3.8 was valid too, but took ~110 s a draft)
+  GEMINI_FAST_MODEL?: string // summaries and Ask; default gemini-3.5-flash
   AI_MOCK?: string // '1' = deterministic mock AI (dev only)
 }

@@ -8,6 +8,8 @@
   "observability": { "enabled": true },
   // ids are placeholders until the resources exist (wrangler hyperdrive create / queues create / r2 bucket create)
   "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "00000000000000000000000000000000" }],
+  // Workers AI (Clairic, Clef). Always runs on Cloudflare, so `nuxt dev` needs `wrangler login`.
+  "ai": { "binding": "AI", "remote": true },
   "r2_buckets": [{ "binding": "CV_BUCKET", "bucket_name": "hiring-app-cvs" }],
   "queues": {
     "producers": [{ "binding": "ENGINE", "queue": "hiring-app-engine" }],

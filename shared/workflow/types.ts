@@ -42,6 +42,7 @@ export interface Stage {
   id: string
   name: string
   nodeKeys: string[]
+  ask?: FormField[] // asked in the move dialog when someone is moved into this stage by hand; answers go on the move event
 }
 
 export interface Graph {

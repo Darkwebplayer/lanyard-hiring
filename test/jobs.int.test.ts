@@ -67,6 +67,11 @@ describe('jobs and versions', () => {
     expect((frozen!.workflow as Graph).nodes.find(n => n.key === 'offer_email')!.config).toMatchObject({ subject: 'Your offer for {{job.title}}' })
   })
 
+  it.each(['simple', 'high_volume', 'panel'] as const)('a new job from the %s template validates as is', async (id) => {
+    const { job } = await createJob(db, ownerId, input, { kind: 'template', id })
+    expect(await validateDraft(db, job.id, ADMIN)).toEqual([])
+  })
+
   it('an invalid draft is kept, and publish returns its issues', async () => {
     const { job } = await createJob(db, ownerId, input, { kind: 'blank' })
     const e = await rejects(publish(db, job.id, ADMIN), 422, 'invalid_version')
