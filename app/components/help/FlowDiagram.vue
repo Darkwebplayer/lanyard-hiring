@@ -33,7 +33,7 @@ const label = computed(() => props.stages.length
 .lane { position: relative; display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 4px; }
 .col {
   display: grid; justify-items: center; gap: 2px; padding: 8px 2px; border-radius: var(--r-field); background: var(--sunk);
-  color: var(--ink-2); font-size: 11px; font-weight: 600; letter-spacing: -0.01em; text-align: center; overflow-wrap: anywhere;
+  color: var(--ink-2); font-size: 11px; font-weight: 600; letter-spacing: -0.01em; text-align: center; overflow-wrap: break-word; hyphens: auto; /* five columns: "Inter-view", not "Intervie w" */
   animation: lit var(--cycle) var(--ease) infinite; animation-delay: calc(var(--i) * var(--slot));
 }
 .ai { padding: 0 5px; border-radius: var(--r-pill); background: var(--machine); color: #fff; font-size: 10px; line-height: 15px; }

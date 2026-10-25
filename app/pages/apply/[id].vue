@@ -55,10 +55,10 @@ watch(step, async () => {
 })
 
 const CORE = [
-  { key: 'first_name', label: 'First name', required: true, auto: 'given-name', type: 'text' },
-  { key: 'last_name', label: 'Last name', required: true, auto: 'family-name', type: 'text' },
-  { key: 'email', label: 'Email', required: true, auto: 'email', type: 'email' },
-  { key: 'phone', label: 'Phone', required: false, auto: 'tel', type: 'tel' },
+  { key: 'first_name', label: 'First name', required: true, auto: 'given-name', type: 'text', ph: 'e.g. Wei Ming' },
+  { key: 'last_name', label: 'Last name', required: true, auto: 'family-name', type: 'text', ph: 'e.g. Tan' },
+  { key: 'email', label: 'Email', required: true, auto: 'email', type: 'email', ph: 'e.g. weiming.tan@gmail.com' },
+  { key: 'phone', label: 'Phone', required: false, auto: 'tel', type: 'tel', ph: 'e.g. 9123 4567' },
 ]
 
 // Mark whichever is the minority: "Optional" when most fields are required, else "Required".
@@ -248,6 +248,7 @@ function focusFirst() {
     <div v-if="loadError?.code === 'job_not_open'" class="ending">
       <h1>This job isn’t taking applications any more.</h1>
       <p class="muted">It may have been filled, or the closing date has passed.</p>
+      <NuxtLink to="/careers" class="btn">See the jobs that are open</NuxtLink>
     </div>
 
     <div v-else-if="loadError" class="ending" role="alert">
@@ -301,7 +302,7 @@ function focusFirst() {
             <label :for="`f-${c.key}`">{{ c.label }} <span v-if="mark(c)" class="mark">{{ mark(c) }}</span></label>
             <input
               :id="`f-${c.key}`" :name="c.key" :type="c.type" :autocomplete="c.auto" :required="c.required"
-              :inputmode="c.type === 'tel' ? 'tel' : undefined" maxlength="100"
+              :inputmode="c.type === 'tel' ? 'tel' : undefined" maxlength="100" :placeholder="c.ph"
               :aria-invalid="errors[c.key] ? 'true' : undefined" :aria-describedby="errors[c.key] ? `e-${c.key}` : undefined"
               @input="clear(c.key)"
             >
@@ -333,17 +334,7 @@ function focusFirst() {
 
           <fieldset v-else-if="f.type === 'list'" class="field">
             <legend class="legend">{{ f.label }} <span v-if="mark(f)" class="mark">{{ mark(f) }}</span></legend>
-            <div class="list">
-              <div v-for="(_, i) in lists[f.key]" :key="i" class="item">
-                <input
-                  v-model="lists[f.key]![i]" :id="i === 0 ? `f-${f.key}` : undefined" :name="f.key" :aria-label="`${f.label}, item ${i + 1}`"
-                  :required="f.required && i === 0" maxlength="200" :aria-invalid="errors[f.key] && i === 0 ? 'true' : undefined"
-                  @input="clear(f.key)"
-                >
-                <button v-if="i > 0" type="button" class="btn btn-quiet btn-icon" :aria-label="`Remove item ${i + 1}`" @click="lists[f.key]!.splice(i, 1)"><Icon name="x" /></button>
-              </div>
-            </div>
-            <button v-if="(lists[f.key]?.length ?? 0) < (f.max ?? 50)" type="button" class="btn btn-sm add" @click="lists[f.key]!.push('')"><Icon name="plus" />Add another</button>
+            <ListInput v-model="lists[f.key]!" :id="`f-${f.key}`" :name="f.key" :label="f.label" :max="f.max" :required="f.required" :invalid="!!errors[f.key]" @input="clear(f.key)" />
             <p v-if="errors[f.key]" class="error">{{ errors[f.key] }}</p>
           </fieldset>
 
@@ -458,11 +449,9 @@ h1:focus { outline: none; }
 @media (max-width: 420px) { .names { grid-template-columns: 1fr; } }
 .mark { font-weight: 400; color: var(--ink-2); margin-left: 4px; font-size: var(--t-sm); }
 .legend { margin-bottom: 8px; padding: 0; }
-.radios, .list { display: grid; gap: 10px; }
+.radios { display: grid; gap: 10px; }
 .radios .check { min-height: 28px; align-items: center; }
 .radios .check input { margin-top: 0; }
-.item { display: flex; gap: 6px; }
-.add { justify-self: start; margin-top: 8px; }
 .hint.warn { color: var(--warn); }
 .turnstile { min-height: 65px; }
 .send { width: 100%; }

@@ -20,7 +20,7 @@ describe('step presets', () => {
   it('a new company starts with the built-ins, ordered per section', async () => {
     const all = await listPresets(db)
     expect(all.map(p => p.label)).toEqual(expect.arrayContaining(BUILTIN_PRESETS.map(p => p.label)))
-    expect(all.filter(p => p.type === 'human_task').map(p => [p.label, p.position])).toEqual([['Interview', 0], ['Technical assessment review', 1], ['HR approval', 2]])
+    expect(all.filter(p => p.type === 'human_task').map(p => [p.label, p.position])).toEqual([['Interview', 0], ['Technical assessment review', 1], ['HR approval', 2], ['Make offer', 3]])
     expect(all.every(p => p.inPalette)).toBe(true)
   })
 

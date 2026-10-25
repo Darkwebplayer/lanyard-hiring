@@ -13,6 +13,7 @@ const body = z.object({
   reason: z.string().trim().max(1000).optional(),
   reasonCode: z.string().trim().max(60).optional(),
   answers: z.record(z.string(), z.unknown()).optional(),
+  notify: z.boolean().optional(), // closing as rejected: also send each the rejection email
   ids: z.array(z.uuid()).min(1).max(25).optional(),
   except: z.array(z.uuid()).max(200).optional(), // a group move leaves out the people pulled out on their own
   dryRun: z.boolean().optional(),

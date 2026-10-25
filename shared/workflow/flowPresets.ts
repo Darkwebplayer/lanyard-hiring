@@ -9,7 +9,7 @@ const assigneesOf = (n: GraphNode) => (n.config as { assignees?: Assignees } | n
 
 // Person steps assigned to named people: those people may not exist, or fit, in the next job.
 export const namedPeople = (workflow: Graph) =>
-  workflow.nodes.filter(n => n.type === 'human_task' && (assigneesOf(n)?.users?.length ?? 0) > 0)
+  workflow.nodes.filter(n => (n.type === 'human_task' || n.type === 'request_documents') && (assigneesOf(n)?.users?.length ?? 0) > 0)
 
 // Named people become "the job owner"; roles stay (they're company-wide); steps without named people are untouched.
 export function withoutNamedPeople(workflow: Graph): Graph {

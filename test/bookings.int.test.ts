@@ -118,7 +118,7 @@ describe('booking an interview', () => {
     expect(b.durationMin).toBe(60)
     expect(await publicBooking(db, b.token, t)).toEqual({
       companyName: 'Acme, Inc.', jobTitle: 'Engineer; Backend', candidateFirstName: 'Jane', interviewers: ['Olivia Owner'],
-      durationMin: 60, timezoneHint: null, startsAt: null, canBook: true, noAvailability: true, slots: [],
+      durationMin: 60, location: null, cancelled: false, timezoneHint: null, startsAt: null, canBook: true, noAvailability: true, slots: [],
     })
   })
 
@@ -129,10 +129,10 @@ describe('booking an interview', () => {
     expect(view).toMatchObject({ timezoneHint: 'UTC', noAvailability: false })
     expect(view.slots[0]).toBe('2026-10-21T09:00:00.000Z') // Tuesday 20th is inside the 12 h notice
 
-    expect(await book(db, first.token, new Date('2026-10-21T10:00:00Z'), t)).toEqual({ startsAt: new Date('2026-10-21T10:00:00Z') })
+    expect(await book(db, first.token, new Date('2026-10-21T10:00:00Z'), t)).toEqual({ startsAt: new Date('2026-10-21T10:00:00Z'), applicationId: first.applicationId })
     const [ev] = await db.select().from(s.applicationEvents).where(and(eq(s.applicationEvents.applicationId, first.applicationId), eq(s.applicationEvents.type, 'booked')))
     expect(ev!.data).toEqual({ runId: first.runId, startsAt: '2026-10-21T10:00:00.000Z', previous: null })
-    expect((await getTask(db, { userId: 'owner', level: 'manager' }, first.runId, t)).booking).toEqual({ startsAt: new Date('2026-10-21T10:00:00Z') })
+    expect((await getTask(db, { userId: 'owner', level: 'manager' }, first.runId, t)).booking).toEqual({ startsAt: new Date('2026-10-21T10:00:00Z'), cancelledAt: null })
 
     const second = await interview()
     const offered = (await publicBooking(db, second.token, t)).slots
@@ -144,6 +144,9 @@ describe('booking an interview', () => {
 
     await book(db, first.token, new Date('2026-10-21T13:00:00Z'), t) // rebook
     expect((await publicBooking(db, second.token, t)).slots).toContain('2026-10-21T10:00:00.000Z')
+    await book(db, first.token, new Date('2026-10-21T10:00:00Z'), t) // and back: still confirmed
+    const confirms = await db.select().from(s.candidateEmails).where(and(eq(s.candidateEmails.applicationId, first.applicationId), eq(s.candidateEmails.kind, 'booked')))
+    expect(confirms).toHaveLength(3)
     await rejects(book(db, first.token, new Date('2026-10-22T13:00:00Z'), new Date('2026-10-21T02:00:00Z')), 409, 'too_late_to_change')
   })
 
@@ -165,7 +168,7 @@ describe('booking an interview', () => {
 
   it('the run booking is for managers and assignees only', async () => {
     const b = await interview()
-    expect(await runBooking(db, { userId: 'owner', level: 'manager' }, b.runId)).toEqual({ token: b.token, durationMin: 60, startsAt: null })
+    expect(await runBooking(db, { userId: 'owner', level: 'manager' }, b.runId)).toEqual({ token: b.token, durationMin: 60, startsAt: null, location: null, cancelledAt: null })
     await rejects(runBooking(db, { userId: 'other', level: 'employee' }, b.runId), 404, 'booking_not_found')
     await rejects(bookingIcs(db, b.token, t), 404, 'booking_not_found') // nothing picked yet
   })
@@ -191,5 +194,24 @@ describe('booking an interview', () => {
     await db.update(s.settings).set({ companyName: 'Acme, Inc.' })
     expect(long.split('\r\n').every(l => new TextEncoder().encode(l).length <= 75)).toBe(true) // folded
     expect(long.replace(/\r\n /g, '')).toContain(`DESCRIPTION:${'é'.repeat(100)}\\nWith Olivia Owner`)
+  })
+
+  it('emails the link when the step starts, then "You’re booked" in their zone with where, which the .ics carries too', async () => {
+    const b = await interview()
+    const mails = () => db.select().from(s.candidateEmails).where(eq(s.candidateEmails.applicationId, b.applicationId)).orderBy(s.candidateEmails.seq)
+    const [ask] = await mails()
+    expect(ask).toMatchObject({ kind: 'booking_request', key: `booking:${b.id}`, to: expect.stringMatching(/@example\.test$/), subject: 'Pick a time for your interview', sentAt: null })
+    expect(ask!.body).toContain(`/book/${b.token}`)
+    expect(ask!.body).toContain('a 60-minute slot with Olivia Owner')
+
+    await db.update(s.bookings).set({ location: 'Tuas warehouse, 12 Tuas Ave 3' }).where(eq(s.bookings.id, b.id))
+    await book(db, b.token, new Date('2026-10-28T09:00:00Z'), t, 'Asia/Singapore', 'https://hire.example')
+    const booked = (await mails())[1]!
+    expect(booked).toMatchObject({ kind: 'booked', subject: 'You’re booked: Wed, 28 Oct, 5:00 pm SGT' })
+    expect(booked.body).toContain('is on Wednesday 28 October, 5:00 – 6:00 pm (Singapore Standard Time).')
+    expect(booked.body).toContain('Where: Tuas warehouse, 12 Tuas Ave 3')
+    expect(booked.body).toContain(`https://hire.example/book/${b.token}`)
+    expect((await bookingIcs(db, b.token, t)).split('\r\n')).toContain('LOCATION:Tuas warehouse\\, 12 Tuas Ave 3')
+    expect(await publicBooking(db, b.token, t)).toMatchObject({ location: 'Tuas warehouse, 12 Tuas Ave 3', cancelled: false })
   })
 })

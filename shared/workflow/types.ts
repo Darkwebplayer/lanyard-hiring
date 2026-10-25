@@ -10,6 +10,7 @@ export interface Field {
   options?: string[] // enum
   protected?: boolean // never sent to AI
   nodeType?: string // for nodes.* fields: the type of the node that produced it
+  rule?: false // not offered in the rule picker
 }
 
 export interface FormField {
@@ -54,6 +55,7 @@ export interface Graph {
 // The job fields every workflow can read as job.*
 export interface JobContext {
   title: string
+  description?: string // the job ad (Markdown); for the AI, not a field flows read
   min_experience_years?: number
   must_have_skills?: string[]
   salary_min?: number

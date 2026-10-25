@@ -10,14 +10,15 @@ export const requirementsSchema = z.object({
   location: z.string().trim().max(200).optional(),
   employment_type: z.string().trim().max(50).optional(),
   workplace_type: z.enum(['on_site', 'hybrid', 'remote']).optional(),
-  salary_currency: z.string().trim().regex(/^[A-Z]{3}$/, 'a three-letter currency code, e.g. EUR').optional(),
+  salary_currency: z.string().trim().regex(/^[A-Z]{3}$/, 'a three-letter currency code, e.g. SGD').optional(),
   show_salary: z.boolean().optional(), // salary stays internal unless this is on
 }).strict().refine(r => r.salary_min === undefined || r.salary_max === undefined || r.salary_min <= r.salary_max, 'salary_min > salary_max')
 
 export type Requirements = z.infer<typeof requirementsSchema>
 
-export const jobContext = (job: { title: string, openings: number, requirements: unknown }): JobContext => ({
+export const jobContext = (job: { title: string, openings: number, requirements: unknown, description?: string }): JobContext => ({
   title: job.title,
+  ...(job.description?.trim() && { description: job.description }),
   openings: job.openings,
   ...(job.requirements as Requirements),
 })

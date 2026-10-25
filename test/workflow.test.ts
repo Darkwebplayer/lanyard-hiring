@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { jobFieldsRead, namedPeople, withoutNamedPeople } from '../shared/workflow/flowPresets'
 import { answersSchema, validateForm } from '../shared/workflow/form'
-import { fieldsAvailableAt, validateGraph, validateVersion } from '../shared/workflow/graph'
+import { aiWarnings, fieldsAvailableAt, validateGraph, validateVersion } from '../shared/workflow/graph'
 import { aggregateScorecard, normalizeOutput, REGISTRY, runSetVariable, scorecardSchema } from '../shared/workflow/registry'
 import { checkRule, evaluate, pickBranch, type Rule } from '../shared/workflow/rules'
 import { MissingRefError, render } from '../shared/workflow/template'
-import { STANDARD_HIRE } from '../shared/workflow/templates'
+import { STANDARD_HIRE, TEMPLATES } from '../shared/workflow/templates'
 import type { Field, Graph } from '../shared/workflow/types'
 
 const ctx = {
@@ -216,8 +216,8 @@ describe('graph validation', () => {
 
   it('no cycles, everything reachable', () => {
     expect(issuesFor(g => {
-      g.edges = g.edges.filter(e => !(e.from === 'offer_email'))
-      g.edges.push({ from: 'offer_email', to: 'interview' })
+      g.edges = g.edges.filter(e => !(e.from === 'make_offer'))
+      g.edges.push({ from: 'make_offer', to: 'interview' })
     })).toContain('cycle')
     expect(issuesFor(g => g.nodes.push({ key: 'orphan', type: 'end', config: { outcome: 'withdrawn' } }))).toContain('unreachable')
   })
@@ -227,9 +227,9 @@ describe('graph validation', () => {
     expect(issuesFor(g => {
       (node(g, 'rejection_email').config as any).body = 'Score {{nodes.interview.technical}}'
     })).toContain('unknown_ref')
-    // but fine for the offer email, which always comes after the interview
+    // but fine for Make offer, which always comes after the interview
     expect(issuesFor(g => {
-      (node(g, 'offer_email').config as any).body = 'Score {{nodes.interview.technical}}'
+      (node(g, 'make_offer').config as any).instructions = 'Score {{nodes.interview.technical}}'
     })).toEqual([])
     // cv_parse must point at a file field
     expect(issuesFor(g => { (node(g, 'cv').config as any).file_field = 'linkedin' })).toContain('type_mismatch')
@@ -382,8 +382,8 @@ describe('review regressions', () => {
   })
 
   it('templates: bad tags and file refs are caught', () => {
-    expect(issuesFor(g => { (node(g, 'offer_email').config as any).body = 'Hi {{Candidate.first_name}}' })).toEqual(['bad_tag'])
-    expect(issuesFor(g => { (node(g, 'offer_email').config as any).body = 'Your cv {{form.cv}}' })).toEqual(['type_mismatch'])
+    expect(issuesFor(g => { (node(g, 'rejection_email').config as any).body = 'Hi {{Candidate.first_name}}' })).toEqual(['bad_tag'])
+    expect(issuesFor(g => { (node(g, 'rejection_email').config as any).body = 'Your cv {{form.cv}}' })).toEqual(['type_mismatch'])
   })
 
   it('handler outputs are normalized to declared types', () => {
@@ -417,5 +417,22 @@ describe('flow preset leftovers', () => {
     expect((out.nodes.find(n => n.key === 'interview')!.config as any).assignees).toEqual({ users: [], roles: ['r1'], job_owner: true })
     expect((out.nodes.find(n => n.key === review.key)!.config as any).assignees).toEqual({ users: [], roles: ['r2'], job_owner: false })
     expect(namedPeople(g)).toHaveLength(1) // the input is untouched
+  })
+})
+
+describe('aiWarnings', () => {
+  const t = TEMPLATES.find(x => x.workflow.nodes.some(n => n.type === 'ai_review'))!
+  const codes = (g: Graph, form = t.form, req: object | null = { must_have_skills: ['Forklift'] }) => aiWarnings(g, form, req).map(i => i.code)
+  it('is quiet for an AI review with a CV and something to score against', () => {
+    expect(codes(t.workflow)).toEqual([])
+    expect(codes(t.workflow, t.form, { min_experience_years: 0 })).toEqual([])
+  })
+  it('warns when the AI has no CV, nothing at all to read, or no requirements', () => {
+    const g = structuredClone(t.workflow)
+    delete (g.nodes.find(n => n.type === 'ai_review')!.config as any).cv_text_ref
+    expect(codes(g, t.form, {})).toEqual(['ai_no_cv', 'ai_no_requirements'])
+    const chk: Graph = { ...g, nodes: [...g.nodes, { key: 'chk', type: 'ai_check', config: { questions: [] } }] }
+    expect(codes(chk, [{ key: 'cv', label: 'CV', type: 'file', required: true }])).toEqual(['ai_no_cv', 'ai_nothing_to_read'])
+    expect(codes(chk)).toEqual(['ai_no_cv'])
   })
 })

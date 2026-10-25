@@ -8,7 +8,8 @@ const props = defineProps<{ fields: Field[], graph: Graph, readOnly?: boolean }>
 const rule = defineModel<Rule>({ required: true })
 
 const byPath = computed(() => new Map(props.fields.map(f => [f.path, f])))
-const groups = computed(() => groupFields(props.fields, props.graph))
+// engine blobs stay out of the picker, unless a rule already uses one (it still shows, so nothing changes quietly)
+const groups = computed(() => groupFields(props.fields.filter(f => f.rule !== false || items.value.some(c => c.ref === f.path)), props.graph))
 const { show: showHelp } = useHelp()
 
 const mode = computed<'one' | 'all' | 'any' | 'deep'>(() => {

@@ -19,6 +19,13 @@ export function fmtDateTime(iso: string | Date | null | undefined) {
   return `${fmtDate(iso)}, ${time.format(new Date(iso))}`
 }
 
+// A booked interview: "Tue 27 Oct, 2:00 pm GMT+8". With the zone, because the candidate picked it in theirs.
+const booked = new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
+const bookedLong = new Intl.DateTimeFormat(undefined, { weekday: 'long', day: 'numeric', month: 'long', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
+export function fmtBooked(iso: string | Date | null | undefined, long = false) {
+  return iso ? (long ? bookedLong : booked).format(new Date(iso)) : ''
+}
+
 // Due dates as people say them: "Due today", "Due Thu", "2 days late"
 export function fmtDue(iso: string | null | undefined, now = new Date()) {
   if (!iso) return { text: 'No due date', late: false, soon: false }
@@ -54,3 +61,6 @@ export const fullName = (c: { firstName: string, lastName: string }) => `${c.fir
 export const pct = (x: number) => `${Math.round(x * 100)}%`
 
 export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
+
+// A ListInput's items as sent: trimmed, blanks dropped.
+export const listItems = (v: unknown) => Array.isArray(v) ? v.map(x => String(x).trim()).filter(Boolean) : []

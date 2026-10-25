@@ -89,6 +89,7 @@ export function summaryOf(n: GraphNode, form: FormField[], roles: Role[]): strin
       ].filter(Boolean).join(' · ')
     }
     case 'send_email': return c.subject ? `“${c.subject}”` : 'No subject yet'
+    case 'request_documents': return plural(c.documents?.length ?? 0, 'document')
     case 'set_variable': return `${plural(c.fields?.length ?? 0, 'value')}${c.fields?.length ? `: ${c.fields.map((f: any) => f.key).join(', ')}` : ''}`
     case 'end': return `Closes the application as ${c.outcome === 'hired' ? 'hired' : c.outcome === 'withdrawn' ? 'withdrawn' : 'rejected'}`
   }
@@ -209,7 +210,7 @@ export interface PaletteItem { id: string, type: string, label: string, icon: st
 
 const BLANK_LABEL: Record<string, string> = {
   cv_parse: 'Read CV', ai_review: 'AI review', ai_check: 'Check answers', send_email: 'Email', condition: 'Decision', set_variable: 'Set values',
-  human_task: 'Custom person step', end: 'Ending',
+  human_task: 'Custom person step', request_documents: 'Request documents', end: 'Ending',
 }
 // The blank step's name inside a sentence: "an email", "an AI review", "a read CV" (acronyms keep their capitals)
 export const blankNoun = (type: string) => {
@@ -231,7 +232,7 @@ export function buildPalette(presets: Preset[]) {
   }))
 }
 
-const BASE_KEY: Record<string, string> = { cv_parse: 'read_cv', ai_review: 'ai_review', ai_check: 'check', send_email: 'email', condition: 'decision', set_variable: 'values', human_task: 'person_step', end: 'end' }
+const BASE_KEY: Record<string, string> = { cv_parse: 'read_cv', ai_review: 'ai_review', ai_check: 'check', send_email: 'email', condition: 'decision', set_variable: 'values', human_task: 'person_step', request_documents: 'documents', end: 'end' }
 
 // A blank step's settings, passing validation where that's possible.
 export function blankConfig(type: string, g: Graph, form: FormField[]): unknown {
@@ -257,6 +258,15 @@ export function blankConfig(type: string, g: Graph, form: FormField[]): unknown 
       min_submissions: 1,
       due_days: 3,
     } satisfies HumanTaskConfig,
+    request_documents: {
+      documents: [
+        { label: 'NRIC or work pass (both sides)', required: true },
+        { label: 'Bank account details', required: true },
+        { label: 'Certificates', required: false },
+      ],
+      assignees: { users: [], roles: [], job_owner: true },
+      due_days: 7,
+    },
   }
   return config[type]
 }
@@ -359,4 +369,38 @@ export function removeBlocker(g: Graph, key: string): string {
   return reader
     ? `“${titleOf(reader)}” uses its answers, so it can’t go. Change that step first.`
     : 'It has more than one way in or out. Remove it on the canvas.'
+}
+
+// Who reaches a person step when a decision sends only some people there, in words ("Only AI review: Overall
+// score 40–69"); null when everyone who gets this far does. `fields` = what the decision can read.
+// ponytail: only looks at a single decision right before the step; anything else reads as "everyone".
+export function onlySome(g: Graph, key: string, fields: Field[]): string | null {
+  const ins = g.edges.filter(e => e.to === key)
+  const c = g.nodes.find(n => n.key === ins[0]?.from)
+  if (!c || c.type !== 'condition' || ins.some(e => e.from !== c.key || !e.branch)) return null
+  const cfg = c.config as ConditionConfig
+  const leads = new Set(ins.map(e => e.branch!))
+  const all = conditionBranchKeys(cfg)
+  if (all.every(b => leads.has(b))) return null
+  const missing = leads.has('missing') ? ' or no answer' : ''
+  const picked = cfg.branches.filter(b => leads.has(b.key))
+  if (!leads.has('default')) return picked.length ? `Only ${picked.map(b => ruleWords(b.rule, fields)).join(' or ')}${missing}` : 'Only some people, see the rule'
+  // "Otherwise": a number range is what's left between the other branches' bounds (whole numbers, like scores)
+  const others = cfg.branches.filter(b => !leads.has(b.key)).map(b => b.rule)
+  const first = others[0]
+  const ref = first && isComparison(first) ? first.ref : null
+  let lo: number | undefined, hi: number | undefined
+  for (const r of others) {
+    if (!isComparison(r) || r.ref !== ref || typeof r.value !== 'number' || picked.length) return 'Only some people, see the rule'
+    const v = r.value
+    if (r.op === 'lt') lo = Math.max(lo ?? v, v)
+    else if (r.op === 'lte') lo = Math.max(lo ?? v + 1, v + 1)
+    else if (r.op === 'gte') hi = Math.min(hi ?? v - 1, v - 1)
+    else if (r.op === 'gt') hi = Math.min(hi ?? v, v)
+    else return 'Only some people, see the rule'
+  }
+  const f = fields.find(x => x.path === ref)
+  if (!f || (lo === undefined && hi === undefined)) return 'Only some people, see the rule'
+  const range = lo !== undefined && hi !== undefined ? `${lo}–${hi}` : lo !== undefined ? `${lo} or more` : `up to ${hi}`
+  return `Only ${f.label.replace(/ \(0–100\)$/, '')} ${range}${missing.replace('answer', 'score')}`
 }

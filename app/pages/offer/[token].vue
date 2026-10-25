@@ -52,6 +52,8 @@ const declining = ref(false)
 const declineH = ref<HTMLElement>()
 const declineBtn = ref<HTMLButtonElement>()
 const justNow = ref(false)
+const reason = ref('') // why they decline: optional, one of DECLINE_REASONS or their own words under "Other"
+const otherReason = ref('')
 
 async function startDecline() {
   declining.value = true
@@ -65,7 +67,7 @@ async function keep() {
   declineBtn.value?.focus()
 }
 
-async function respond(body: { action: 'accept', signedName: string } | { action: 'decline' }) {
+async function respond(body: { action: 'accept', signedName: string } | { action: 'decline', reason?: string }) {
   busy.value = body.action
   nameError.value = ''
   formError.value = ''
@@ -154,7 +156,7 @@ const print = () => window.print()
           <div class="field">
             <label for="sig">Type your full name to sign</label>
             <input
-              id="sig" v-model="name" class="sig" autocomplete="name" required maxlength="300"
+              id="sig" v-model="name" class="sig" autocomplete="name" required maxlength="300" placeholder="e.g. Nurul Aisyah binte Ahmad"
               :aria-invalid="nameError ? 'true' : undefined" :aria-describedby="nameError ? 'sig-e' : undefined" @input="nameError = ''"
             >
             <p v-if="nameError" id="sig-e" class="error"><Icon name="alert" :size="16" />{{ nameError }}</p>
@@ -173,9 +175,17 @@ const print = () => window.print()
         <div v-else class="decline">
           <h2 ref="declineH" tabindex="-1">Decline this offer?</h2>
           <p class="muted">{{ offer.company ?? 'The team' }} will be told, and you won’t be able to accept it from this page afterwards.</p>
+          <div class="field">
+            <label for="why">Would you tell us why? <span class="muted">Optional</span></label>
+            <select id="why" v-model="reason">
+              <option value="">I’d rather not say</option>
+              <option v-for="r in DECLINE_REASONS" :key="r" :value="r">{{ r }}</option>
+            </select>
+            <input v-if="reason === 'Other'" v-model="otherReason" maxlength="200" aria-label="Your reason" placeholder="In a few words">
+          </div>
           <p v-if="formError" class="form-error" role="alert"><Icon name="alert" :size="16" />{{ formError }}</p>
           <div class="row">
-            <button type="button" class="btn btn-danger btn-lg" :aria-busy="busy === 'decline'" :disabled="!!busy" @click="respond({ action: 'decline' })">
+            <button type="button" class="btn btn-danger btn-lg" :aria-busy="busy === 'decline'" :disabled="!!busy" @click="respond({ action: 'decline', ...((reason === 'Other' ? otherReason.trim() : reason) && { reason: reason === 'Other' ? otherReason.trim() : reason }) })">
               <span v-if="busy === 'decline'" class="spinner" /><span>Decline offer</span>
             </button>
             <button type="button" class="btn btn-lg" @click="keep">Keep the offer</button>

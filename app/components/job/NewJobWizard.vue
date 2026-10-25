@@ -12,7 +12,7 @@ type From = 'template' | 'blank' | 'job' | 'preset' | 'describe'
 const empty = () => ({
   title: '', openings: 1 as number | '', from: 'template' as From, templateId: 'simple', jobId: '', presetId: '', describe: '',
   description: '', workplace: '' as '' | 'on_site' | 'hybrid' | 'remote', location: '', closesAt: '',
-  salaryMin: '' as number | '', salaryMax: '' as number | '', currency: 'EUR', showSalary: false,
+  salaryMin: '' as number | '', salaryMax: '' as number | '', currency: 'SGD', showSalary: false,
   skills: [] as string[], minYears: '' as number | '',
 })
 const form = reactive(empty())
@@ -67,13 +67,13 @@ const chosen = computed(() => {
     const j = props.jobs.find(j => j.id === form.jobId)
     return { name: `A copy of ${j?.title ?? 'another job'}`, stages: [], story: 'Its form and stages come across. Its candidates don’t.', ai: false, aiLine: undefined }
   }
-  return { name: 'Blank flow', stages: [], story: 'Only Applied to start. You add every step on the Stages tab.', ai: false, aiLine: undefined }
+  return { name: 'Start blank', stages: [], story: 'Only Applied to start. You add every step on the Stages tab.', ai: false, aiLine: undefined }
 })
 
 // ---- about the job and must-haves (same shapes and checks as the Details tab) ----
 const WORKPLACES = [{ value: 'on_site', label: 'On-site' }, { value: 'hybrid', label: 'Hybrid' }, { value: 'remote', label: 'Remote' }] as const
 const salaryError = computed(() => form.salaryMin !== '' && form.salaryMax !== '' && form.salaryMin > form.salaryMax ? 'The minimum is higher than the maximum.' : null)
-const currency = computed(() => form.currency.trim().toUpperCase() || 'EUR')
+const currency = computed(() => form.currency.trim().toUpperCase() || 'SGD')
 const salary = computed(() => salaryText({
   min: form.salaryMin === '' ? null : form.salaryMin, max: form.salaryMax === '' ? null : form.salaryMax,
   currency: /^[A-Z]{3}$/.test(currency.value) ? currency.value : null, // Intl throws on a half-typed code
@@ -117,7 +117,7 @@ function submit() {
 }
 // skipping means "not now", so nothing half-typed (or invalid) here goes in
 function skip() {
-  Object.assign(form, { description: '', workplace: '', location: '', closesAt: '', salaryMin: '', salaryMax: '', currency: 'EUR', showSalary: false })
+  Object.assign(form, { description: '', workplace: '', location: '', closesAt: '', salaryMin: '', salaryMax: '', currency: 'SGD', showSalary: false })
   go(4)
 }
 
@@ -232,10 +232,14 @@ const TAB_CAPS = ['Everyone who applied, by stage.', 'What happens to each appli
                 <textarea id="nj-describe" v-model="form.describe" required maxlength="2000" rows="4" placeholder="Café barista: quick call, one paid trial shift, then offer." />
               </div>
             </template>
+            <label class="tpl">
+              <input v-model="choice" type="radio" name="nj-from" value="blank">
+              <b class="tpl-name">Start blank</b>
+              <span class="tpl-desc">Only “Applied”. You add every step yourself.</span>
+            </label>
             <details class="other" :open="otherOpen" @toggle="otherOpen = ($event.target as HTMLDetailsElement).open">
-              <summary>Other ways to start: blank, a saved flow, or copy another job</summary>
+              <summary>Or reuse: a saved flow, or copy another job</summary>
               <div class="other-body">
-                <label class="check"><input v-model="choice" type="radio" name="nj-from" value="blank"><span><b>Blank flow</b><span class="hint">Only the start. You build every step.</span></span></label>
                 <div v-if="flowPresets?.length" class="presets" role="group" aria-labelledby="nj-presets">
                   <span id="nj-presets" class="eyebrow">Your saved flows</span>
                   <label v-for="p in flowPresets" :key="p.id" class="check"><input v-model="choice" type="radio" name="nj-from" :value="`preset:${p.id}`"><span><b>{{ p.name }} <span class="n">{{ counts(p) }}</span></b><span v-if="p.description" class="hint">{{ p.description }}</span></span></label>
@@ -262,7 +266,7 @@ const TAB_CAPS = ['Everyone who applied, by stage.', 'What happens to each appli
               </div>
               <div class="field">
                 <label for="nj-loc">Location</label>
-                <input id="nj-loc" v-model="form.location" maxlength="200" placeholder="e.g. Berlin or Remote (EU)">
+                <input id="nj-loc" v-model="form.location" maxlength="200" placeholder="e.g. Jurong East or Tampines">
               </div>
               <div class="field">
                 <span class="label">Salary range</span>
@@ -270,7 +274,7 @@ const TAB_CAPS = ['Everyone who applied, by stage.', 'What happens to each appli
                   <input v-model.number="form.salaryMin" type="number" min="0" aria-label="Salary minimum" placeholder="Min" :aria-invalid="!!salaryError">
                   <span class="hint">to</span>
                   <input v-model.number="form.salaryMax" type="number" min="0" aria-label="Salary maximum" placeholder="Max" :aria-invalid="!!salaryError">
-                  <input v-model="form.currency" class="cur" maxlength="3" aria-label="Currency, three letters" placeholder="EUR" autocapitalize="characters" spellcheck="false">
+                  <input v-model="form.currency" class="cur" maxlength="3" aria-label="Currency, three letters" placeholder="SGD" autocapitalize="characters" spellcheck="false">
                 </div>
                 <span v-if="salaryError" class="error"><Icon name="alert" :size="14" />{{ salaryError }}</span>
                 <label class="check"><input v-model="form.showSalary" type="checkbox" :disabled="form.salaryMin === '' && form.salaryMax === ''">Show the salary on the apply page</label>
@@ -293,7 +297,7 @@ const TAB_CAPS = ['Everyone who applied, by stage.', 'What happens to each appli
               <label for="nj-years">At least this many years</label>
               <input id="nj-years" v-model.number="form.minYears" type="number" min="0" max="60" step="0.5">
             </div>
-            <p v-if="chosen.ai" class="tip"><b>Tip</b><span>A rule like “no more than 6 demerit points” won’t be read from the description. Add it here as a skill, or as a question on the form.</span></p>
+            <p v-if="chosen.ai" class="tip"><b>Tip</b><span>The AI reads the description, but scores against these. A hard rule like “no more than 6 demerit points” is safer here as a skill, or as a question on the form.</span></p>
           </template>
 
           <template v-else>

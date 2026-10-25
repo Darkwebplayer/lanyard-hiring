@@ -7,7 +7,8 @@ import { type Field, type FieldType, type Issue, KEY_RE } from './types'
 // human: waits for submissions · terminal: closes the application
 export type NodeKind = 'trigger' | 'instant' | 'auto' | 'human' | 'terminal'
 
-export interface OutputField { key: string, type: FieldType, label: string, options?: string[] }
+// rule: false = an engine blob (CV text, checksum, AI summary): readable by steps and emails, left out of the rule picker
+export interface OutputField { key: string, type: FieldType, label: string, options?: string[], rule?: false }
 
 export interface NodeDef<C = any> {
   type: string
@@ -61,11 +62,11 @@ const trigger: NodeDef<Record<string, never>> = {
 
 const EXTRACT_TYPES = { text: 'string', number: 'number', date: 'date', list: 'list' } as const
 const CV_OUTPUTS: OutputField[] = [
-  { key: 'text', type: 'text', label: 'CV text' },
+  { key: 'text', type: 'text', label: 'CV text', rule: false },
   { key: 'skills', type: 'list', label: 'Skills' },
   { key: 'years_experience', type: 'number', label: 'Years of experience' },
   { key: 'current_title', type: 'string', label: 'Current title' },
-  { key: 'file_sha256', type: 'string', label: 'File checksum' },
+  { key: 'file_sha256', type: 'string', label: 'File checksum', rule: false },
 ]
 
 const cvParse: NodeDef<{
@@ -122,7 +123,7 @@ const aiReview: NodeDef<{
   outputs: c => [
     ...c.criteria.map(cr => ({ key: cr.key, type: 'number' as const, label: `${cr.label} (0–100)` })),
     { key: 'overall', type: 'number', label: 'Overall score (0–100)' },
-    { key: 'summary', type: 'text', label: 'AI summary' },
+    { key: 'summary', type: 'text', label: 'AI summary', rule: false },
   ],
   check: (c, available, node) => [...uniqueKeys(c.criteria, node, 'criterion', AI_RESERVED), ...checkAiInput(c.cv_text_ref, available, node)],
 }
@@ -240,8 +241,21 @@ export interface HumanTaskConfig {
   scorecard: ScorecardField[]
   min_submissions: number
   due_days?: number
-  booking?: { duration_min: number } // the candidate gets a link to pick a time with the assignees
+  booking?: { duration_min: number, where?: string } // the candidate gets a link to pick a time with the assignees
+  // Make offer: no scorecard; the offer's answer (link or recorded) completes it with `accepted` and `decline_reason`
+  offer?: boolean
 }
+
+const assigneesSchema = z.object({
+  users: z.array(z.string().min(1)).default([]),
+  roles: z.array(z.uuid()).default([]),
+  job_owner: z.boolean().default(false),
+}).strict().refine(a => a.users.length || a.roles.length || a.job_owner, 'pick at least one assignee')
+
+const OFFER_OUTPUTS: OutputField[] = [
+  { key: 'accepted', type: 'boolean', label: 'Offer accepted' },
+  { key: 'decline_reason', type: 'string', label: 'Why they declined' },
+]
 
 const humanTask: NodeDef<HumanTaskConfig> = {
   type: 'human_task',
@@ -250,11 +264,7 @@ const humanTask: NodeDef<HumanTaskConfig> = {
   config: z.object({
     title: z.string().trim().min(1).max(200),
     instructions: z.string().max(4000).optional(),
-    assignees: z.object({
-      users: z.array(z.string().min(1)).default([]),
-      roles: z.array(z.uuid()).default([]),
-      job_owner: z.boolean().default(false),
-    }).strict().refine(a => a.users.length || a.roles.length || a.job_owner, 'pick at least one assignee'),
+    assignees: assigneesSchema,
     scorecard: z.array(z.object({
       key,
       label: z.string().trim().min(1).max(200),
@@ -262,12 +272,13 @@ const humanTask: NodeDef<HumanTaskConfig> = {
       required: z.boolean().default(true),
       min: z.number().optional(),
       max: z.number().optional(),
-    }).strict()).min(1).max(30),
+    }).strict()).max(30),
     min_submissions: z.number().int().min(1).max(20).default(1),
     due_days: z.number().int().min(0).max(90).optional(),
-    booking: z.object({ duration_min: z.number().int().min(15).max(240) }).strict().optional(),
-  }).strict() as z.ZodType<HumanTaskConfig>,
-  outputs: c => [
+    booking: z.object({ duration_min: z.number().int().min(15).max(240), where: z.string().trim().max(300).optional() }).strict().optional(),
+    offer: z.boolean().optional(),
+  }).strict().refine(c => c.offer || c.scorecard.length, { message: 'add at least one scorecard question', path: ['scorecard'] }) as z.ZodType<HumanTaskConfig>,
+  outputs: c => c.offer ? OFFER_OUTPUTS : [
     ...c.scorecard.flatMap((f): OutputField[] => f.type === 'boolean'
       ? [{ key: f.key, type: 'boolean', label: `${f.label} (all agreed)` }, { key: `${f.key}_any`, type: 'boolean', label: `${f.label} (anyone)` }]
       : [{ key: f.key, type: f.type, label: f.type === 'number' ? `${f.label} (average)` : f.label }]),
@@ -358,6 +369,38 @@ export const HUMAN_TASK_PRESETS: Record<string, { label: string, config: Omit<Hu
   },
 }
 
+// The Make offer step every template ends with: the job owner makes the offer, the answer moves it on.
+export const MAKE_OFFER: Omit<HumanTaskConfig, 'assignees'> = {
+  title: 'Make an offer to {{candidate.first_name}} {{candidate.last_name}}',
+  instructions: 'Use Make offer… to email the letter. This closes when they answer on the link, or when you record their answer.',
+  scorecard: [],
+  min_submissions: 1,
+  due_days: 3,
+  offer: true,
+}
+
+// ---------- request_documents ----------
+
+// Emails the candidate a link to upload each document; the follow-up people get it in their inbox.
+// Completes once every required document is uploaded or marked received.
+export interface RequestDocumentsConfig {
+  documents: { label: string, required: boolean }[]
+  assignees: HumanTaskConfig['assignees']
+  due_days?: number
+}
+
+const requestDocuments: NodeDef<RequestDocumentsConfig> = {
+  type: 'request_documents',
+  kind: 'human',
+  label: 'Request documents',
+  config: z.object({
+    documents: z.array(z.object({ label: z.string().trim().min(1).max(200), required: z.boolean().default(true) }).strict()).min(1).max(20),
+    assignees: assigneesSchema,
+    due_days: z.number().int().min(0).max(90).optional(),
+  }).strict() as z.ZodType<RequestDocumentsConfig>,
+  outputs: () => [{ key: 'received_count', type: 'number', label: 'Documents received' }],
+}
+
 // ---------- send_email ----------
 
 const sendEmail: NodeDef<{ subject: string, body: string }> = {
@@ -394,5 +437,5 @@ export function normalizeOutput(fields: OutputField[], output: Record<string, un
 }
 
 export const REGISTRY: Record<string, NodeDef> = Object.fromEntries(
-  [trigger, cvParse, aiReview, aiCheck, setVariable, condition, humanTask, sendEmail, end].map(d => [d.type, d]),
+  [trigger, cvParse, aiReview, aiCheck, setVariable, condition, humanTask, requestDocuments, sendEmail, end].map(d => [d.type, d]),
 )

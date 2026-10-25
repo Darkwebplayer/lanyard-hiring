@@ -34,15 +34,16 @@ describe('relation', () => {
     expect(relation(G, n('ai'), n('interview'))).toEqual({ kind: 'next', branch: 'Shortlist' })
     expect(relation(G, n('ai'), n('manual_review'))).toEqual({ kind: 'next', branch: 'Otherwise' }) // default before missing
     expect(relation(G, n('interview'), n('rejection_email'))).toEqual({ kind: 'next', branch: 'Otherwise' })
-    expect(relation(G, n('offer_email'), { closed: 'hired' })).toEqual({ kind: 'next' })
+    expect(relation(G, n('make_offer'), n('documents'))).toEqual({ kind: 'next', branch: 'Accepted' })
     expect(relation(G, n('cv'), n('interview'))).toEqual({ kind: 'skip', steps: 1 })
-    expect(relation(G, n('interview'), { closed: 'hired' })).toEqual({ kind: 'skip', steps: 1 })
+    expect(relation(G, n('interview'), { closed: 'hired' })).toEqual({ kind: 'skip', steps: 2 })
     expect(relation(G, n('interview'), n('cv'))).toEqual({ kind: 'back' })
-    expect(relation(G, n('interview'), { closed: 'withdrawn' })).toEqual({ kind: 'other' })
+    expect(relation(G, n('interview'), { closed: 'withdrawn' })).toEqual({ kind: 'skip', steps: 1 }) // a declined offer
+    expect(relation(G, n('rejection_email'), { closed: 'withdrawn' })).toEqual({ kind: 'other' })
     expect(relation(G, { closed: 'rejected' }, n('cv'))).toEqual({ kind: 'other' })
     expect(relation(G, { closed: 'rejected' }, { closed: 'hired' })).toEqual({ kind: 'other' })
     expect(relation(G, n('cv'), n('cv'))).toEqual({ kind: 'other' })
-    expect(relation(G, n('offer_email'), n('rejection_email'))).toEqual({ kind: 'other' })
+    expect(relation(G, n('make_offer'), n('rejection_email'))).toEqual({ kind: 'other' })
   })
 
   it('takes the shortest way when one exists past a branch', () => {
@@ -59,9 +60,10 @@ describe('arrivalEffects', () => {
       kind: 'assign', text: '“Interview” goes to the job owner, due in 5 days', nodeKey: 'interview',
       assignees: { users: [], roles: [], job_owner: true }, dueDays: 5,
     }])
-    expect(arrivalEffects(G, n('offer_email')).map(e => e.text)).toEqual(['Sends them “Offer email”. It can’t be unsent.', 'Then closes them as hired'])
+    expect(arrivalEffects(G, n('make_offer')).map(e => e.text)).toEqual(['“Make offer” goes to the job owner, due in 3 days'])
+    expect(arrivalEffects(G, n('rejection_email')).map(e => e.text)).toEqual(['Sends them “Rejection email”. It can’t be unsent.', 'Then closes them as rejected'])
     expect(arrivalEffects(G, { closed: 'rejected' })).toEqual([{ kind: 'close', outcome: 'rejected', text: expect.stringContaining('No email is sent') }])
-    expect(arrivalEffects(G, n('offer_email')).at(-1)?.outcome).toBe('hired')
+    expect(arrivalEffects(G, n('rejection_email')).at(-1)?.outcome).toBe('rejected')
   })
 
   it('mentions booking and panels', () => {
@@ -73,7 +75,7 @@ describe('arrivalEffects', () => {
 describe('stageSummary', () => {
   it('lists what each column does, in flow order', () => {
     expect(stageSummary(G, 'screening').map(e => e.nodeKey)).toEqual(['cv', 'ai', 'manual_review'])
-    expect(stageSummary(G, 'decision').map(e => e.text)).toEqual(['Sends them “Offer email”', 'Sends them “Rejection email”'])
+    expect(stageSummary(G, 'decision').map(e => e.text)).toEqual(['Sends them “Rejection email”'])
     expect(stageSummary(G, 'nope')).toEqual([])
   })
 })
@@ -83,16 +85,19 @@ describe('stageView', () => {
     const v = stageView(G)
     expect(v.fits).toBe(true)
     expect(v.start).toEqual({ key: 'start', exits: [{ to: { stage: 'screening', node: 'cv' } }] })
-    const [screening, interview, decision] = v.stages
+    const [screening, interview, offer, decision] = v.stages
     expect(screening!.auto.map(s => s.key)).toEqual(['cv', 'ai'])
     expect(screening!.people.map(s => s.key)).toEqual(['manual_review'])
     expect(screening!.exits).toContainEqual({ condition: 'screen', branch: 'shortlist', label: 'Shortlist', rule: { ref: 'nodes.ai.overall', op: 'gte', value: 70 }, to: { stage: 'interview', node: 'interview' } })
     expect(screening!.exits).toContainEqual({ condition: 'screen', branch: 'missing', label: 'Missing data', to: { stage: 'screening', node: 'manual_review' } })
     expect(screening!.exits).toContainEqual({ condition: 'review_decision', branch: 'default', label: 'Otherwise', to: { stage: 'decision', node: 'rejection_email' } })
     expect(interview!.exits.map(x => x.label)).toEqual(['Hire', 'Otherwise'])
-    expect(decision!.exits).toEqual([{ to: { closed: 'hired' } }, { to: { closed: 'rejected' } }])
+    expect(decision!.exits).toEqual([{ to: { closed: 'rejected' } }])
+    // Make offer: the answer decides, accepted → documents → hired, otherwise → withdrawn
+    expect(offer!.people.map(s => s.key)).toEqual(['make_offer', 'documents'])
+    expect(offer!.exits.map(x => [x.label, x.to])).toEqual([['Accepted', { stage: 'offer', node: 'documents' }], ['Otherwise', { closed: 'withdrawn' }], [undefined, { closed: 'hired' }]])
     expect(v.unstaged).toEqual([])
-    expect(v.closed.map(c => [c.outcome, c.ends])).toEqual([['hired', ['hired']], ['rejected', ['rejected']], ['withdrawn', []]])
+    expect(v.closed.map(c => [c.outcome, c.ends])).toEqual([['hired', ['hired']], ['rejected', ['rejected']], ['withdrawn', ['withdrawn']]])
   })
 
   it('refuses flows a stage list would misstate', () => {
@@ -128,8 +133,7 @@ describe('insertAfter / removeStep', () => {
   })
 
   it('rewires every way in, and refuses unsafe removals', () => {
-    const g = removeStep(G, 'offer_email')!
-    expect(g.edges).toContainEqual({ from: 'decision', to: 'hired', branch: 'hire' })
+    expect(removeStep(G, 'make_offer')).toBeNull() // offer_answer reads its answer
     expect(removeStep(G, 'interview')).toBeNull() // decision reads its answers
     expect(removeStep(G, 'screen')).toBeNull()
     expect(removeStep(G, 'start')).toBeNull()

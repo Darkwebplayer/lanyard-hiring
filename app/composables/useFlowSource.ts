@@ -9,6 +9,7 @@ export interface FlowSource {
   save: (p: { form?: FormField[], workflow?: Graph }) => Promise<unknown> // fills in the half not passed
   readOnly: Ref<boolean>
   lockedKeys: Ref<Set<string>> // steps in the live flow: their key can't change
+  lockedQuestions: Ref<Map<string, Set<string>>> // per live step, the keys its questions have there (rules and emails may read them)
   lockedFields: Ref<Map<string, FieldType>> // fields people have applied with
   lockVersion: Ref<number | null>
   missing: Ref<boolean> // the preset was deleted: nothing left to save to
@@ -26,6 +27,10 @@ export const useJobFlowSource = (id: string): FlowSource => {
     save: saveDraft,
     readOnly: computed(() => detail.value?.job.status === 'archived'),
     lockedKeys: computed(() => new Set(detail.value?.published?.workflow.nodes.map(n => n.key) ?? [])),
+    lockedQuestions: computed(() => new Map((detail.value?.published?.workflow.nodes ?? []).map((n) => {
+      const c = n.config as { scorecard?: { key: string }[], questions?: { key: string }[] } | undefined
+      return [n.key, new Set([...(c?.scorecard ?? []), ...(c?.questions ?? [])].map(q => q.key))]
+    }))),
     lockedFields: computed(() => new Map((detail.value?.published?.form ?? []).map(f => [f.key, f.type]))),
     lockVersion: computed(() => detail.value?.published?.version ?? null),
     missing: computed(() => false),
@@ -59,6 +64,7 @@ export const useFlowPresetSource = (id: string): FlowSource => {
     },
     readOnly: computed(() => false),
     lockedKeys: computed(() => new Set()),
+    lockedQuestions: computed(() => new Map()),
     lockedFields: computed(() => new Map()),
     lockVersion: computed(() => null),
     missing: computed(() => !!flowPresets.value && !preset.value),

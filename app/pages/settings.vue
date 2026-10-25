@@ -111,7 +111,15 @@ async function save() {
       <button class="btn" @click="load"><Icon name="retry" />Try again</button>
     </div>
 
-    <form v-else class="layout" :aria-busy="!loaded" :inert="!loaded" @submit.prevent="save">
+    <!-- empty greyed inputs read as blank settings, so show shapes until the values arrive -->
+    <div v-else-if="!loaded" class="layout" aria-busy="true" aria-label="Loading settings">
+      <div class="col">
+        <div v-for="h in [420, 260, 240]" :key="h" class="skeleton" :style="{ height: `${h}px`, borderRadius: 'var(--r-panel)' }" />
+      </div>
+      <div class="skeleton" style="height: 200px; border-radius: var(--r-panel)" />
+    </div>
+
+    <form v-else class="layout" @submit.prevent="save">
       <div class="col">
         <section class="panel fields" aria-labelledby="h-apply">
           <h2 id="h-apply" class="sect-h">Company and apply form</h2>
@@ -127,7 +135,7 @@ async function save() {
           </div>
           <div class="field">
             <label for="s-consent">Consent text</label>
-            <textarea id="s-consent" v-model="form.consentText" rows="4" maxlength="2000" aria-describedby="s-consent-h" />
+            <textarea id="s-consent" v-model="form.consentText" rows="4" maxlength="2000" aria-describedby="s-consent-h" placeholder="e.g. I agree that you may keep my details for 12 months to consider me for jobs, under the PDPA." />
             <p id="s-consent-h" class="hint">Shown with a checkbox candidates must tick before they can send. Leave empty for no checkbox.</p>
           </div>
           <div class="field">
@@ -136,7 +144,7 @@ async function save() {
           </div>
           <div class="field">
             <label for="s-ai">AI screening notice</label>
-            <textarea id="s-ai" v-model="form.aiNoticeText" rows="3" maxlength="2000" aria-describedby="s-ai-h" />
+            <textarea id="s-ai" v-model="form.aiNoticeText" rows="3" maxlength="2000" aria-describedby="s-ai-h" placeholder="e.g. A computer reads each application first. A person makes every decision." />
             <p id="s-ai-h" class="hint">Tells candidates an automated review reads their application. Leave empty to show nothing.</p>
           </div>
         </section>
@@ -148,7 +156,7 @@ async function save() {
           </div>
           <div class="field">
             <label for="s-intro">Intro line</label>
-            <textarea id="s-intro" v-model="form.careersIntro" rows="2" maxlength="500" placeholder="We’re a family-run bakery with three shops in Leeds." aria-describedby="s-intro-h" />
+            <textarea id="s-intro" v-model="form.careersIntro" rows="2" maxlength="500" placeholder="We’re a family-run bakery with three shops in Tampines and Bedok." aria-describedby="s-intro-h" />
             <p id="s-intro-h" class="hint">Sits under your company name, above the list of open jobs. <span class="count">{{ form.careersIntro.length }}/500</span></p>
           </div>
           <div class="field">
@@ -169,7 +177,6 @@ async function save() {
             <p class="hint">Whoever rejects someone picks one of these. Renaming or removing a reason never changes past decisions: they keep the words they were made with.</p>
           </div>
           <ol ref="reasonList" class="reasons">
-            <template v-if="!loaded"><li v-for="i in 3" :key="i" class="skeleton" style="height: var(--h-md)" /></template>
             <li v-for="(r, i) in reasons" :key="r.id" :data-r="r.id" class="reason" :class="{ bad: dupes.has(r.id) || !r.text.trim() }">
               <span class="n faint" aria-hidden="true">{{ i + 1 }}</span>
               <input v-model="r.text" maxlength="60" :aria-label="`Reason ${i + 1}`" :aria-invalid="dupes.has(r.id) || !r.text.trim() || undefined">
@@ -183,7 +190,8 @@ async function save() {
             <button type="button" class="btn btn-sm" :disabled="!newReason.trim()" @click="addReason"><Icon name="plus" />Add reason</button>
           </div>
           <p v-else class="hint">That’s 20, the most the list holds. Remove one to add another.</p>
-          <p v-if="loaded && reasonProblem" class="field-error" role="alert"><Icon name="alert" :size="14" />{{ reasonProblem }}</p>
+          <!-- always there, so the rows above don't move when the message comes and goes -->
+          <p class="field-error" role="alert"><template v-if="reasonProblem"><Icon name="alert" :size="14" />{{ reasonProblem }}</template></p>
         </section>
 
         <div class="foot">
@@ -199,7 +207,7 @@ async function save() {
         <h2 id="pv" class="eyebrow">Preview · bottom of the apply form</h2>
         <div class="sheet" aria-hidden="true">
           <ApplyNotices :consent-text="orNull(form.consentText)" :ai-notice-text="orNull(form.aiNoticeText)" preview />
-          <p v-if="loaded && !orNull(form.consentText) && !orNull(form.aiNoticeText)" class="faint none">Nothing extra shows above the button.</p>
+          <p v-if="!orNull(form.consentText) && !orNull(form.aiNoticeText)" class="faint none">Nothing extra shows above the button.</p>
           <span class="fake-send">Send application</span>
         </div>
         <p class="faint aside-note">Your own interview hours are in your <NuxtLink to="/inbox/hours">Inbox</NuxtLink>.</p>
@@ -228,7 +236,7 @@ async function save() {
 .reason .n { font-size: var(--t-sm); font-variant-numeric: tabular-nums; text-align: right; padding-right: 4px; }
 .reason input { margin-right: 4px; }
 .add { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; margin-left: 24px; align-items: center; }
-.field-error { display: flex; gap: 6px; align-items: center; color: var(--bad); font-size: var(--t-sm); font-weight: 500; }
+.field-error { min-height: 1.45em; display: flex; gap: 6px; align-items: center; color: var(--bad); font-size: var(--t-sm); font-weight: 500; }
 
 .foot { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 .ok, .error { display: inline-flex; gap: 6px; align-items: center; font-weight: 500; font-size: var(--t-sm); }

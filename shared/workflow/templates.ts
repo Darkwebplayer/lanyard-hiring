@@ -1,4 +1,4 @@
-import { HUMAN_TASK_PRESETS } from './registry'
+import { HUMAN_TASK_PRESETS, MAKE_OFFER } from './registry'
 import type { FormField, Graph } from './types'
 
 // "Standard hire": tenants clone it. Borderline and missing scores go to a person, never auto-reject.
@@ -71,12 +71,22 @@ export const STANDARD_HIRE: { form: FormField[], workflow: Graph } = {
           on_missing: false,
         },
       },
+      // the owner makes the offer (it emails the letter); the answer, on the link or recorded, moves them on
+      { key: 'make_offer', type: 'human_task', label: 'Make offer', config: { ...MAKE_OFFER, assignees: { users: [], roles: [], job_owner: true } } },
       {
-        key: 'offer_email',
-        type: 'send_email',
+        key: 'offer_answer',
+        type: 'condition',
+        config: { branches: [{ key: 'accepted', label: 'Accepted', rule: { ref: 'nodes.make_offer.accepted', op: 'is_true' } }], on_missing: false },
+      },
+      // after a yes: the paperwork, uploaded on the emailed link or ticked off by hand
+      {
+        key: 'documents',
+        type: 'request_documents',
+        label: 'Request documents',
         config: {
-          subject: 'Your offer for {{job.title}}',
-          body: 'Hi {{candidate.first_name}},\n\nWe are delighted to offer you the {{job.title}} role. We will be in touch with the details shortly.',
+          documents: [{ label: 'NRIC or work pass', required: true }, { label: 'Bank account details', required: true }, { label: 'Certificates', required: false }],
+          assignees: { users: [], roles: [], job_owner: true },
+          due_days: 7,
         },
       },
       {
@@ -88,6 +98,7 @@ export const STANDARD_HIRE: { form: FormField[], workflow: Graph } = {
         },
       },
       { key: 'hired', type: 'end', config: { outcome: 'hired' } },
+      { key: 'withdrawn', type: 'end', config: { outcome: 'withdrawn' } },
       { key: 'rejected', type: 'end', config: { outcome: 'rejected' } },
     ],
     edges: [
@@ -102,15 +113,20 @@ export const STANDARD_HIRE: { form: FormField[], workflow: Graph } = {
       { from: 'review_decision', to: 'interview', branch: 'advance' },
       { from: 'review_decision', to: 'rejection_email', branch: 'default' },
       { from: 'interview', to: 'decision' },
-      { from: 'decision', to: 'offer_email', branch: 'hire' },
+      { from: 'decision', to: 'make_offer', branch: 'hire' },
       { from: 'decision', to: 'rejection_email', branch: 'default' },
-      { from: 'offer_email', to: 'hired' },
+      { from: 'make_offer', to: 'offer_answer' },
+      { from: 'offer_answer', to: 'documents', branch: 'accepted' },
+      { from: 'documents', to: 'hired' },
+      { from: 'offer_answer', to: 'withdrawn', branch: 'default' },
       { from: 'rejection_email', to: 'rejected' },
     ],
     stages: [
       { id: 'screening', name: 'Screening', nodeKeys: ['cv', 'ai', 'manual_review'] },
       { id: 'interview', name: 'Interview', nodeKeys: ['interview'] },
-      { id: 'decision', name: 'Decision', nodeKeys: ['offer_email', 'rejection_email'] },
+      // hires go on to Offer; only a no lands here, so the column says so
+      { id: 'offer', name: 'Offer', nodeKeys: ['make_offer', 'documents'] },
+      { id: 'decision', name: 'Not moving on', nodeKeys: ['rejection_email'] },
     ],
   },
 }
@@ -125,9 +141,10 @@ const CV = STANDARD_HIRE.form[0]!
 const hireIf = (task: string) => node('decision', 'condition', {
   branches: [{ key: 'hire', label: 'Hire', rule: { ref: `nodes.${task}.hire`, op: 'is_true' } }], on_missing: false,
 })
-// every template ends the same way: an offer or a rejection email, then the outcome
-const ENDINGS = [byKey('offer_email'), byKey('rejection_email'), byKey('hired'), byKey('rejected')]
-const ENDING_EDGES = [{ from: 'offer_email', to: 'hired' }, { from: 'rejection_email', to: 'rejected' }]
+// every template ends the same way: a rejection email, or Make offer and their answer, then the outcome
+const ENDINGS = ['make_offer', 'offer_answer', 'documents', 'rejection_email', 'hired', 'withdrawn', 'rejected'].map(byKey)
+const ENDING_EDGES = STANDARD_HIRE.workflow.edges.filter(e => ['make_offer', 'offer_answer', 'documents', 'rejection_email'].includes(e.from))
+const ENDING_STAGES = STANDARD_HIRE.workflow.stages!.filter(s => s.id === 'decision' || s.id === 'offer')
 
 // No AI: the owner reads every application.
 const SIMPLE: Template = {
@@ -158,14 +175,14 @@ const SIMPLE: Template = {
       { from: 'review_decision', to: 'interview', branch: 'advance' },
       { from: 'review_decision', to: 'rejection_email', branch: 'default' },
       { from: 'interview', to: 'decision' },
-      { from: 'decision', to: 'offer_email', branch: 'hire' },
+      { from: 'decision', to: 'make_offer', branch: 'hire' },
       { from: 'decision', to: 'rejection_email', branch: 'default' },
       ...ENDING_EDGES,
     ],
     stages: [
       { id: 'review', name: 'Review', nodeKeys: ['review'] },
       { id: 'interview', name: 'Interview', nodeKeys: ['interview'] },
-      { id: 'decision', name: 'Decision', nodeKeys: ['offer_email', 'rejection_email'] },
+      ...ENDING_STAGES,
     ],
   },
 }
@@ -209,14 +226,14 @@ const HIGH_VOLUME: Template = {
       { from: 'screen', to: 'call', branch: 'default' },
       { from: 'screen', to: 'call', branch: 'missing' },
       { from: 'call', to: 'decision' },
-      { from: 'decision', to: 'offer_email', branch: 'hire' },
+      { from: 'decision', to: 'make_offer', branch: 'hire' },
       { from: 'decision', to: 'rejection_email', branch: 'default' },
       ...ENDING_EDGES,
     ],
     stages: [
       { id: 'screening', name: 'Screening', nodeKeys: ['cv', 'ai'] },
       { id: 'call', name: 'Call', nodeKeys: ['call'] },
-      { id: 'decision', name: 'Decision', nodeKeys: ['offer_email', 'rejection_email'] },
+      ...ENDING_STAGES,
     ],
   },
 }

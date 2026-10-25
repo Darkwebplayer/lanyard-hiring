@@ -188,7 +188,7 @@ const resetFilters = () => setQuery({ q: undefined, stage: undefined, step: unde
 
 <template>
   <div class="list">
-    <div class="filters">
+    <div class="filters" :inert="nSelected > 0">
       <label class="search">
         <Icon name="search" :size="16" />
         <span class="sr-only">Search by name or email</span>
@@ -297,10 +297,12 @@ const resetFilters = () => setQuery({ q: undefined, stage: undefined, step: unde
 .search svg { position: absolute; left: 12px; top: 50%; translate: 0 -50%; color: var(--ink-3); pointer-events: none; }
 .search input { padding-left: 36px; }
 
-/* the selection bar: dark, the one place bulk actions live, stuck to the top while the list scrolls */
+/* the selection bar: dark, the one place bulk actions live, stuck to the top while the list scrolls.
+   It lies over the filter row (same cell, same height) so ticking the first box doesn't push the rows down. */
+.filters, .selbar { grid-area: 1 / 1; }
 .selbar {
   position: sticky; top: 8px; z-index: 3; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-  padding: 8px 8px 8px 16px; border-radius: var(--r-panel); background: var(--ink); color: #fff; font-size: var(--t-sm); box-shadow: var(--shadow-2);
+  min-height: var(--h-md); padding: 4px 4px 4px 16px; border-radius: var(--r-panel); background: var(--ink); color: #fff; font-size: var(--t-sm); box-shadow: var(--shadow-2);
   animation: bar-in var(--t-micro) var(--ease);
 }
 @keyframes bar-in { from { opacity: 0; translate: 0 -4px; } }

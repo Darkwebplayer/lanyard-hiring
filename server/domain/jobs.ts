@@ -1,10 +1,11 @@
 import { and, desc, eq, inArray, max, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { formSchemaDef } from '../../shared/workflow/form'
-import { checkVersionCompat, fieldsAvailableAt, graphSchema, validateVersion } from '../../shared/workflow/graph'
+import { aiWarnings, checkVersionCompat, fieldsAvailableAt, graphSchema, validateVersion } from '../../shared/workflow/graph'
 import type { HumanTaskConfig } from '../../shared/workflow/registry'
 import { REGISTRY } from '../../shared/workflow/registry'
 import { STANDARD_HIRE, TEMPLATES, type TemplateId } from '../../shared/workflow/templates'
+import type { Requirements } from '../../shared/workflow/job'
 import type { FormField, Graph, Issue } from '../../shared/workflow/types'
 import type { Db, Tx } from '../db/client'
 import { flowPresets, jobs, jobVersions, roles, user } from '../db/schema'
@@ -140,8 +141,8 @@ export async function versionIssues(db: Db | Tx, job: typeof jobs.$inferSelect, 
 // Assignees are resolved again when a task activates; this catches what is already wrong at publish.
 async function assigneeIssues(db: Db | Tx, workflow: Graph, ownerId: string, adminEmail: string): Promise<Issue[]> {
   const tasks = workflow.nodes
-    .filter(n => n.type === 'human_task')
-    .map(n => ({ key: n.key, config: REGISTRY.human_task!.config.parse(n.config) as HumanTaskConfig }))
+    .filter(n => n.type === 'human_task' || n.type === 'request_documents') // documents: a follow-up person, min 1
+    .map(n => ({ key: n.key, config: { min_submissions: 1, ...REGISTRY[n.type]!.config.parse(n.config) } as Pick<HumanTaskConfig, 'assignees' | 'min_submissions' | 'offer'> }))
   if (!tasks.length) return []
 
   const userIds = [...new Set([ownerId, ...tasks.flatMap(t => t.config.assignees.users)])]
@@ -149,12 +150,13 @@ async function assigneeIssues(db: Db | Tx, workflow: Graph, ownerId: string, adm
   const [users, knownRoles, roleMembers] = await Promise.all([
     db.select({ id: user.id, email: user.email, active: user.active, level: roles.level })
       .from(user).leftJoin(roles, eq(roles.id, user.roleId)).where(inArray(user.id, userIds)),
-    roleIds.length ? db.select({ id: roles.id }).from(roles).where(inArray(roles.id, roleIds)) : [],
+    roleIds.length ? db.select({ id: roles.id, level: roles.level }).from(roles).where(inArray(roles.id, roleIds)) : [],
     roleIds.length
       ? db.select({ id: user.id, roleId: user.roleId }).from(user).where(and(inArray(user.roleId, roleIds), eq(user.active, true)))
       : [],
   ])
-  const usable = new Set(users.filter(u => accessLevel(u, u.level, adminEmail)).map(u => u.id))
+  const levels = new Map(users.map(u => [u.id, accessLevel(u, u.level, adminEmail)]))
+  const usable = new Set(users.filter(u => levels.get(u.id)).map(u => u.id))
   const roleSet = new Set(knownRoles.map(r => r.id))
 
   const issues: Issue[] = []
@@ -170,6 +172,11 @@ async function assigneeIssues(db: Db | Tx, workflow: Graph, ownerId: string, adm
     if (pool.size < config.min_submissions) {
       issues.push({ node: key, code: 'not_enough_assignees', message: `needs ${config.min_submissions} submissions but only ${pool.size} people can be assigned` })
     }
+    // only managers can make or record an offer, so an employee holding this step would be stuck
+    if (config.offer && ([...a.users, ...(a.job_owner ? [ownerId] : [])].some(id => levels.get(id) === 'employee')
+      || knownRoles.some(r => a.roles.includes(r.id) && r.level === 'employee'))) {
+      issues.push({ node: key, code: 'offer_needs_manager', message: 'only managers can make offers; assign managers or a manager role' })
+    }
   }
   return issues
 }
@@ -178,6 +185,12 @@ export async function validateDraft(db: Db, jobId: string, adminEmail: string) {
   const { job, draft } = await getJob(db, jobId)
   if (!draft) throw new DomainError(409, 'no_draft')
   return versionIssues(db, job, draft, adminEmail)
+}
+
+// What publish allows but is likely a mistake. Only meaningful once validateDraft has no issues.
+export async function draftWarnings(db: Db, jobId: string) {
+  const { job, draft } = await getJob(db, jobId)
+  return draft ? aiWarnings(draft.workflow as Graph, draft.form as FormField[], job.requirements as Requirements | null) : []
 }
 
 // Freezes the draft. In-flight applications stay pinned to the version they started on.

@@ -46,15 +46,23 @@ const MESSAGES: Record<string, string> = {
   expires_in_past: 'Pick an end date in the future.',
   offer_not_found: 'This offer doesn’t exist any more.',
   offer_not_open: 'This offer has already been answered or withdrawn.',
+  answer_with_offer: 'This step closes when the offer is answered. Use Make offer, or record their answer on their page.',
   offer_expired: 'This offer has expired.',
   name_mismatch: 'Type your full name as it appears on the offer.',
   booking_not_found: 'This booking link doesn’t exist any more.',
   booking_closed: 'This interview has moved on, so the time can’t change.',
   too_late_to_change: 'It’s less than 12 hours away, so the time can’t change here.',
   slot_unavailable: 'Someone just took that time. Pick another.',
+  documents_not_found: 'This documents link doesn’t exist any more.',
+  unknown_document: 'That document is no longer on the list. Reload the page.',
+  empty_file: 'That file is empty. Pick another.',
+  file_too_large: 'That file is over 10 MB. Try a smaller photo or a PDF.',
+  unsupported_file: 'Only PDF, JPG or PNG files are accepted.',
+  documents_all_in: 'Every required document is already in.',
   ai_off: 'AI is off. An admin can turn it on in Settings.',
   ai_not_configured: 'AI isn’t set up on the server yet.',
   ai_error: 'The AI didn’t answer this time. Try again in a moment.',
+  ai_quota: 'The AI usage limit was reached. Try again later, or ask an admin to upgrade the AI key.',
 }
 
 export interface ApiError { status: number, code: string, message: string, issues: Issue[] }
@@ -85,13 +93,15 @@ export async function api<T = unknown>(url: string, opts: Parameters<typeof $fet
   }
 }
 
-// What a manager does about each run error (docs/backend.md §5).
-export function runErrorText(error: string | null | undefined): { what: string, fix: string } {
+// What a manager does about each run error (docs/backend.md §5). hasReview: the flow has a person step that
+// reviews applications, so "a manual review" names a real place to move them.
+export function runErrorText(error: string | null | undefined, hasReview = false): { what: string, fix: string } {
   const e = error ?? ''
   if (e.startsWith('no_assignees')) return { what: 'Nobody could be assigned', fix: 'Give someone the role this step uses, then retry.' }
   if (/^(missing_file|file_not_found|checksum_mismatch)/.test(e)) return { what: 'The CV is missing or was changed', fix: 'Move the candidate on by hand.' }
-  if (e.startsWith('unreadable_cv')) return { what: 'The CV can’t be read', fix: 'It may be a scan. Move it to a manual review.' }
+  if (e.startsWith('unreadable_cv')) return { what: 'The CV can’t be read', fix: `It may be a scan. Move it to ${hasReview ? 'a manual review' : 'another step'}.` }
   if (e.startsWith('ai_off')) return { what: 'AI is off', fix: 'An admin can turn on Use AI in Settings, then retry.' }
+  if (e.startsWith('ai_quota')) return { what: 'The AI usage limit was reached', fix: 'Retry later, or ask an admin to upgrade the AI key.' }
   if (/^(ai_not_configured|ai_error)/.test(e)) return { what: 'The AI step couldn’t run', fix: 'Check the AI settings, then retry.' }
   if (e.startsWith('missing_ref')) return { what: 'The email had an empty field', fix: 'Move the candidate on, or fix their data and retry.' }
   if (e.startsWith('email_failed')) return { what: 'The email provider refused the email', fix: 'Retry.' }

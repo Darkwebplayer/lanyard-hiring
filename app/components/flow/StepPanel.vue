@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { fieldsAvailableAt } from '~~/shared/workflow/graph'
-import type { HumanTaskConfig } from '~~/shared/workflow/registry'
+import type { HumanTaskConfig, ScorecardField } from '~~/shared/workflow/registry'
 import type { ConditionConfig, Rule } from '~~/shared/workflow/rules'
 import { render } from '~~/shared/workflow/template'
 import { type FormField, type Graph, type GraphNode, type Issue, KEY_RE } from '~~/shared/workflow/types'
@@ -11,6 +11,7 @@ import TemplateField from './TemplateField.vue'
 const props = defineProps<{
   node: GraphNode, graph: Graph, form: FormField[], roles: Role[], people: Person[] | null
   issues: Issue[], keyLocked: boolean, readOnly: boolean, formHref: string
+  liveQuestions?: Set<string> // keys this step's questions have in the live flow
   job: { title: string, openings: number, requirements?: object }
   // preset: editing a library preset, not a step in a flow: no key, no connections, no delete
   preset?: boolean
@@ -95,6 +96,15 @@ function relabel(item: { key: string, label?: string }, next: string, fallback: 
   if (!item.key || item.key === slug(item.label ?? '', fallback)) item.key = slug(next, fallback)
   item.label = next
 }
+// Questions' keys follow their name the way form fields' keys do: until the key is typed by hand, and never once
+// the question is in the live flow or another step uses the key (a rule or an email would lose it). Unique among the siblings.
+const keyTyped = new WeakSet<object>()
+const keyUsed = (k: string) => new RegExp(`nodes\\.${props.node.key}\\.${k}(_any)?(?![a-z0-9_])`).test(JSON.stringify(props.graph))
+function relabelQuestion(item: { key: string, label: string }, next: string, siblings: { key: string }[]) {
+  const follows = !keyTyped.has(item) && !props.liveQuestions?.has(item.key) && !(item.key && keyUsed(item.key))
+  item.label = next
+  if (follows) item.key = uniqueKey(slug(next, 'question'), siblings.filter(x => x !== item).map(x => x.key))
+}
 
 // ---------- AI review ----------
 const cvTextOptions = computed(() => fields.value.filter(f =>
@@ -124,7 +134,7 @@ function setQuestionKind(q: any, kind: 'yes_no' | 'choice') {
   if (kind === 'yes_no') delete q.options
   else q.options ??= [{ key: 'option_1', label: 'Option 1' }, { key: 'option_2', label: 'Option 2' }]
 }
-const addQuestion = () => c.value.questions.push({ key: '', label: '', question: '', kind: 'yes_no' })
+const addQuestion = () => c.value.questions.push({ key: uniqueKey('question', c.value.questions.map((q: any) => q.key)), label: '', question: '', kind: 'yes_no' })
 const addOption = (q: any) => q.options.push({ key: uniqueKey('option', q.options.map((o: any) => o.key)), label: '' })
 // what each question hands the next Decision, in the words the Decision shows
 const givesText = (q: any) => q.kind === 'choice'
@@ -142,8 +152,19 @@ const optNumber = (obj: any, k: string, raw: string) => {
   if (raw === '') delete obj[k]
   else obj[k] = Number(raw)
 }
+// Rating 1–5 is a number from 1 to 5 (the inbox shows small whole-number ranges as rating buttons)
+const answerType = (s: ScorecardField) => s.type === 'number' && s.min === 1 && s.max === 5 ? 'rating' : s.type
+function setAnswerType(s: ScorecardField, v: string) {
+  delete s.min
+  delete s.max
+  if (v === 'rating') Object.assign(s, { type: 'number', min: 1, max: 5 })
+  else s.type = v as ScorecardField['type']
+}
+// a fresh question, not a copy of the last one: yes/no is the simplest answer; the name box gets focus to fill in
 function addScore() {
-  ht.value.scorecard.push({ key: uniqueKey('question', ht.value.scorecard.map(s => s.key)), label: '', type: 'number', required: true, min: 1, max: 5 })
+  const n = ht.value.scorecard.length
+  ht.value.scorecard.push({ key: uniqueKey('question', ht.value.scorecard.map(s => s.key)), label: '', type: 'boolean', required: true })
+  nextTick(() => document.getElementById(`sl-${props.node.key}-${n}`)?.focus())
 }
 
 // ---------- email preview ----------
@@ -168,12 +189,16 @@ function setLiteral(f: any, raw: string) {
 const addVar = () => c.value.fields.push({ key: uniqueKey('value', c.value.fields.map((f: any) => f.key)), type: 'string', source: { kind: 'literal', value: '' } })
 
 // booking link: off unless asked for; the server takes 15–240 minutes
-const booking = computed(() => c.value.booking as { duration_min: number } | undefined)
+const booking = computed(() => c.value.booking as { duration_min: number, where?: string } | undefined)
+const setWhere = (v: string) => { if (v.trim()) c.value.booking.where = v; else delete c.value.booking.where }
 function setBooking(on: boolean) {
   if (on) c.value.booking = { duration_min: 30 }
   else delete c.value.booking
 }
 const setDuration = (raw: string) => (c.value.booking.duration_min = Math.min(240, Math.max(15, Math.round(Number(raw) || 30))))
+
+// ---------- request documents ----------
+const dueChoices = computed(() => [...new Set([3, 7, 14, 30, ...(c.value.due_days === undefined ? [] : [c.value.due_days as number])])].sort((a, b) => a - b))
 
 const fileFields = computed(() => props.form.filter(f => f.type === 'file'))
 const OUTCOMES = [['hired', 'Hired'], ['rejected', 'Rejected'], ['withdrawn', 'Withdrawn']] as const
@@ -212,16 +237,19 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
           <p v-if="preset" class="hint">Steps added from this preset start with this name.</p>
         </div>
         <slot name="extra" />
-        <div v-if="!preset" class="field">
-          <label :for="`key-${node.key}`">Key</label>
-          <input
-            :id="`key-${node.key}`" v-model.trim="keyDraft" class="mono" :disabled="keyLocked || readOnly"
-            :aria-invalid="!!keyError" spellcheck="false" @change="commitKey" @keydown.enter="commitKey"
-          >
-          <p v-if="keyLocked" class="hint"><Icon name="lock" :size="12" class="inl" />Locked: this step is in the live flow, so a new key would count as removing it.</p>
-          <p v-else-if="keyError" class="error">{{ keyError }}</p>
-          <p v-else class="hint">Other steps read this step’s answers as <code v-text="refHint" /></p>
-        </div>
+        <details v-if="!preset" class="adv">
+          <summary>Advanced <span class="faint">(key: {{ node.key }}, used in rules and emails)</span></summary>
+          <div class="field">
+            <label :for="`key-${node.key}`">Key</label>
+            <input
+              :id="`key-${node.key}`" v-model.trim="keyDraft" class="mono" :disabled="keyLocked || readOnly"
+              :aria-invalid="!!keyError" spellcheck="false" @change="commitKey" @keydown.enter="commitKey"
+            >
+            <p v-if="keyLocked" class="hint"><Icon name="lock" :size="12" class="inl" />Locked: this step is in the live flow, so a new key would count as removing it.</p>
+            <p v-else-if="keyError" class="error">{{ keyError }}</p>
+            <p v-else class="hint">Other steps read this step’s answers as <code v-text="refHint" /></p>
+          </div>
+        </details>
       </section>
 
       <!-- start -->
@@ -251,15 +279,9 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
             <span class="legend">Fact {{ Number(i) + 1 }}</span>
             <button type="button" class="btn btn-quiet btn-icon btn-sm" :aria-label="`Remove ${f.label || 'fact'}`" title="Remove fact" @click="dropExtract(Number(i))"><Icon name="x" /></button>
           </div>
-          <div class="row-2 two">
-            <div class="field">
-              <label :for="`xl-${node.key}-${i}`">Name</label>
-              <input :id="`xl-${node.key}-${i}`" :value="f.label" placeholder="Notice period" @input="relabel(f, ($event.target as HTMLInputElement).value, 'fact')">
-            </div>
-            <div class="field">
-              <label :for="`xk-${node.key}-${i}`">Key</label>
-              <input :id="`xk-${node.key}-${i}`" v-model.trim="f.key" class="mono" spellcheck="false">
-            </div>
+          <div class="field">
+            <label :for="`xl-${node.key}-${i}`">Name</label>
+            <input :id="`xl-${node.key}-${i}`" :value="f.label" placeholder="Notice period" @input="relabel(f, ($event.target as HTMLInputElement).value, 'fact')">
           </div>
           <div class="type-hint">
             <div class="field">
@@ -273,6 +295,13 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
               <input :id="`xh-${node.key}-${i}`" :value="f.hint ?? ''" maxlength="300" :placeholder="f.type === 'list' ? 'e.g. Food hygiene, first aid' : 'e.g. How soon they can start'" @input="setHint(f, ($event.target as HTMLInputElement).value)">
             </div>
           </div>
+          <details class="adv">
+            <summary>Advanced</summary>
+            <div class="field">
+              <label :for="`xk-${node.key}-${i}`">Key</label>
+              <input :id="`xk-${node.key}-${i}`" v-model.trim="f.key" class="mono" spellcheck="false" placeholder="e.g. notice_period">
+            </div>
+          </details>
         </div>
         <button v-if="(c.extract?.length ?? 0) < 10" type="button" class="btn btn-sm add" @click="addExtract"><Icon name="plus" />Add a fact</button>
         <p class="hint">If the CV does not say, the fact stays empty. Read CV never guesses.</p>
@@ -287,20 +316,21 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
             <span class="legend">Criterion {{ Number(i) + 1 }}</span>
             <button v-if="c.criteria.length > 1" type="button" class="btn btn-quiet btn-icon btn-sm" :aria-label="`Remove ${cr.label || 'criterion'}`" title="Remove criterion" @click="c.criteria.splice(i, 1)"><Icon name="x" /></button>
           </div>
-          <div class="row-2 two">
-            <div class="field">
-              <label :for="`cl-${node.key}-${i}`">Name</label>
-              <input :id="`cl-${node.key}-${i}`" :value="cr.label" @input="relabel(cr, ($event.target as HTMLInputElement).value, 'criterion')">
-            </div>
-            <div class="field">
-              <label :for="`ck-${node.key}-${i}`">Key</label>
-              <input :id="`ck-${node.key}-${i}`" v-model.trim="cr.key" class="mono" spellcheck="false">
-            </div>
+          <div class="field">
+            <label :for="`cl-${node.key}-${i}`">Name</label>
+            <input :id="`cl-${node.key}-${i}`" :value="cr.label" placeholder="e.g. Customer service" @input="relabel(cr, ($event.target as HTMLInputElement).value, 'criterion')">
           </div>
           <div class="field">
             <label :for="`cd-${node.key}-${i}`">What to look for</label>
-            <textarea :id="`cd-${node.key}-${i}`" v-model="cr.description" rows="2" />
+            <textarea :id="`cd-${node.key}-${i}`" v-model="cr.description" rows="2" placeholder="e.g. Has served customers in a shop, café or call centre" />
           </div>
+          <details class="adv">
+            <summary>Advanced</summary>
+            <div class="field">
+              <label :for="`ck-${node.key}-${i}`">Key</label>
+              <input :id="`ck-${node.key}-${i}`" v-model.trim="cr.key" class="mono" spellcheck="false" placeholder="e.g. customer_service">
+            </div>
+          </details>
         </div>
         <button v-if="c.criteria.length < 10" type="button" class="btn btn-sm add" @click="c.criteria.push({ key: '', label: '', description: '' })"><Icon name="plus" />Add a criterion</button>
         <div class="field">
@@ -330,16 +360,17 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
             <label :for="`qq-${node.key}-${i}`">Ask</label>
             <textarea :id="`qq-${node.key}-${i}`" v-model="q.question" rows="2" maxlength="500" placeholder="Can they work Saturdays and Sundays?" />
           </div>
-          <div class="row-2 two">
-            <div class="field">
-              <label :for="`ql-${node.key}-${i}`">Name</label>
-              <input :id="`ql-${node.key}-${i}`" :value="q.label" placeholder="Weekends" @input="relabel(q, ($event.target as HTMLInputElement).value, 'question')">
-            </div>
+          <div class="field">
+            <label :for="`ql-${node.key}-${i}`">Name</label>
+            <input :id="`ql-${node.key}-${i}`" :value="q.label" placeholder="Weekends" @input="relabelQuestion(q, ($event.target as HTMLInputElement).value, c.questions)">
+          </div>
+          <details class="adv">
+            <summary>Advanced</summary>
             <div class="field">
               <label :for="`qk-${node.key}-${i}`">Key</label>
-              <input :id="`qk-${node.key}-${i}`" v-model.trim="q.key" class="mono" spellcheck="false">
+              <input :id="`qk-${node.key}-${i}`" v-model.trim="q.key" class="mono" spellcheck="false" placeholder="e.g. weekends" @input="keyTyped.add(q)">
             </div>
-          </div>
+          </details>
           <div class="field">
             <span class="legend" :id="`qa-${node.key}-${i}`">Answer</span>
             <div class="seg" role="radiogroup" :aria-labelledby="`qa-${node.key}-${i}`">
@@ -350,7 +381,7 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
           <div v-if="q.kind === 'choice'" class="field">
             <span class="legend">Choices <span class="faint">(2 to 8)</span></span>
             <div v-for="(o, j) in q.options" :key="j" class="opt">
-              <input :value="o.label" :aria-label="`Choice ${Number(j) + 1}`" @input="relabel(o, ($event.target as HTMLInputElement).value, 'option')">
+              <input :value="o.label" :aria-label="`Choice ${Number(j) + 1}`" placeholder="e.g. Saturdays only" @input="relabel(o, ($event.target as HTMLInputElement).value, 'option')">
               <button v-if="q.options.length > 2" type="button" class="btn btn-quiet btn-icon btn-sm" :aria-label="`Remove ${o.label || 'choice'}`" title="Remove choice" @click="q.options.splice(j, 1)"><Icon name="x" /></button>
             </div>
             <button v-if="q.options.length < 8" type="button" class="btn btn-sm btn-quiet add" @click="addOption(q)"><Icon name="plus" />Add a choice</button>
@@ -387,16 +418,17 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
             <button type="button" class="btn btn-quiet btn-icon btn-sm" :disabled="i === cond.branches.length - 1" :aria-label="`Move ${b.label} down`" title="Move down" @click="moveBranch(i, 1)"><Icon name="arrow-right" class="down" /></button>
             <button v-if="cond.branches.length > 1" type="button" class="btn btn-quiet btn-icon btn-sm" :aria-label="`Remove ${b.label}`" title="Remove branch" @click="dropBranch(i)"><Icon name="x" /></button>
           </div>
-          <div class="row-2 two">
-            <div class="field">
-              <label :for="`bl-${node.key}-${i}`">Name</label>
-              <input :id="`bl-${node.key}-${i}`" :value="b.label" @input="relabelBranch(i, ($event.target as HTMLInputElement).value)">
-            </div>
+          <div class="field">
+            <label :for="`bl-${node.key}-${i}`">Name</label>
+            <input :id="`bl-${node.key}-${i}`" :value="b.label" placeholder="e.g. Strong match" @input="relabelBranch(i, ($event.target as HTMLInputElement).value)">
+          </div>
+          <details class="adv" :open="!!branchKeyError(b.key)">
+            <summary>Advanced</summary>
             <div class="field">
               <label :for="`bk-${node.key}-${i}`">Key</label>
               <input :id="`bk-${node.key}-${i}`" :value="b.key" class="mono" spellcheck="false" :aria-invalid="!!branchKeyError(b.key)" @change="renameBranch(i, ($event.target as HTMLInputElement).value.trim())">
             </div>
-          </div>
+          </details>
           <p v-if="branchKeyError(b.key)" class="error">{{ branchKeyError(b.key) }}</p>
           <div class="legend sm">When</div>
           <RuleBuilder :model-value="b.rule" :fields="fields" :graph="graph" :read-only="readOnly" @update:model-value="setRule(b, $event)" />
@@ -437,8 +469,8 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
 
       <!-- person step -->
       <section v-else-if="node.type === 'human_task'" class="sec">
-        <TemplateField v-model="ht.title" label="Task title" :fields="fields" :graph="graph" hide-protected hint="What people see in their inbox." />
-        <TemplateField v-model="ht.instructions" label="Instructions (optional)" multiline :fields="fields" :graph="graph" hide-protected />
+        <TemplateField v-model="ht.title" label="Task title" :fields="fields" :graph="graph" hide-protected placeholder="e.g. Call {{candidate.first_name}} about shifts" hint="What people see in their inbox." />
+        <TemplateField v-model="ht.instructions" label="Instructions (optional)" multiline :fields="fields" :graph="graph" hide-protected placeholder="e.g. Ask which days they can work and when they can start." />
         <fieldset class="field">
           <legend class="legend">Who does it</legend>
           <label class="check"><input v-model="ht.assignees.job_owner" type="checkbox">Job owner</label>
@@ -456,6 +488,8 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
             </div>
           </template>
         </fieldset>
+        <p v-if="ht.offer" class="hint">Make offer: whoever does this step makes the offer from the candidate’s page or their inbox, and the letter is emailed. It moves on when the candidate answers on the link, or when you record their answer. Rules after it can read “Offer accepted”.</p>
+        <template v-if="!ht.offer">
         <div class="legend">Scorecard</div>
         <div v-for="(s, i) in ht.scorecard" :key="i" class="row-card">
           <div class="rc-head">
@@ -464,35 +498,40 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
           </div>
           <div class="field">
             <label :for="`sl-${node.key}-${i}`" class="sr-only">Question</label>
-            <input :id="`sl-${node.key}-${i}`" :value="s.label" placeholder="e.g. Problem solving (1–5)" @input="relabel(s, ($event.target as HTMLInputElement).value, 'question')">
+            <input :id="`sl-${node.key}-${i}`" :value="s.label" :placeholder="s.type === 'number' ? 'e.g. Problem solving (1–5)' : 'e.g. Would you hire them?'" @input="relabelQuestion(s, ($event.target as HTMLInputElement).value, ht.scorecard)">
           </div>
           <div class="row-2 two">
             <div class="field">
-              <label :for="`sk-${node.key}-${i}`">Key</label>
-              <input :id="`sk-${node.key}-${i}`" v-model.trim="s.key" class="mono" spellcheck="false">
-            </div>
-            <div class="field">
               <label :for="`st-${node.key}-${i}`">Answer</label>
-              <select :id="`st-${node.key}-${i}`" v-model="s.type">
-                <option value="number">Number</option>
+              <select :id="`st-${node.key}-${i}`" :value="answerType(s)" @change="setAnswerType(s, ($event.target as HTMLSelectElement).value)">
                 <option value="boolean">Yes / no</option>
+                <option value="rating">Rating 1–5</option>
+                <option value="number">Number</option>
                 <option value="text">Text</option>
               </select>
             </div>
-            <template v-if="s.type === 'number'">
+            <template v-if="answerType(s) === 'number'">
               <div class="field">
                 <label :for="`smin-${node.key}-${i}`">Lowest</label>
-                <input :id="`smin-${node.key}-${i}`" type="number" :value="s.min" @input="optNumber(s, 'min', ($event.target as HTMLInputElement).value)">
+                <input :id="`smin-${node.key}-${i}`" type="number" :value="s.min" placeholder="No limit" @input="optNumber(s, 'min', ($event.target as HTMLInputElement).value)">
               </div>
               <div class="field">
                 <label :for="`smax-${node.key}-${i}`">Highest</label>
-                <input :id="`smax-${node.key}-${i}`" type="number" :value="s.max" @input="optNumber(s, 'max', ($event.target as HTMLInputElement).value)">
+                <input :id="`smax-${node.key}-${i}`" type="number" :value="s.max" placeholder="No limit" @input="optNumber(s, 'max', ($event.target as HTMLInputElement).value)">
               </div>
             </template>
           </div>
           <label class="check"><input v-model="s.required" type="checkbox">Required</label>
+          <details class="adv">
+            <summary>Advanced</summary>
+            <div class="field">
+              <label :for="`sk-${node.key}-${i}`">Key</label>
+              <input :id="`sk-${node.key}-${i}`" v-model.trim="s.key" class="mono" spellcheck="false" placeholder="e.g. would_hire" @input="keyTyped.add(s)">
+            </div>
+          </details>
         </div>
         <button v-if="ht.scorecard.length < 30" type="button" class="btn btn-sm add" @click="addScore"><Icon name="plus" />Add a question</button>
+        </template>
         <div class="row-2 two">
           <div class="field">
             <label :for="`ms-${node.key}`">Scorecards needed</label>
@@ -504,7 +543,7 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
           </div>
         </div>
         <p class="hint">With 2 or more, the step waits for that many scorecards (a panel) and averages the numbers.</p>
-        <div class="row-card">
+        <div v-if="!ht.offer" class="row-card">
           <label class="check">
             <input type="checkbox" role="switch" :checked="!!booking" @change="setBooking(($event.target as HTMLInputElement).checked)">
             <span><b>Let the candidate book a time</b><br><span class="hint">They get a link to pick a slot when the people above are free. Interviewers set their hours in their inbox, under <NuxtLink to="/inbox/hours">Your interview hours</NuxtLink>.</span></span>
@@ -513,12 +552,52 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
             <label :for="`book-${node.key}`">Length (minutes)</label>
             <input :id="`book-${node.key}`" type="number" min="15" max="240" step="15" :value="booking.duration_min" @change="setDuration(($event.target as HTMLInputElement).value)">
           </div>
+          <div v-if="booking" class="field">
+            <label :for="`where-${node.key}`">Where <span class="faint">optional</span></label>
+            <input :id="`where-${node.key}`" :value="booking.where ?? ''" maxlength="300" placeholder="e.g. Tuas warehouse, 12 Tuas Ave 3. Ask for Priya at the front desk." @input="setWhere(($event.target as HTMLInputElement).value)">
+            <span class="hint">Shown on the booking page, in the emails and in the calendar invite.</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- request documents -->
+      <section v-else-if="node.type === 'request_documents'" class="sec">
+        <p class="hint">Emails the new hire a link to upload these. Moves on when every required one is in, whether they uploaded it or you ticked it off.</p>
+        <div v-for="(d, i) in c.documents" :key="i" class="doc">
+          <input v-model="d.label" :aria-label="`Document ${Number(i) + 1}`" placeholder="e.g. NRIC or work pass (both sides)" maxlength="200">
+          <label class="check"><input v-model="d.required" type="checkbox">Required</label>
+          <button v-if="c.documents.length > 1" type="button" class="btn btn-quiet btn-icon btn-sm" :aria-label="`Remove ${d.label || 'document'}`" title="Remove document" @click="c.documents.splice(i, 1)"><Icon name="x" /></button>
+        </div>
+        <button v-if="c.documents.length < 20" type="button" class="btn btn-sm add" @click="c.documents.push({ label: '', required: true })"><Icon name="plus" />Add a document</button>
+        <fieldset class="field">
+          <legend class="legend">Who follows up</legend>
+          <label class="check"><input v-model="c.assignees.job_owner" type="checkbox">Job owner</label>
+          <label v-for="r in roles" :key="r.id" class="check">
+            <input type="checkbox" :checked="c.assignees.roles.includes(r.id)" @change="toggle(c.assignees.roles, r.id, ($event.target as HTMLInputElement).checked)">
+            <span>Anyone with the role {{ r.name }}</span>
+          </label>
+          <template v-if="people">
+            <div class="legend sm">Specific people</div>
+            <div class="people">
+              <label v-for="p in people" :key="p.id" class="check">
+                <input type="checkbox" :checked="c.assignees.users.includes(p.id)" @change="toggle(c.assignees.users, p.id, ($event.target as HTMLInputElement).checked)">
+                <span>{{ p.name }} <span class="faint">{{ p.email }}</span></span>
+              </label>
+            </div>
+          </template>
+        </fieldset>
+        <div class="field">
+          <label :for="`dd-${node.key}`">Due</label>
+          <select :id="`dd-${node.key}`" :value="c.due_days ?? ''" @change="optNumber(c, 'due_days', ($event.target as HTMLSelectElement).value)">
+            <option value="">No due date</option>
+            <option v-for="d in dueChoices" :key="d" :value="d">{{ d }} days after it’s sent</option>
+          </select>
         </div>
       </section>
 
       <!-- email -->
       <section v-else-if="node.type === 'send_email'" class="sec">
-        <TemplateField v-model="c.subject" label="Subject" :fields="fields" :graph="graph" />
+        <TemplateField v-model="c.subject" label="Subject" :fields="fields" :graph="graph" placeholder="e.g. Your application for {{job.title}}" />
         <TemplateField v-model="c.body" label="Message" multiline :fields="fields" :graph="graph" hint="Sent to the candidate. If a field is empty when it’s time to send, the email waits for you instead." />
         <div class="preview" aria-label="Preview with sample answers">
           <div class="eyebrow">Preview with sample answers</div>
@@ -530,12 +609,12 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
 
       <!-- set values -->
       <section v-else-if="node.type === 'set_variable'" class="sec">
-        <p class="hint">Saves values later steps can read as <code v-text="refHint" />.</p>
+        <p class="hint">Saves values that later steps can use.</p>
         <div v-for="(f, i) in c.fields" :key="i" class="row-card">
           <div class="row-2">
             <div class="field">
               <label :for="`vk-${node.key}-${i}`">Key</label>
-              <input :id="`vk-${node.key}-${i}`" v-model.trim="f.key" class="mono" spellcheck="false">
+              <input :id="`vk-${node.key}-${i}`" v-model.trim="f.key" class="mono" spellcheck="false" placeholder="e.g. start_date">
             </div>
             <div class="field">
               <label :for="`vt-${node.key}-${i}`">Type</label>
@@ -621,6 +700,7 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
 .gives dd { margin: 0; color: var(--ink-2); overflow-wrap: anywhere; }
 .goes { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: var(--t-sm); }
 .goes span { flex: none; }
+.doc { display: grid; grid-template-columns: minmax(0, 1fr) auto var(--h-sm); gap: 8px; align-items: center; }
 .people { display: grid; gap: 8px; max-height: 220px; overflow-y: auto; }
 .note { padding: 10px 12px; border-radius: var(--r-field); background: var(--warn-tint); color: var(--warn); font-size: var(--t-sm); font-weight: 500; }
 .hint { font-size: var(--t-sm); color: var(--ink-2); }
@@ -634,4 +714,7 @@ code { font-size: 12px; overflow-wrap: anywhere; }
 fieldset.field { gap: 10px; }
 .dur input { width: 120px; }
 fieldset.field > legend { margin-bottom: 10px; }
+/* keys and {{nodes.…}} names: for people who wire rules by hand */
+.adv > summary { cursor: pointer; font-size: var(--t-sm); color: var(--ink-2); width: fit-content; }
+.adv[open] > summary { margin-bottom: 8px; }
 </style>

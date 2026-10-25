@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { rejectionEmailNode, rejectionSubject } from '~~/shared/workflow/graph'
 import { arrivalEffects, relation } from '~~/shared/workflow/stages'
 import type { FormField } from '~~/shared/workflow/types'
 import type { Pos } from './NextMenu.vue'
@@ -14,6 +15,7 @@ const picking = ref(true) // false when opened on a named move: the list stays o
 const reason = ref('')
 const reasonCode = ref('')
 const answers = ref<Record<string, any>>({})
+const notify = ref(false) // closing as rejected: off by default, they may have been told already
 const busy = ref(false)
 const err = ref('')
 const issues = ref<string[]>([])
@@ -40,7 +42,9 @@ const closingRejected = computed(() => !!target.value && 'closed' in target.valu
 const at = computed(() => closed.value || !props.tl.application.currentNodeKey ? null : { node: props.tl.application.currentNodeKey })
 const isNext = computed(() => !!graph.value && !!at.value && !!target.value && relation(graph.value, at.value, target.value).kind === 'next')
 const needReason = computed(() => !closingRejected.value && !isNext.value)
-const effects = computed(() => graph.value && target.value ? arrivalEffects(graph.value, target.value) : [])
+const effects = computed(() => graph.value && target.value
+  ? arrivalEffects(graph.value, target.value).map(e => notify.value && closingRejected.value ? { ...e, text: e.text.replace('No email is sent.', 'They’re emailed the rejection.') } : e)
+  : [])
 // closing as rejected, or a step whose path ends in a rejection ("Otherwise → Rejection email"): ask the team's reason
 const rejecting = computed(() => effects.value.some(e => e.outcome === 'rejected'))
 // what can't be taken back is red, as on the board: a rejection, or an email that can't be unsent
@@ -87,6 +91,7 @@ function open(preset?: Pos | null) {
   picking.value = !preset
   reason.value = ''
   reasonCode.value = ''
+  notify.value = false
   fresh()
   err.value = ''
   issues.value = []
@@ -106,9 +111,9 @@ function cleanAnswers() {
   return Object.fromEntries(ask.value.flatMap((f) => {
     const v = answers.value[f.key]
     if (f.type === 'boolean') return [[f.key, !!v]]
+    if (f.type === 'list') return listItems(v).length ? [[f.key, listItems(v)]] : []
     if (v === '' || v == null) return []
     if (f.type === 'number') return [[f.key, Number(v)]]
-    if (f.type === 'list') return [[f.key, String(v).split(',').map(s => s.trim()).filter(Boolean)]]
     return [[f.key, v]]
   }))
 }
@@ -128,6 +133,7 @@ async function submit() {
         ...(reason.value.trim() && { reason: reason.value.trim() }),
         ...(rejecting.value && reasonCode.value && { reasonCode: reasonCode.value }),
         ...(ask.value.length && { answers: cleanAnswers() }),
+        ...(closingRejected.value && notify.value && { notify: true }),
       },
     })
     dlg.value!.close()
@@ -145,7 +151,7 @@ async function submit() {
 </script>
 
 <template>
-  <dialog ref="dlg" class="dialog move" aria-labelledby="move-h" @click="e => e.target === dlg && dlg!.close()">
+  <dialog ref="dlg" class="dialog move" :class="{ picking }" aria-labelledby="move-h" @click="e => e.target === dlg && dlg!.close()">
     <form @submit.prevent="submit">
       <div class="dialog-body">
         <div>
@@ -202,6 +208,11 @@ async function submit() {
           </div>
         </fieldset>
 
+        <label v-if="closingRejected" class="check notify">
+          <input v-model="notify" type="checkbox">
+          <span>Send {{ first }} the rejection email<br><span class="faint">{{ graph && rejectionEmailNode(graph) ? 'The one from this job’s flow' : 'A short, polite note' }}: “{{ rejectionSubject(graph, tl.job.title) }}”. It shows on their page.</span></span>
+        </label>
+
         <fieldset v-if="ask.length" class="ask">
           <legend class="legend">Asked when someone is moved here</legend>
           <div v-for="(f, i) in ask" :key="f.key" class="field">
@@ -215,10 +226,10 @@ async function submit() {
                 <option value="" :disabled="f.required">Pick one</option>
                 <option v-for="o in f.options ?? []" :key="o" :value="o">{{ o }}</option>
               </select>
+              <ListInput v-else-if="f.type === 'list'" v-model="answers[f.key]" :id="`ask-${f.key}`" :label="f.label" :max="f.max" :required="f.required" />
               <input
                 v-else :id="`ask-${f.key}`" v-model="answers[f.key]" :required="f.required" :data-first="i === 0 || undefined"
                 :type="f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : 'text'" :min="f.type === 'number' ? f.min : undefined" :max="f.type === 'number' ? f.max : undefined"
-                :placeholder="f.type === 'list' ? 'Separate with commas' : undefined"
               >
             </template>
           </div>
@@ -226,7 +237,7 @@ async function submit() {
 
         <div class="field">
           <label for="move-reason">{{ needReason ? 'Reason' : 'Note' }}<span v-if="!needReason" class="faint"> (optional)</span></label>
-          <textarea id="move-reason" v-model="reason" :required="needReason" maxlength="1000" rows="2" />
+          <textarea id="move-reason" v-model="reason" :required="needReason" maxlength="1000" rows="2" :placeholder="rejecting ? 'e.g. Can’t do weekend shifts' : needReason ? 'e.g. Owner wants to meet them this week' : 'e.g. Spoke on the phone, keen to start'" />
           <span class="hint">{{ rejecting ? 'Only your team sees it, in the candidate’s history.' : needReason && target ? 'This skips the flow’s own path, so say why. Kept in the history with your name.' : 'Follows the flow, so no reason needed.' }}</span>
         </div>
       </div>
@@ -249,6 +260,10 @@ async function submit() {
 .move { width: min(520px, calc(100vw - 32px)); }
 .move form { display: flex; flex-direction: column; max-height: calc(100dvh - 48px); }
 .dialog-body { overflow-y: auto; }
+/* picking a step grows "This will:" and the questions under the list; a set height keeps the dialog,
+   and so the Move button, still while the body scrolls inside it */
+.picking form { height: min(720px, calc(100dvh - 48px)); }
+.picking .dialog-body { flex: 1; align-content: start; }
 .sub { margin-top: 4px; font-size: var(--t-sm); }
 .linkish { border: 0; padding: 0; background: none; font: inherit; color: var(--accent-ink); font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 fieldset { display: grid; gap: 6px; }
@@ -270,6 +285,8 @@ fieldset { display: grid; gap: 6px; }
 .does li.email svg { color: var(--bad); }
 .ask { gap: 12px; }
 .check { display: flex; align-items: center; gap: 8px; font-weight: 500; font-size: var(--t-sm); cursor: pointer; }
+.notify { align-items: flex-start; }
+.notify input { margin-top: 2px; }
 /* the team's reasons, drawn as the board's move dialog draws them: the picked one on the accent tint */
 .reasons { display: grid; gap: 4px; }
 .reason { padding: 9px 12px; border-radius: var(--r-field); box-shadow: inset 0 0 0 1px var(--line); font-size: var(--t-md); font-weight: 400; }

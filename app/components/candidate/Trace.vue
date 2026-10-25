@@ -25,6 +25,7 @@ export interface Timeline {
   graph?: Graph // managers only: the pinned flow version
   runs: Run[]
   events: TimelineEvent[]
+  aiReview: Record<string, unknown> | null // latest completed AI review output, for every viewer
 }
 
 export const humanise = (k: string) => {

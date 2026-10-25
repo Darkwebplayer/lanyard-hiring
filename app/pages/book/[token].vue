@@ -3,7 +3,7 @@ definePageMeta({ layout: 'bare' })
 
 interface Booking {
   companyName: string | null, jobTitle: string, candidateFirstName: string, interviewers: string[], durationMin: number
-  timezoneHint: string | null, startsAt: string | null, canBook: boolean, noAvailability: boolean, slots: string[]
+  location: string | null, cancelled: boolean, timezoneHint: string | null, startsAt: string | null, canBook: boolean, noAvailability: boolean, slots: string[]
 }
 
 // Client-only (routeRules '/**'): the slots depend on the candidate's own clock and zone anyway.
@@ -93,7 +93,7 @@ async function confirm() {
   busy.value = true
   bookError.value = ''
   try {
-    await api(base, { method: 'POST', body: { startsAt: pick.value } })
+    await api(base, { method: 'POST', body: { startsAt: pick.value, timezone: tz.value } }) // the email says the time in their zone
     changing.value = false
     justBooked.value = true
     await load()
@@ -134,6 +134,11 @@ const picking = computed(() => !!b.value?.canBook && (!b.value.startsAt || chang
       <div class="skeleton" style="height: 120px" />
     </div>
 
+    <div v-else-if="b.cancelled" class="card sheet">
+      <h1>This interview was cancelled</h1>
+      <p class="muted">Your application has moved on, so it no longer goes ahead<template v-if="b.startsAt"> on {{ fullF.format(new Date(b.startsAt)) }}</template>. {{ b.companyName ?? 'The team' }} will be in touch, or reply to their email with any questions.</p>
+    </div>
+
     <!-- booked, not changing -->
     <section v-else-if="b.startsAt && !changing" class="card sheet" aria-labelledby="bk-h" :aria-live="justBooked ? 'polite' : undefined">
       <div>
@@ -141,6 +146,8 @@ const picking = computed(() => !!b.value?.canBook && (!b.value.startsAt || chang
         <p class="sub">{{ b.jobTitle }} · {{ b.durationMin }} minutes<template v-if="people"> with {{ people }}</template></p>
       </div>
       <p class="when"><Icon name="calendar" :size="20" /><span>{{ fullF.format(new Date(b.startsAt)) }}<small>{{ zoneName }}</small></span></p>
+      <p v-if="b.location" class="when"><Icon name="pin" :size="20" /><span>{{ b.location }}<small>Where</small></span></p>
+      <p v-if="justBooked" class="muted small">We’ve emailed this to you too.</p>
       <div class="row">
         <a class="btn btn-primary btn-lg" :href="`${base}/invite.ics`" download="interview.ics"><Icon name="download" />Add to calendar</a>
         <button v-if="b.canBook" class="btn btn-lg" @click="changing = true; bookError = ''">Change time</button>
@@ -158,6 +165,7 @@ const picking = computed(() => !!b.value?.canBook && (!b.value.startsAt || chang
       <div>
         <h1 id="pk-h">Hi {{ b.candidateFirstName }}, pick a time for your interview</h1>
         <p class="sub">{{ b.jobTitle }} · {{ b.durationMin }} minutes<template v-if="people"> with {{ people }}</template></p>
+        <p v-if="b.location" class="sub">Where: {{ b.location }}</p>
       </div>
 
       <p v-if="bookError" class="form-error" role="alert"><Icon name="alert" :size="16" />{{ bookError }}</p>

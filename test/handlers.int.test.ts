@@ -101,6 +101,12 @@ describe('ai_review', () => {
     for (const leak of ['Jane', 'Doe', 'jane@example.test', '123', 'female', '"k"']) expect(json).not.toContain(leak)
   })
 
+  it('sends the job description, trimmed', () => {
+    const d = aiReviewInput(ctx({ job: { title: 'Driver', openings: 1, description: '  ## Role\nDrive.  ' } }), form)
+    expect(d.job).toEqual({ title: 'Driver', description: '## Role\nDrive.', requirements: {} })
+    expect(aiReviewInput(ctx({ job: { title: 'Driver', openings: 1, description: 'x'.repeat(9000) } }), form).job.description).toHaveLength(6000)
+  })
+
   it('review round 2: identity is redacted from CV text; refs outside form/CV text are ignored', () => {
     const cv = 'Jane Doe\njane@example.test | +44 7700 900123 | 123\nJanet Smith, 2015 - 2020 at Doe Corp? no: DoeCorp\nContact: other.person@mail.example'
     const input = aiReviewInput(ctx({ nodes: { cv: { text: cv } } }), form, 'nodes.cv.text')
@@ -117,7 +123,7 @@ describe('ai_review', () => {
   it('scores per criterion, overall is their mean, and the audit records model and input hash', async () => {
     const { output, input } = await handlers().ai_review!(args({ config, ctx: c, form }))
     expect(output).toMatchObject({ skills: 50, exp: 50, overall: 50 })
-    expect(input).toMatchObject({ model: 'mock', prompt_version: 'v3', input_sha256: expect.stringMatching(/^[0-9a-f]{64}$/), sure: { skills: 0.5, exp: 0.5 } })
+    expect(input).toMatchObject({ model: 'mock', prompt_version: 'v4', input_sha256: expect.stringMatching(/^[0-9a-f]{64}$/), sure: { skills: 0.5, exp: 0.5 } })
     expect(output).not.toHaveProperty('sure')
     const again = await handlers().ai_review!(args({ config, ctx: c, form }))
     expect(again.input).toEqual(input) // same input, same hash
@@ -140,7 +146,7 @@ describe('ai_check', () => {
   it('outputs one answer per question; the audit records model, hash and how sure', async () => {
     const { output, input } = await handlers().ai_check!(args({ config }))
     expect(output).toEqual({ weekends: true, role: 'barista' })
-    expect(input).toMatchObject({ model: 'mock', prompt_version: 'v3', input_sha256: expect.stringMatching(/^[0-9a-f]{64}$/), sure: { weekends: 0.5, role: 0.5 } })
+    expect(input).toMatchObject({ model: 'mock', prompt_version: 'v4', input_sha256: expect.stringMatching(/^[0-9a-f]{64}$/), sure: { weekends: 0.5, role: 0.5 } })
   })
 
   it('without AI configured it fails visibly', async () => {

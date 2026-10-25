@@ -177,7 +177,7 @@ How to send an application:
 
 | Method & path | Guard | Returns |
 |---|---|---|
-| `GET /api/tasks` | user | employee: `{ mine }`. Manager/admin: `{ mine, overdue, blocked, failed, stuck }`. Each is `TaskRow[]` |
+| `GET /api/tasks` | user | employee: `{ mine, calledOff }`. Manager/admin: `{ mine, calledOff, overdue, blocked, failed, stuck }`. Each is `TaskRow[]`; `calledOff` is your interviews cancelled in the last 7 days |
 | `GET /api/tasks/:runId` | assignee or manager | `TaskDetail` |
 | `POST /api/tasks/:runId/submit` | assignee | body `{ values: { <scorecard key>: value } }` → `{ completed: boolean }` |
 
@@ -217,7 +217,13 @@ Scorecards and blind panels:
 |---|---|---|
 | `GET /api/applications/:id` | – (**user**: manager, or holder of a task on it) | `Timeline` |
 | `GET /api/applications/:id/files/:field` | – (same access) | the file as a download (`<a href download>` works; the session cookie is sent) |
-| `POST /api/applications/:id/move` | `{ to: { node: '<key>' } \| { close: 'hired'\|'rejected'\|'withdrawn' }, reason }` | `{ ok: true }` |
+| `POST /api/applications/:id/move` | `{ to: { node: '<key>' } \| { close: 'hired'\|'rejected'\|'withdrawn' }, reason, notify? }` | `{ ok: true }` |
+| `GET /api/applications/:id/emails` | – (**user**: same access as the application) | `[{ id, kind, key, to, replyTo, subject, body, createdAt, sentAt }]`, newest first |
+| `GET /api/applications/:id/offers` | – | offers, newest first, each with `answer` and `emailed: { to, at } \| null` |
+| `POST /api/applications/:id/offers` | `{ templateId, terms: { salary, start_date, location? }, expiresAt? }` | the offer (201); emails the candidate the link. `warning: 'seats_full'` when every opening is filled |
+| `POST /api/offers/:id/resend` | – | `{ ok: true }`; emails the open offer's link again. 409 `offer_not_open` |
+| `POST /api/offers/:id/answer` | `{ accepted, via: 'phone'\|'email'\|'in_person', note?, reason?, notify = true }` | `{ status: 'accepted'\|'declined' }`; the team records an answer, same effect as the link. 409 `offer_not_open` |
+| `POST /api/offers/:id/withdraw` | – | the offer. 409 `offer_not_open` |
 | `PUT /api/runs/:id/assignees` | `{ add?: userId[], remove?: userId[] }` | the run's assignments |
 | `POST /api/runs/:id/retry` | – | `{ ok: true }` |
 | `GET /api/jobs/:id/applications` | – | `PipelineRow[]` |
@@ -259,6 +265,9 @@ PipelineRow = { id, status, outcome, currentNodeKey, createdAt, version, runStat
   - `{ close }` ends the application without going through an End node.
   - A reason is required; it goes in the event log.
   - Errors: 422 `node_not_in_version`, 409 `already_closed` (closing a closed application: reopen it first).
+- **Close as rejected with `notify: true`** (also on `POST /api/jobs/:id/moves`): emails the candidate the flow's rejection email (a `send_email` step that leads straight to a rejected End), or a plain one.
+- **Candidate emails:** every email to a candidate (flow `send_email` steps, the offer link, the confirmation of an answer, the booking link and "You're booked", a rejection by hand) is written to `candidate_emails` in the same transaction as what caused it, then sent after commit; `sentAt` is null until the provider took it (the sweeper retries). `kind`: `flow` (then `key` is the run id) · `offer` · `offer_accepted` · `offer_declined` · `booking_request` · `booked` · `rejection` · `documents`.
+- **Offer answers** (the link or `answer`): at a Make offer step the step completes with `{ accepted, decline_reason? }` and the flow walks on; anywhere else the application closes as hired / withdrawn. Accepting cancels a booked interview still ahead (`booking_cancelled`; the interviewers see it under `calledOff` in `GET /api/tasks`).
 - **Retry:**
   - Only for the application's **latest** run, when it's `failed` or stuck `running`.
   - Errors: 409 `not_latest_run`, `not_retryable`, `application_closed`.
@@ -292,6 +301,10 @@ PipelineRow = { id, status, outcome, currentNodeKey, createdAt, version, runStat
 | `reopened` | |
 | `run_failed` | `data: { node, error }` |
 | `run_retried` | |
+| `offer_made`, `offer_withdrawn` | `data: { offerId }` |
+| `offer_answered` | `data: { offerId, accepted, via: 'link'\|'phone'\|'email'\|'in_person', reason?, note? }`; actor: who recorded it, or who made the offer (link) |
+| `booked` | `data: { runId, startsAt, previous }` |
+| `booking_cancelled` | `data: { runId, startsAt }` |
 
 ---
 
@@ -317,7 +330,7 @@ GraphEdge = { from, to, branch? }            // branch only on edges leaving a c
 | `ai_review` | auto | `{ criteria: [{ key, label, description }] (1–10), instructions?, cv_text_ref? }` | one number (0–100) per criterion key, plus `overall` and `summary` |
 | `set_variable` | instant | `{ fields: [{ key, type, label?, source: { kind:'literal', value } \| { kind:'ref', ref } }] }` | the field keys |
 | `condition` | instant | `{ branches: [{ key, label, rule }], on_missing }` | – (it routes by `branchTaken`) |
-| `human_task` | human | `{ title, instructions?, assignees: { users[], roles[], job_owner }, scorecard: ScorecardField[], min_submissions=1, due_days? }` | scorecard keys (numbers averaged, text joined; booleans give `<key>` (everyone said yes) and `<key>_any`), plus `submitted_count` |
+| `human_task` | human | `{ title, instructions?, assignees: { users[], roles[], job_owner }, scorecard: ScorecardField[], min_submissions=1, due_days?, booking?: { duration_min, where? }, offer? }` | scorecard keys (numbers averaged, text joined; booleans give `<key>` (everyone said yes) and `<key>_any`), plus `submitted_count`. With `offer: true`: `accepted` (boolean), `decline_reason` |
 | `send_email` | auto | `{ subject, body }` (templates; sent to the candidate, Reply-To from settings) | `sent` |
 | `end` | terminal | `{ outcome: 'hired'\|'rejected'\|'withdrawn' }` | – |
 
@@ -325,6 +338,8 @@ Node type notes:
 - **Human tasks:**
   - Presets for the palette are in `HUMAN_TASK_PRESETS`: interview, assessment review, HR approval.
   - Their titles and instructions can't reference protected fields (`protected_ref`).
+  - **Make offer** is a human task with `offer: true` and an empty scorecard (`MAKE_OFFER` in the registry). It takes no scorecard (`submit` gives 409 `answer_with_offer`): making the offer emails the letter, and the offer's answer (the candidate's link, or `POST /api/offers/:id/answer`) completes it with `{ accepted, decline_reason? }`. A condition after it routes accepted → hired, otherwise → withdrawn.
+  - **Booking:** with `booking`, the candidate is emailed a link to pick a slot; `where` (optional) shows on the booking page, in the emails and as the .ics LOCATION.
 - **`cv_text_ref`** may only be a non-protected `form.*` text field or `nodes.<cv_parse>.text`, otherwise `ai_input_not_allowed`.
 - **Kill switch:** a node type listed in the env var `DISABLED_NODE_TYPES` fails its runs with `disabled`; they show up under `failed`.
 
@@ -375,8 +390,10 @@ CV parse → AI review → condition `screen`:
 - missing or default → manual review → `review_decision`: advance → interview, otherwise → rejection email
 
 The interview leads to the `decision` condition:
-- hire → offer email → End(hired)
+- hire → `make_offer` (Make offer, job owner) → `offer_answer`: accepted → End(hired), otherwise → End(withdrawn)
 - otherwise → rejection email → End(rejected)
+
+Versions published before Make offer (hire → offer email → End(hired)) keep running as they were; an offer answered there closes the application directly.
 
 The full graph is in `shared/workflow/templates.ts` (`STANDARD_HIRE`).
 

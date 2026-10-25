@@ -62,11 +62,20 @@ function openDraft() {
 }
 watch([selectedId, newType, () => !!presets.value], openDraft, { immediate: true })
 
+// the schema's words ("scorecard.1.label: Too small…") turned into the editor's: "Question 2 needs a label"
+const ITEM: Record<string, string> = { scorecard: 'Question', questions: 'Question', options: 'Choice', criteria: 'Criterion', extract: 'Fact', documents: 'Document', branches: 'Branch', fields: 'Value' }
+const NEEDS: Record<string, string> = { label: 'a label', key: 'a key', question: 'a question to ask', subject: 'a subject', body: 'a message' }
+function plainIssue(i: { path: PropertyKey[], code: string, message: string }) {
+  const where = i.path.flatMap((p, n) => typeof p === 'number' ? [`${ITEM[String(i.path[n - 1])] ?? 'Item'} ${p + 1}`] : []).join(', ') || 'This step'
+  const leaf = i.path.at(-1)
+  if (typeof leaf === 'string' && NEEDS[leaf] && (i.code === 'too_small' || i.code === 'invalid_type')) return `${where} needs ${NEEDS[leaf]}`
+  return `${where}${typeof leaf === 'string' ? ` (${leaf})` : ''}: ${i.message}`
+}
 const shapeIssues = computed<Issue[]>(() => {
   const n = draft.value?.node
   if (!n) return []
   const r = REGISTRY[n.type]!.config.safeParse(n.config)
-  return r.success ? [] : r.error.issues.map(i => ({ node: 'preset', code: 'invalid_config', message: `${i.path.join('.') || 'settings'}: ${i.message}` }))
+  return r.success ? [] : r.error.issues.map(i => ({ node: 'preset', code: 'invalid_config', message: plainIssue(i) }))
 })
 const issues = computed(() => [...shapeIssues.value, ...serverIssues.value])
 
@@ -194,7 +203,7 @@ async function confirmDelete() {
           </StepPanel>
           <footer class="foot">
             <button v-if="selected" type="button" class="btn btn-danger btn-sm" @click="dlg?.showModal()"><Icon name="trash" />Delete</button>
-            <span class="status" aria-live="polite">{{ dirty ? (selected ? 'Unsaved. Saving changes new steps in every job; flows keep their copy.' : 'New presets go into every job’s palette.') : selected ? 'Saved' : '' }}</span>
+            <span class="status" aria-live="polite">{{ shapeIssues.length ? `Fix ${shapeIssues.length === 1 ? 'the problem' : 'the problems'} at the top to ${selected ? 'save' : 'add'} it.` : dirty ? (selected ? 'Unsaved. Saving changes new steps in every job; flows keep their copy.' : 'New presets go into every job’s palette.') : selected ? 'Saved' : '' }}</span>
             <button type="button" class="btn btn-primary" :disabled="saving || (!dirty && !!selected) || shapeIssues.length > 0" :aria-busy="saving" @click="save">
               <span v-if="saving" class="spinner" />{{ selected ? 'Save preset' : 'Add preset' }}
             </button>

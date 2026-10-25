@@ -3,8 +3,6 @@ import type { RouteLocationRaw } from 'vue-router'
 import type { TaskRow } from '~/composables/useTasks'
 
 defineProps<{ task: TaskRow, to: RouteLocationRaw, current: boolean }>()
-// the interview's own time beats the scorecard's due date for planning a day, so it gets the weekday
-const when = (iso: string) => new Date(iso).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })
 </script>
 
 <template>
@@ -14,7 +12,7 @@ const when = (iso: string) => new Date(iso).toLocaleString(undefined, { weekday:
     <span class="job">{{ task.jobTitle }}</span>
     <DueChip :due="task.dueAt" :overdue="task.overdue" class="due" />
     <span v-if="task.booking" class="book" :class="{ waiting: !task.booking.startsAt }">
-      <Icon name="calendar" :size="14" />{{ task.booking.startsAt ? `Interview ${when(task.booking.startsAt)}` : 'Waiting for the candidate to book' }}
+      <Icon name="calendar" :size="14" />{{ task.booking.cancelledAt ? `Cancelled: the interview on ${fmtBooked(task.booking.startsAt)}` : task.booking.startsAt ? `Interview ${fmtBooked(task.booking.startsAt)}` : 'Waiting for the candidate to book' }}
     </span>
   </NuxtLink>
 </template>

@@ -6,11 +6,12 @@ const flash = useState<{ at: string } | null>('inbox-flash', () => null)
 
 // with tasks waiting, the first one opens by itself; nobody starts from a blank page
 const router = useRouter()
-const opening = computed(() => !!inbox.value?.mine.length && route.query.list !== 'attention')
+const first = computed(() => inbox.value?.mine.find(t => t.nodeType !== 'request_documents')) // those open on the candidate page
+const opening = computed(() => !!first.value && route.query.list !== 'attention')
 // after mount, so it never races the navigation that brought us here
 onMounted(async () => {
   await router.isReady()
-  watch(() => opening.value && inbox.value!.mine[0]!.runId, (id) => {
+  watch(() => opening.value && first.value!.runId, (id) => {
     if (id) router.replace({ path: `/inbox/${id}`, query: route.query })
   }, { immediate: true })
 })

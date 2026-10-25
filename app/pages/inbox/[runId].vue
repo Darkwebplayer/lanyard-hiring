@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import type { TaskRow } from '~/composables/useTasks'
+import { type Timeline, fmtVal, humanise } from '~/components/candidate/Trace.vue'
 import type { ScorecardField } from '~~/shared/workflow/registry'
 
 interface Assignment { userId: string, name: string, assignedAt: string, submittedAt: string | null, closedAt: string | null, values: Record<string, unknown> | null }
 interface TaskDetail extends TaskRow {
   scorecard: ScorecardField[], minSubmissions: number, canSubmit: boolean, assignments: Assignment[]
   instructions: string | null
+  offer?: boolean // Make offer: answered through the offer dialog, not a scorecard
 }
 
 const route = useRoute()
@@ -24,7 +26,20 @@ const busy = ref(false)
 // the opening after a sent scorecard is the one animated arrival; clicks and j/k stay instant
 const arrived = flash.value?.at === route.path
 
+// who they are, from their application (same access check as their page); the task still works without it
+const snap = ref<Timeline | null>(null)
+const snapLoading = ref(false)
+async function loadSnap(applicationId: string) {
+  if (snap.value?.application.id === applicationId) return
+  snap.value = null
+  snapLoading.value = true
+  snap.value = await api<Timeline>(`/api/applications/${applicationId}`).catch(() => null)
+  snapLoading.value = false
+}
 async function load() {
+  // the inbox row already knows the application: fetch both at once rather than one after the other
+  const known = Object.values(inbox.value ?? {}).flatMap(rows => rows ?? []).find(r => r.runId === id.value)?.applicationId
+  const early = known ? loadSnap(known) : undefined
   try {
     task.value = await api<TaskDetail>(`/api/tasks/${id.value}`)
     loadError.value = null
@@ -32,7 +47,22 @@ async function load() {
   catch (e) {
     loadError.value = e as ApiError
   }
+  if (task.value && task.value.applicationId !== known) await loadSnap(task.value.applicationId)
+  await early
 }
+const offerDlg = ref<{ open: () => void }>()
+const cv = computed(() => {
+  const f = snap.value?.form.find(f => f.type === 'file' && snap.value!.application.answers[f.key])
+  return f && { url: `/api/applications/${snap.value!.application.id}/files/${f.key}`, name: snap.value!.application.answers[f.key].name ?? f.label }
+})
+const snapAnswers = computed(() => snap.value?.form.filter(f => f.type !== 'file')
+  .map(f => ({ key: f.key, label: f.label, v: snap.value!.application.answers[f.key] })) ?? [])
+const ai = computed(() => {
+  const o = snap.value?.aiReview
+  if (!o || typeof o.overall !== 'number') return null
+  const crit = Object.entries(o).filter(([k, v]) => k !== 'overall' && typeof v === 'number') as [string, number][]
+  return { overall: Math.round(o.overall), crit: crit.map(([k, v]) => `${humanise(k)} ${Math.round(v)}`).join(' · '), summary: typeof o.summary === 'string' ? o.summary : '' }
+})
 watch(id, () => {
   task.value = null
   values.value = {}
@@ -43,7 +73,6 @@ watch(id, () => {
 useHead({ title: () => task.value?.title ?? 'Inbox' })
 
 // the booked interview, with its weekday; the link for a candidate who hasn't picked yet (email sending is still a mock)
-const bookedAt = (iso: string) => new Date(iso).toLocaleString(undefined, { weekday: 'long', day: 'numeric', month: 'long', hour: 'numeric', minute: '2-digit' })
 const copying = ref(false)
 const copied = ref<boolean | 'failed'>(false)
 async function copyBookingLink() {
@@ -174,7 +203,7 @@ async function submit() {
           </p>
           <p v-if="task.booking" class="booking" :class="{ waiting: !task.booking.startsAt }">
             <Icon name="calendar" :size="16" />
-            <template v-if="task.booking.startsAt"><span>Interview booked for <b>{{ bookedAt(task.booking.startsAt) }}</b></span></template>
+            <template v-if="task.booking.startsAt"><span>Interview booked for <b>{{ fmtBooked(task.booking.startsAt, true) }}</b></span></template>
             <template v-else>
               <span>Waiting for the candidate to book a time</span>
               <button type="button" class="btn btn-sm btn-quiet" :aria-busy="copying" @click="copyBookingLink">
@@ -185,9 +214,39 @@ async function submit() {
         </div>
       </div>
       <p v-if="task.instructions" class="instructions">{{ task.instructions }}</p>
+      <div v-if="snap" class="snap">
+        <div class="snap-top">
+          <p class="contact">
+            <a v-if="snap.candidate.phone" :href="`tel:${snap.candidate.phone}`" class="phone">{{ snap.candidate.phone }}</a>
+            <a :href="`mailto:${snap.candidate.email}`">{{ snap.candidate.email }}</a>
+            <a v-if="cv" :href="cv.url" download class="file"><Icon name="download" :size="16" />{{ cv.name }}</a>
+          </p>
+          <NuxtLink :to="`/candidates/${task.applicationId}`" class="open">Open their page →</NuxtLink>
+        </div>
+        <div v-if="ai" class="ai">
+          <p class="ai-score"><span class="faint">AI score</span><b>{{ ai.overall }}</b><span v-if="ai.crit" class="faint">{{ ai.crit }}</span></p>
+          <p v-if="ai.summary" class="ai-sum">“{{ ai.summary }}”</p>
+        </div>
+        <details v-if="snapAnswers.length" class="snap-answers">
+          <summary>Their answers</summary>
+          <dl>
+            <div v-for="f in snapAnswers" :key="f.key"><dt>{{ f.label }}</dt><dd :class="{ faint: f.v == null || f.v === '' }">{{ f.v == null || f.v === '' ? 'Not answered' : fmtVal(f.v) }}</dd></div>
+          </dl>
+        </details>
+      </div>
+      <div v-else-if="snapLoading" class="snap" aria-busy="true" aria-label="Loading the candidate"><span class="skeleton" style="height:14px;width:48%" /></div>
     </header>
 
-    <form v-if="task.canSubmit" class="card form-card" novalidate @submit.prevent="submit">
+    <section v-if="task.offer" class="card form-card">
+      <template v-if="task.status === 'waiting_on_human'">
+        <div><button type="button" class="btn btn-primary" :disabled="!snap || !isManager" @click="offerDlg?.open()"><Icon name="mail" />Make offer…</button></div>
+        <p class="faint">The task closes when {{ snap?.candidate.firstName ?? 'they' }} answers, or you record their answer on their page.</p>
+      </template>
+      <p v-else class="reason"><Icon name="lock" :size="16" />This offer step has finished.</p>
+      <CandidateOffer v-if="snap" ref="offerDlg" :tl="snap" bare @changed="load" />
+    </section>
+
+    <form v-else-if="task.canSubmit" class="card form-card" novalidate @submit.prevent="submit">
       <h3>Scorecard</h3>
       <template v-for="f in task.scorecard" :key="f.key">
         <fieldset v-if="isRating(f) || f.type === 'boolean'" class="field q" :aria-describedby="fieldErrors[f.key] ? `e-${f.key}` : undefined">
@@ -291,6 +350,21 @@ async function submit() {
 .booking .btn { margin-left: auto; }
 .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: 10px; }
 .who { font-weight: 600; }
+.snap { margin-top: 18px; display: grid; gap: 14px; }
+.snap-top { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; justify-content: space-between; }
+.contact { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: baseline; min-width: 0; overflow-wrap: anywhere; }
+.contact .phone { font-weight: 600; font-size: var(--t-lg); }
+.contact .file { display: inline-flex; gap: 4px; align-items: center; }
+.open { font-size: var(--t-sm); }
+.ai, .snap-answers { border-top: 1px solid var(--line); padding-top: 14px; }
+.ai { display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: flex-start; }
+.ai-score { display: grid; gap: 2px; flex: 0 0 auto; max-width: 14rem; font-size: var(--t-sm); }
+.ai-score b { font-size: var(--t-2xl); line-height: 1.1; font-variant-numeric: tabular-nums; }
+.ai-sum { flex: 1 1 20rem; font-size: var(--t-sm); color: var(--ink-2); max-width: 70ch; }
+.snap-answers summary { font-weight: 500; cursor: pointer; }
+.snap-answers dl { margin: 10px 0 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: 8px 24px; font-size: var(--t-sm); }
+.snap-answers dt { color: var(--ink-2); }
+.snap-answers dd { margin: 0; white-space: pre-line; overflow-wrap: anywhere; }
 .instructions { margin-top: 18px; padding: 14px 16px; border-radius: var(--r-field); background: var(--sunk); white-space: pre-line; color: var(--ink); max-width: 70ch; }
 
 .form-card, .panel-card { padding: 24px 28px; display: grid; gap: 22px; }

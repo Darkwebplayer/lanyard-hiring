@@ -28,9 +28,9 @@ async function load() {
 load()
 
 const sortedRoles = computed(() => [...roles.value].sort((a, b) => a.name.localeCompare(b.name)))
-// Admin first, then active people, then switched-off ones
+// Admin first, then by name. Not by active: a row that jumps when switched off puts the next click on someone else.
 const sortedUsers = computed(() => [...users.value ?? []].sort((a, b) =>
-  Number(b.isAdmin) - Number(a.isAdmin) || Number(b.active) - Number(a.active) || a.name.localeCompare(b.name)))
+  Number(b.isAdmin) - Number(a.isAdmin) || a.name.localeCompare(b.name)))
 
 // per-row errors, shown next to the row that caused them
 const rowError = reactive<Record<string, string>>({})
@@ -72,17 +72,23 @@ const inviteEmail = ref('')
 const inviteRole = ref('')
 const inviteError = ref('')
 const inviting = ref(false)
-const invitedNote = ref('')
+const invited = ref<{ email: string, existed: boolean } | null>(null)
+// reads the invite's role now, so changing it in the list below keeps this line true
+const invitedNote = computed(() => {
+  const inv = invited.value && invites.value.find(i => i.email === invited.value!.email)
+  if (!inv) return ''
+  return invited.value!.existed ? `Invite for ${inv.email} changed to ${inv.roleName}.` : `Invited ${inv.email} as ${inv.roleName}.`
+})
 watch(roles, (r) => { if (!inviteRole.value) inviteRole.value = [...r].sort((a, b) => a.name.localeCompare(b.name)).find(x => x.level === 'employee')?.id ?? r[0]?.id ?? '' })
 async function sendInvite() {
   inviteError.value = ''
-  invitedNote.value = ''
+  invited.value = null
   inviting.value = true
   try {
     const inv = await api<Invite>('/api/invites', { method: 'POST', body: { email: inviteEmail.value.trim(), roleId: inviteRole.value } })
     const existed = invites.value.some(i => i.email === inv.email)
     invites.value = [inv, ...invites.value.filter(i => i.email !== inv.email)]
-    invitedNote.value = existed ? `Invite for ${inv.email} changed to ${inv.roleName}.` : `Invited ${inv.email} as ${inv.roleName}.`
+    invited.value = { email: inv.email, existed }
     inviteEmail.value = ''
   }
   catch (e) { inviteError.value = toApiError(e).message }

@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { strToU8, zipSync } from 'fflate'
 import { describe, expect, it } from 'vitest'
 import { extractCvText, sniffCv } from '../server/engine/handlers/extract'
+import { cleanList } from '../server/engine/handlers'
 
 const fixture = (name: string) => new Uint8Array(readFileSync(new URL(`./fixtures/${name}`, import.meta.url)))
 
@@ -55,5 +56,19 @@ describe('docx safety (review regressions)', () => {
   it('caps extracted text', async () => {
     const bytes = docx(`<w:p><w:t>${'word '.repeat(50_000)}</w:t></w:p>`)
     expect((await extractCvText(bytes, sniffCv(bytes)!)).length).toBe(100_000)
+  })
+})
+
+describe('cv list cleanup', () => {
+  it('rejoins and drops sub-word pieces Clairic returns (QA, Nurul)', () => {
+    const text = 'Led ops on Manhattan WMS. WSQ OSH. Defensive Driving Course. Advanced Excel (SkillsFuture). SKILLS: English, C'
+    expect(cleanList(['Manhattan WMS', 'M', 'Excel', 'F', 'WS', 'Advanced', 'Man', 'hattan WMS', 'Def', 'ensive Driving Course', 'English,', 'SK', 'C', 'Team coaching'], text))
+      .toEqual(['Manhattan WMS', 'Excel', 'Advanced', 'Defensive Driving Course', 'English', 'C', 'Team coaching'])
+  })
+
+  it('keeps stems, rejoins across line breaks, drops empties', () => {
+    const text = 'Drove forklifts daily. ReactJS and Python3.\nManhattan\nWMS, Defensive\nDriving Course'
+    expect(cleanList(['Forklift', 'React', 'Python', ',', 'Man', 'hattan WMS', 'Def', 'ensive Driving Course'], text))
+      .toEqual(['Forklift', 'React', 'Python', 'Manhattan WMS', 'Defensive Driving Course'])
   })
 })

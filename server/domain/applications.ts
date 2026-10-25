@@ -1,8 +1,9 @@
 import { type AnyColumn, type SQL, and, asc, count, desc, eq, ilike, inArray, isNotNull, isNull, lte, notInArray, or, sql } from 'drizzle-orm'
 import type { FormField, Graph } from '../../shared/workflow/types'
 import type { Db } from '../db/client'
-import { applicationEvents, applications, candidates, jobs, jobVersions, nodeRuns, taskAssignments, user } from '../db/schema'
+import { applicationEvents, applications, candidates, jobs, jobVersions, nodeRuns, offers, taskAssignments, user } from '../db/schema'
 import { atLeastManager, type Level } from './access'
+import { documentsStatus } from './documents'
 import { DomainError } from './errors'
 
 export interface Viewer { userId: string, level: Level }
@@ -103,6 +104,8 @@ export async function timeline(db: Db, viewer: Viewer, applicationId: string, no
       assignments: visibleAssignments(r.nodeKey, assignments.filter(a => a.runId === r.id), viewer, blind).map(({ runId: _, ...a }) => a),
     })),
     events,
+    // the latest AI review's scores and summary, for everyone who can see the application: the AI never reads protected answers
+    aiReview: (runs.findLast(r => r.nodeType === 'ai_review' && r.status === 'completed')?.output ?? null) as Record<string, unknown> | null,
   }
 }
 
@@ -196,13 +199,15 @@ export async function board(db: Db, jobId: string, now = new Date()) {
   await assertJob(db, jobId)
   // single-table select: drizzle leaves columns unqualified, which inside a subquery would bind to node_runs
   const appId = sql`${applications}."id"`
+  // closed people group by outcome alone: a hire from an accepted offer still sits on the interview step's key
+  const at = sql<string | null>`case when ${applications.status} = 'active' then ${applications.currentNodeKey} end`
   const counts = await db.select({
-    key: applications.currentNodeKey, status: applications.status, outcome: applications.outcome, n: count(),
+    key: at, status: applications.status, outcome: applications.outcome, n: count(),
     failed: sql<number>`count(*) filter (where (select r.status from ${nodeRuns} r where r.application_id = ${appId} order by r.seq desc limit 1) = 'failed')`.mapWith(Number),
     // a waiting task is the active run, and there is at most one of those
     overdue: sql<number>`count(*) filter (where exists (select 1 from ${nodeRuns} r where r.application_id = ${appId} and r.status = 'waiting_on_human' and r.due_at < ${now.toISOString()}::timestamptz))`.mapWith(Number),
   }).from(applications).where(eq(applications.jobId, jobId))
-    .groupBy(applications.currentNodeKey, applications.status, applications.outcome)
+    .groupBy(at, applications.status, applications.outcome)
   // newest first: labels and stages come from the latest version; older versions only name steps that are gone
   const versions = await db.select({ status: jobVersions.status, workflow: jobVersions.workflow }).from(jobVersions)
     .where(eq(jobVersions.jobId, jobId)).orderBy(desc(jobVersions.version))
@@ -217,7 +222,7 @@ export async function board(db: Db, jobId: string, now = new Date()) {
   // the first few people of each group, in list order, so cards show faces and lists open with someone in them
   const ranked = db.select({
     id: applications.id,
-    rn: sql<number>`row_number() over (partition by ${applications.currentNodeKey}, ${applications.status}, ${applications.outcome}
+    rn: sql<number>`row_number() over (partition by ${at}, ${applications.status}, ${applications.outcome}
       order by ${urgency(appId)} desc, ${applications.createdAt} desc, ${applications.id} desc)`.as('rn'),
   }).from(applications).where(eq(applications.jobId, jobId)).as('ranked')
   const top = await db.select({ id: ranked.id }).from(ranked).where(lte(ranked.rn, PREVIEW))
@@ -248,6 +253,26 @@ export async function movable(db: Db, jobId: string, from: MoveFrom, target: { n
 }
 
 // Hires against openings, for every job that was ever published.
+// Who was hired in the last 90 days, newest first: when, how (the accepted offer's answer, else a move by hand,
+// else the flow), and the start date from the accepted offer's terms.
+async function recentHires(db: Db) {
+  const closed = (col: SQL) => sql`(select ${col} from ${applicationEvents} e where e.application_id = ${applications.id} and e.type = 'closed' order by e.seq desc limit 1)`
+  const hiredAt = closed(sql`e.created_at`)
+  const offer = (col: SQL) => sql`(select ${col} from ${offers} o where o.application_id = ${applications.id} and o.status = 'accepted' order by o.responded_at desc nulls last limit 1)`
+  const rows = await db.select({
+    id: applications.id, firstName: candidates.firstName, lastName: candidates.lastName, jobId: jobs.id, jobTitle: jobs.title,
+    hiredAt: sql<string>`${hiredAt}`,
+    manual: sql<boolean | null>`${closed(sql`(e.data->>'manual')::boolean`)}`,
+    via: sql<string | null>`${offer(sql`o.answer->>'via'`)}`,
+    startDate: sql<string | null>`${offer(sql`o.terms->>'start_date'`)}`,
+  }).from(applications)
+    .innerJoin(candidates, eq(candidates.id, applications.candidateId))
+    .innerJoin(jobs, eq(jobs.id, applications.jobId))
+    .where(and(eq(applications.outcome, 'hired'), sql`${hiredAt} > now() - interval '90 days'`))
+    .orderBy(sql`${hiredAt} desc`)
+  return rows.map(({ manual, via, ...r }) => ({ ...r, how: (via ?? (manual ? 'hand' : 'flow')) as 'link' | 'phone' | 'email' | 'in_person' | 'hand' | 'flow' }))
+}
+
 export async function hireReport(db: Db) {
   const rows = await db.select({
     id: jobs.id, title: jobs.title, status: jobs.status, openings: jobs.openings,
@@ -264,9 +289,12 @@ export async function hireReport(db: Db) {
     applied: count(),
     hired: sql<number>`count(*) filter (where ${applications.outcome} = 'hired')`.mapWith(Number),
   }).from(applications).groupBy(applications.source).orderBy(desc(count()), asc(applications.source))
+  const recent = await recentHires(db)
+  const docs = await documentsStatus(db, recent.map(h => h.id))
   return {
     jobs: rows.map(r => ({ ...r, fillRate: r.hired / r.openings })),
     totals: { jobs: rows.length, openings, hires, fillRate: openings ? hires / openings : 0 },
     bySource,
+    hired: recent.map(h => ({ ...h, documents: docs[h.id] ?? null })),
   }
 }

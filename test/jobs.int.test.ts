@@ -53,7 +53,7 @@ describe('jobs and versions', () => {
     expect(state.draft).toBeNull()
 
     const edited = structuredClone(STANDARD_HIRE)
-    ;(edited.workflow.nodes.find(n => n.key === 'offer_email')!.config as any).subject = 'Offer: {{job.title}}'
+    ;(edited.workflow.nodes.find(n => n.key === 'rejection_email')!.config as any).subject = 'About: {{job.title}}'
     const v2draft = await saveDraft(db, job.id, edited)
     expect(v2draft.version).toBe(2)
     await saveDraft(db, job.id, edited) // second save updates the same draft
@@ -64,7 +64,7 @@ describe('jobs and versions', () => {
     state = await getJob(db, job.id)
     expect(state.job.publishedVersionId).toBe(v2.id)
     const frozen = await db.query.jobVersions.findFirst({ where: eq(s.jobVersions.id, v1.id) })
-    expect((frozen!.workflow as Graph).nodes.find(n => n.key === 'offer_email')!.config).toMatchObject({ subject: 'Your offer for {{job.title}}' })
+    expect((frozen!.workflow as Graph).nodes.find(n => n.key === 'rejection_email')!.config).toMatchObject({ subject: 'Your application for {{job.title}}' })
   })
 
   it.each(['simple', 'high_volume', 'panel'] as const)('a new job from the %s template validates as is', async (id) => {
@@ -135,6 +135,20 @@ describe('jobs and versions', () => {
     expect(await check({ assignees: { users: [], roles: [interviewerRole], job_owner: false }, min_submissions: 2 })).toEqual([])
     expect(await check({ assignees: { users: [], roles: [interviewerRole], job_owner: false }, min_submissions: 3 })).toEqual(['not_enough_assignees'])
     expect(await check({ assignees: { users: [], roles: [crypto.randomUUID()], job_owner: true } })).toEqual(['bad_role'])
+  })
+
+  it('only managers can make offers, so an offer step an employee could hold blocks publish', async () => {
+    const check = async (assignees: object, owner = ownerId) => {
+      const t = structuredClone(STANDARD_HIRE)
+      const n = t.workflow.nodes.find(n => (n.config as { offer?: boolean }).offer)!
+      n.config = { ...(n.config as object), assignees }
+      const { job } = await createJob(db, owner, input, { kind: 'blank' })
+      await saveDraft(db, job.id, t)
+      return (await validateDraft(db, job.id, ADMIN)).map(i => i.code)
+    }
+    expect(await check({ users: ['int1'], roles: [], job_owner: false })).toEqual(['offer_needs_manager'])
+    expect(await check({ users: [], roles: [interviewerRole], job_owner: false })).toEqual(['offer_needs_manager'])
+    expect(await check({ users: [], roles: [], job_owner: true })).toEqual([])
   })
 
   it('duplicate to another job copies the latest version', async () => {

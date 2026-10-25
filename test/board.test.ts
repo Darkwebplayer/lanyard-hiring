@@ -44,6 +44,7 @@ describe('board effect lines', () => {
   it('writes the column line short', () => {
     expect(boltLine(G, 'screening', names)).toBe('Reads the CV · AI scores them · Assigns the job owner')
     expect(boltLine(g, 'interview', names)).toBe('Assigns Priya, Tomás · booking link')
-    expect(boltLine(G, 'decision', names)).toBe('Emails “Offer email” · Emails “Rejection email”')
+    expect(boltLine(G, 'decision', names)).toBe('Emails “Rejection email”')
+    expect(boltLine(G, 'offer', names)).toBe('Assigns the job owner')
   })
 })

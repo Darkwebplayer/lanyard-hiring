@@ -193,7 +193,7 @@ async function confirmDelete() {
               <h2 id="flow-h" class="sr-only">{{ selected.name }}</h2>
               <div class="field">
                 <label for="fp-name">Name</label>
-                <input id="fp-name" v-model="draft.name" required maxlength="100" autocomplete="off">
+                <input id="fp-name" v-model="draft.name" required maxlength="100" autocomplete="off" placeholder="e.g. Weekend shop staff">
               </div>
               <div class="field">
                 <label for="fp-desc">Description</label>

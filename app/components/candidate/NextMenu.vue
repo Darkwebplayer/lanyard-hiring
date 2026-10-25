@@ -59,7 +59,7 @@ function flow() {
     </button>
     <button type="button" @click="choose({ closed: 'rejected' })">
       <span class="dot blank" aria-hidden="true" />
-      <span class="txt"><span>Close as rejected…</span><small>Asks a reason from your list. No email is sent</small></span>
+      <span class="txt"><span>Close as rejected…</span><small>Asks a reason from your list. Emailing them is up to you</small></span>
     </button>
     <button type="button" @click="choose({ closed: 'withdrawn' })">
       <span class="dot blank" aria-hidden="true" />

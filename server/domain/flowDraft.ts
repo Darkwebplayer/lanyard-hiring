@@ -7,7 +7,7 @@ import { OPS_BY_TYPE } from '../../shared/workflow/rules'
 import { resting, stageView } from '../../shared/workflow/stages'
 import { STANDARD_HIRE } from '../../shared/workflow/templates'
 import type { FormField, Graph, GraphNode, Issue } from '../../shared/workflow/types'
-import { gemini } from '../engine/ai'
+import { gemini, isQuotaError } from '../engine/ai'
 import type { AppEnv } from '../env'
 import { DomainError } from './errors'
 
@@ -15,6 +15,14 @@ import { DomainError } from './errors'
 // schemas and validateVersion decide, and their issues go back to it for up to two repairs.
 
 export const flowDraftInput = z.object({ description: z.string().trim().min(1).max(2000), form: formSchemaDef })
+
+// The owner says CVs matter but the form can't take one: the draft adds the CV upload (the Read CV step needs it).
+// Returns the form to draft against, and the field it added, if any.
+export function withCvField(description: string, form: FormField[]) {
+  if (!/\b(cvs?|resumes?|résumés?|curriculum vitae)\b/i.test(description) || form.some(f => f.type === 'file')) return { form }
+  const cv = { ...STANDARD_HIRE.form.find(f => f.type === 'file')!, ...form.some(f => f.key === 'cv') && { key: 'cv_file' } }
+  return { form: [...form, cv], added: cv }
+}
 
 // The shape we check drafts against. Gemini gets JSON mode, not this schema: with an open `config` object its constrained
 // decoding ran away (500 null keys, 99 s, 2026-10-24) and deep/recursive schemas get dropped, so the strict check is ours.
@@ -31,7 +39,7 @@ const OUTPUTS: Record<string, string> = {
   cv_parse: 'text (CV text, the only thing an AI step may read besides answers), skills (list), years_experience (number), current_title (string), plus one per extract key',
   ai_review: 'one 0–100 number per criterion key, overall (0–100), summary (text)',
   ai_check: 'one per question key: boolean for yes_no, the chosen option key (enum) for choice',
-  human_task: 'per scorecard field: number → the average, boolean → <key> (all agreed) and <key>_any, text → joined; submitted_count',
+  human_task: 'per scorecard field: number → the average, boolean → <key> (all agreed) and <key>_any, text → joined; submitted_count. With offer: true (Make offer) instead: accepted (boolean), decline_reason',
   send_email: 'sent (boolean)',
   set_variable: 'one per field key',
   condition: 'none: it routes',
@@ -45,7 +53,7 @@ Shape: { nodes: [{ key, type, label, config }], edges: [{ from, to, branch? }], 
 - Exactly one "application_received" node (key "start", config {}), with no incoming edges.
 - Every node except end nodes has exactly one outgoing edge without a branch, except "condition" nodes: a condition has exactly one edge per branch key, plus one with branch "default" (otherwise), plus one with branch "missing" if on_missing is true. No other branches.
 - Every path finishes at an "end" node (config { outcome: "hired" | "rejected" | "withdrawn" }). No loops. Every node reachable from start.
-- Put a "send_email" before each end node: an offer before "hired", a polite rejection before "rejected". Share one rejection email node.
+- Before "hired" goes the example's "make_offer" step as is (a human_task with offer: true and no scorecard: the owner makes the offer, the candidate's answer completes it), then a condition on nodes.make_offer.accepted: accepted → end "hired", default → end "withdrawn". Before "rejected" goes a polite rejection "send_email". Share one rejection email node.
 - Steps read values with paths: candidate.first_name / last_name / email / phone, form.<field key>, ${JOB_FIELDS.map(f => f.path).join(', ')}, and nodes.<key>.<output> of steps that come before on EVERY path to them.
 - Email subjects/bodies and person-step titles/instructions may use {{path}} placeholders, e.g. {{candidate.first_name}}, {{job.title}}.
 - Condition rules: { ref, op, value? } or { all: [...] } / { any: [...] } / { not: rule }. Operators per value type: ${JSON.stringify(OPS_BY_TYPE)}.
@@ -53,11 +61,11 @@ Shape: { nodes: [{ key, type, label, config }], edges: [{ from, to, branch? }], 
 How to build:
 - Calls, trial shifts, interviews and reviews are "human_task" steps (a person does them) assigned to the job owner: assignees { users: [], roles: [], job_owner: true }. Give each a scorecard with a boolean the next decision can read (e.g. { key: "hire", label: "Hire?", type: "boolean", required: true }) and an optional text "notes". Mention details from the description (paid, two hours, Saturday morning) in title or instructions.
 - Use "ai_check" for yes/no knockouts or sorting questions answered from the applicant's answers or CV ("Can they work weekends?"). It reads all non-protected answers by itself; to also read the CV, add a "cv_parse" step first and set cv_text_ref to "nodes.<cv_parse key>.text". Then a "condition" branches on its outputs. Send "missing" (unclear) to a person, never straight to rejection.
-- Only use "cv_parse" if the form has a file field (file_field = that key). Only use "ai_review" if the owner asks for scoring.
+- Only use "cv_parse" if the form has a file field (file_field = that key); when the owner mentions CVs or resumes, do add it. Only use "ai_review" if the owner asks for scoring.
 - The form below is fixed: never invent form fields, and never reference protected fields anywhere.
 - Never put two conditions directly after each other.
 
-Stages are the board columns, in order. Every step except start, conditions and end nodes belongs to exactly one stage (conditions and end nodes go in none). A stage never sends people back to an earlier stage, so the shared rejection email goes in the last stage, with the offer email.
+Stages are the board columns, in order. Every step except start, conditions and end nodes belongs to exactly one stage (conditions and end nodes go in none). A stage never sends people back to an earlier stage, so the shared rejection email goes in a "Decision" stage near the end, and make_offer alone in a last "Offer" stage.
 
 Step types (config is JSON Schema; output fields other steps can read):
 ${Object.values(REGISTRY).map(d => `- ${d.type} ("${d.label}", ${d.kind}) outputs: ${OUTPUTS[d.type] ?? 'none'}\n  config: ${JSON.stringify(z.toJSONSchema(d.config, { io: 'input', unrepresentable: 'any' }))}`).join('\n')}
@@ -90,7 +98,7 @@ export const geminiDraft = (env: AppEnv): Generate => async (messages) => {
   }
   catch (e) {
     console.error('flow draft failed', e)
-    throw new DomainError(502, 'ai_error')
+    throw isQuotaError(e) ? new DomainError(429, 'ai_quota') : new DomainError(502, 'ai_error')
   }
 }
 
@@ -154,9 +162,11 @@ export function mockFlow(form: FormField[]): Graph {
       decide('call_decision', 'nodes.call.hire'),
       person('trial', 'Trial shift', 'Trial shift with {{candidate.first_name}} {{candidate.last_name}}', 'Hire?'),
       decide('decision', 'nodes.trial.hire'),
-      { ...ending('offer_email'), label: 'Offer email' },
+      ending('make_offer'),
+      ending('offer_answer'),
       { ...ending('rejection_email'), label: 'Rejection email' },
       ending('hired'),
+      ending('withdrawn'),
       ending('rejected'),
     ],
     edges: [
@@ -170,16 +180,19 @@ export function mockFlow(form: FormField[]): Graph {
       { from: 'call_decision', to: 'trial', branch: 'yes' },
       { from: 'call_decision', to: 'rejection_email', branch: 'default' },
       { from: 'trial', to: 'decision' },
-      { from: 'decision', to: 'offer_email', branch: 'yes' },
+      { from: 'decision', to: 'make_offer', branch: 'yes' },
       { from: 'decision', to: 'rejection_email', branch: 'default' },
-      { from: 'offer_email', to: 'hired' },
+      { from: 'make_offer', to: 'offer_answer' },
+      { from: 'offer_answer', to: 'hired', branch: 'accepted' },
+      { from: 'offer_answer', to: 'withdrawn', branch: 'default' },
       { from: 'rejection_email', to: 'rejected' },
     ],
     stages: [
       { id: 'screening', name: 'Screening', nodeKeys: [...file ? ['cv'] : [], 'check'] },
       { id: 'call', name: 'Phone call', nodeKeys: ['call'] },
       { id: 'trial', name: 'Trial shift', nodeKeys: ['trial'] },
-      { id: 'decision', name: 'Decision', nodeKeys: ['offer_email', 'rejection_email'] },
+      { id: 'decision', name: 'Decision', nodeKeys: ['rejection_email'] },
+      { id: 'offer', name: 'Offer', nodeKeys: ['make_offer'] },
     ],
   }
 }

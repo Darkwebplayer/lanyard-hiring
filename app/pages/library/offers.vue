@@ -15,16 +15,20 @@ async function refresh() {
 }
 refresh()
 
-// The holes a letter can use; filled when an offer is made. Samples drive the preview.
-const HOLES = [
-  { path: 'candidate.first_name', label: 'First name', sample: 'Maya' },
-  { path: 'job.title', label: 'Job title', sample: 'Shop supervisor' },
-  { path: 'company.name', label: 'Company', sample: 'Northwind Bakery' },
-  { path: 'offer.salary', label: 'Salary', sample: '£28,000 a year' },
-  { path: 'offer.start_date', label: 'Start date', sample: '2 November 2026' },
-  { path: 'offer.location', label: 'Location', sample: 'Leeds, Kirkgate shop' },
-]
-const KNOWN = new Set(HOLES.map(h => h.path))
+// The holes a letter can use; filled when an offer is made. Samples drive the preview: the company's own name,
+// otherwise plain made-up Singapore-style details. Dates read as the letter writes them.
+const company = ref('')
+api<{ companyName: string | null }>('/api/settings').then(s => (company.value = s.companyName ?? '')).catch(() => {})
+const inAMonth = new Date(Date.now() + 30 * 86_400_000).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+const HOLES = computed(() => [
+  { path: 'candidate.first_name', label: 'First name', sample: 'Alex' },
+  { path: 'job.title', label: 'Job title', sample: 'Team supervisor' },
+  { path: 'company.name', label: 'Company', sample: company.value || 'Your company' },
+  { path: 'offer.salary', label: 'Salary', sample: 'SGD 3,500 a month' },
+  { path: 'offer.start_date', label: 'Start date', sample: inAMonth },
+  { path: 'offer.location', label: 'Location', sample: 'Main office' },
+])
+const KNOWN = new Set(HOLES.value.map(h => h.path))
 
 // ?offer=<id> | standard | new; else the first in the list
 const key = (t: Template) => t.id ?? 'standard'
@@ -65,7 +69,7 @@ onBeforeRouteLeave(() => !dirty.value || confirm('Discard the unsaved changes to
 const unknown = computed(() => [...new Set([...draft.body.matchAll(/\{\{\s*([\w.]+)\s*\}\}/g)].map(m => m[1]!).filter(p => !KNOWN.has(p)))])
 // built here: a {{…}} inside the template's own {{ }} would end the interpolation early
 const unknownText = computed(() => unknown.value.map(p => `{{${p}}}`).join(', '))
-const preview = computed(() => renderMarkdown(draft.body.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_, p) => HOLES.find(h => h.path === p)?.sample ?? '')))
+const preview = computed(() => renderMarkdown(draft.body.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_, p) => HOLES.value.find(h => h.path === p)?.sample ?? '')))
 
 const ta = ref<HTMLTextAreaElement>()
 function insert(path: string) {
@@ -201,6 +205,7 @@ async function confirmDelete() {
               <textarea
                 v-show="mode === 'write'" id="ol-body" ref="ta" v-model="draft.body" rows="16" maxlength="20000"
                 :readonly="readOnly" spellcheck="true" aria-describedby="ol-holes-h"
+                placeholder="e.g. Dear {{candidate.first_name}}, we’re happy to offer you the job of {{job.title}} at {{company.name}}."
               />
               <!-- eslint-disable-next-line vue/no-v-html -- renderMarkdown escapes all HTML first -->
               <div v-if="mode === 'preview'" class="prose preview" v-html="preview || '<p class=&quot;faint&quot;>Nothing to preview yet.</p>'" />

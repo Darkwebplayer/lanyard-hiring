@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lt, or, sql } from 'drizzle-orm'
 import { type HumanTaskConfig, REGISTRY } from '../../shared/workflow/registry'
 import type { Graph } from '../../shared/workflow/types'
 import type { Db } from '../db/client'
@@ -14,7 +14,7 @@ const runRows = (db: Db) => db.select({
   dueAt: nodeRuns.dueAt, error: nodeRuns.error, retries: nodeRuns.retries, createdAt: nodeRuns.createdAt,
   applicationId: applications.id, jobVersionId: applications.jobVersionId,
   firstName: candidates.firstName, lastName: candidates.lastName, jobId: jobs.id, jobTitle: jobs.title,
-  bookingId: bookings.id, bookedAt: bookings.startsAt,
+  bookingId: bookings.id, bookedAt: bookings.startsAt, bookingCancelledAt: bookings.cancelledAt,
 }).from(nodeRuns)
   .innerJoin(applications, eq(applications.id, nodeRuns.applicationId))
   .innerJoin(candidates, eq(candidates.id, applications.candidateId))
@@ -27,7 +27,7 @@ const view = (r: RunRow, now: Date) => ({
   title: (r.input as { title?: string } | null)?.title ?? r.nodeKey,
   dueAt: r.dueAt, overdue: isOverdue(r, now), error: r.error, retries: r.retries, createdAt: r.createdAt,
   applicationId: r.applicationId, candidateName: `${r.firstName} ${r.lastName}`, jobId: r.jobId, jobTitle: r.jobTitle,
-  booking: r.bookingId ? { startsAt: r.bookedAt } : null, // the candidate's booking link exists; startsAt once they picked
+  booking: r.bookingId ? { startsAt: r.bookedAt, cancelledAt: r.bookingCancelledAt } : null, // the candidate's booking link exists; startsAt once they picked
 })
 
 async function humanConfigs(db: Db, versionIds: string[]) {
@@ -38,12 +38,16 @@ async function humanConfigs(db: Db, versionIds: string[]) {
   }
 }
 
-// The inbox. Everyone gets their open tasks; managers also get what needs a person to unstick it.
+// The inbox. Everyone gets their open tasks, and interviews of theirs called off in the last week (an accepted
+// offer, a close); managers also get what needs a person to unstick it.
 export async function listTasks(db: Db, viewer: Viewer, adminEmail: string, now: Date) {
   const mine = await runRows(db).innerJoin(taskAssignments, eq(taskAssignments.runId, nodeRuns.id))
     .where(and(eq(taskAssignments.userId, viewer.userId), isNull(taskAssignments.closedAt), isNull(taskAssignments.submittedAt), eq(nodeRuns.status, 'waiting_on_human')))
     .orderBy(asc(nodeRuns.dueAt), asc(nodeRuns.seq))
-  if (!atLeastManager(viewer.level)) return { mine: mine.map(r => view(r, now)) }
+  const calledOff = (await runRows(db).innerJoin(taskAssignments, eq(taskAssignments.runId, nodeRuns.id))
+    .where(and(eq(taskAssignments.userId, viewer.userId), isNotNull(bookings.cancelledAt), gt(bookings.cancelledAt, new Date(now.getTime() - 7 * 86_400_000))))
+    .orderBy(desc(bookings.cancelledAt))).map(r => view(r, now))
+  if (!atLeastManager(viewer.level)) return { mine: mine.map(r => view(r, now)), calledOff }
 
   const t = now.getTime()
   const waiting = await runRows(db).where(eq(nodeRuns.status, 'waiting_on_human')).orderBy(asc(nodeRuns.dueAt), asc(nodeRuns.seq))
@@ -67,11 +71,12 @@ export async function listTasks(db: Db, viewer: Viewer, adminEmail: string, now:
   const config = await humanConfigs(db, [...new Set(waiting.map(r => r.jobVersionId))])
   const blocked = waiting.filter((r) => {
     const reachable = holders.filter(h => h.runId === r.runId && (h.submittedAt || (!h.closedAt && accessLevel(h, h.level, adminEmail)))).length
-    return reachable < config(r.jobVersionId, r.nodeKey).min_submissions
+    return reachable < (r.nodeType === 'human_task' ? config(r.jobVersionId, r.nodeKey).min_submissions : 1)
   })
 
   return {
     mine: mine.map(r => view(r, now)),
+    calledOff,
     overdue: waiting.filter(r => isOverdue(r, now)).map(r => view(r, now)),
     blocked: blocked.map(r => view(r, now)),
     failed: failed.map(r => view(r, now)),
@@ -96,6 +101,7 @@ export async function getTask(db: Db, viewer: Viewer, runId: string, now: Date) 
     ...view(row, now),
     instructions: (row.input as { instructions?: string } | null)?.instructions ?? null,
     scorecard: config.scorecard,
+    offer: !!config.offer, // Make offer: answered through the offer, not a scorecard
     minSubmissions: config.min_submissions,
     canSubmit: row.status === 'waiting_on_human' && !!mine && !mine.closedAt && !mine.submittedAt,
     assignments: visibleAssignments(row.nodeKey, assignments, viewer, await blindNodes(db, viewer, row.applicationId)),
@@ -109,7 +115,7 @@ const REMINDER_BATCH = 500 // stays under the Workers subrequest limit (paid pla
 export async function sendReminders(db: Db, adminEmail: string, appUrl: string, now: Date, send: (key: string, email: Email) => Promise<unknown>) {
   const day = now.toISOString().slice(0, 10)
   const due = await db.select({
-    runId: nodeRuns.id, input: nodeRuns.input, dueAt: nodeRuns.dueAt,
+    runId: nodeRuns.id, input: nodeRuns.input, dueAt: nodeRuns.dueAt, nodeType: nodeRuns.nodeType, applicationId: nodeRuns.applicationId,
     userId: user.id, email: user.email, name: user.name, active: user.active, level: roles.level,
   }).from(taskAssignments)
     .innerJoin(nodeRuns, eq(nodeRuns.id, taskAssignments.runId))
@@ -130,7 +136,9 @@ export async function sendReminders(db: Db, adminEmail: string, appUrl: string, 
       await send(`reminder:${r.runId}:${r.userId}:${day}`, {
         to: r.email,
         subject: `Overdue: ${title}`,
-        text: `Hi ${r.name},\n\n"${title}" was due on ${r.dueAt!.toISOString().slice(0, 10)} and is still waiting for your scorecard.\n\n${appUrl}/tasks/${r.runId}`,
+        text: r.nodeType === 'request_documents'
+          ? `Hi ${r.name},\n\n"${title}" was due on ${r.dueAt!.toISOString().slice(0, 10)} and some documents are still missing. You can send the candidate a reminder or mark what you have as received.\n\n${appUrl}/candidates/${r.applicationId}`
+          : `Hi ${r.name},\n\n"${title}" was due on ${r.dueAt!.toISOString().slice(0, 10)} and is still waiting for your scorecard.\n\n${appUrl}/tasks/${r.runId}`,
       })
       sent++
     }

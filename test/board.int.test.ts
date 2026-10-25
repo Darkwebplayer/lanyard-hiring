@@ -85,6 +85,16 @@ describe('board and list', () => {
     expect((await pipeline(db, job.id, { source: 'linkedin' })).map(r => r.source)).toEqual(['linkedin'])
     expect((await pipeline(db, job.id, { source: 'none', limit: 1 }))[0]!.total).toBe(30)
   })
+
+  it('counts closed people by outcome, whatever step they closed on', async () => {
+    const job = await makeJob()
+    const [a, b] = [await apply(job), await apply(job)]
+    // an end-step hire sits on 'hired'; an accepted offer closes them where they were
+    await db.update(s.applications).set({ status: 'closed', outcome: 'hired', currentNodeKey: 'hired' }).where(eq(s.applications.id, a))
+    await db.update(s.applications).set({ status: 'closed', outcome: 'hired' }).where(eq(s.applications.id, b))
+    const bd = await board(db, job.id)
+    expect(bd.counts.filter(c => c.outcome === 'hired')).toMatchObject([{ key: null, n: 2 }])
+  })
 })
 
 describe('moves', () => {

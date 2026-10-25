@@ -110,7 +110,7 @@ describe('panel through the inbox', () => {
 
     expect(await submitTask(deps(), run.id, 'i2', { technical: 5, communication: 4, hire: true })).toEqual({ completed: true })
     await drain()
-    expect(await db.query.applications.findFirst({ where: eq(s.applications.id, id) })).toMatchObject({ status: 'closed', outcome: 'hired' })
+    expect(await db.query.applications.findFirst({ where: eq(s.applications.id, id) })).toMatchObject({ status: 'active', currentNodeKey: 'make_offer' })
     expect((await listTasks(db, emp('i3'), ADMIN, t)).mine.map(m => m.runId)).not.toContain(run.id)
     // i3 was closed out without submitting: no access any more; i1 keeps it
     await rejects(getTask(db, emp('i3'), run.id, t), 404, 'task_not_found')
@@ -191,7 +191,7 @@ describe('manager inbox', () => {
       expect(ids('stuck')).toContain(stuckApp)
 
       const forI1 = await listTasks(db, emp('i1'), ADMIN, later)
-      expect(Object.keys(forI1)).toEqual(['mine'])
+      expect(Object.keys(forI1)).toEqual(['mine', 'calledOff'])
       expect(forI1.mine.map(r => r.applicationId)).toContain(overdueApp)
       expect(forI1.mine.map(r => r.applicationId)).not.toContain(blockedApp) // already submitted
     }
@@ -248,6 +248,7 @@ describe('pipeline and hire report', () => {
     await submitTask(deps(), r.id, 'i1', score)
     await submitTask(deps(), r.id, 'i2', score)
     await drain()
+    await moveApplication(deps(), hired, { node: 'hired' }, { reason: 'Accepted on the phone' }, 'owner') // past Make offer
 
     const list = await pipeline(db, job.id)
     expect(list.map(a => [a.id, a.status, a.outcome, a.currentNodeKey, a.runStatus])).toEqual([
@@ -268,6 +269,18 @@ describe('pipeline and hire report', () => {
   })
 })
 
+describe('who was hired', () => {
+  it('lists hires with how they were hired; no offer means no start date', async () => {
+    const job = await panelJob(2)
+    const a = await apply(job)
+    const b = await apply(job)
+    await moveApplication(deps(), a, { close: 'hired' }, { reason: 'hired on the spot' }, 'owner')
+    const { hired } = await hireReport(db)
+    expect(hired.find(h => h.id === a)).toMatchObject({ jobId: job.id, firstName: 'Jane', how: 'hand', startDate: null, documents: null, hiredAt: expect.anything() })
+    expect(hired.some(h => h.id === b)).toBe(false)
+  })
+})
+
 describe('board', () => {
   it('counts per step, searches and pages the list, and moves only those still where the board saw them', async () => {
     const job = await panelJob()
@@ -276,7 +289,7 @@ describe('board', () => {
 
     const bd = await board(db, job.id, t)
     expect(bd.counts).toEqual([{ key: 'interview', status: 'active', outcome: null, n: 2, failed: 0, overdue: 0 }])
-    expect(bd.stages?.map(st => st.name)).toEqual(['Screening', 'Interview', 'Decision'])
+    expect(bd.stages?.map(st => st.name)).toEqual(['Screening', 'Interview', 'Offer', 'Not moving on'])
     expect(bd.steps.map(st => st.key)).toContain('interview')
     expect((await board(db, job.id, new Date(t.getTime() + 6 * day))).counts[0]).toMatchObject({ n: 2, overdue: 2 })
 

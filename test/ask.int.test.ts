@@ -160,7 +160,7 @@ describe('gate and stream', () => {
 
   it('AI_MOCK streams a canned answer naming the page and citing a real anchor', async () => {
     const c = await ctx(owner, 'candidates-id', { id: appId })
-    const res = askStream(env({ AI_MOCK: '1' }), c, 'Why?', [])
+    const res = await askStream(env({ AI_MOCK: '1' }), c, 'Why?', [])
     expect(res.headers.get('content-type')).toBe('text/plain; charset=utf-8')
     const text = await res.text()
     expect(text).toContain('Ben Okafor · Barista')

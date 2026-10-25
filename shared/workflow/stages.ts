@@ -85,6 +85,7 @@ function stepEffects(n: GraphNode): Effect[] {
     case 'ai_review': return [{ kind: 'auto', text: 'Runs an AI review', nodeKey }]
     case 'ai_check': return [{ kind: 'auto', text: 'Checks their answers with AI', nodeKey }]
     case 'send_email': return [{ kind: 'email', text: `Sends them “${name}”`, nodeKey }]
+    case 'request_documents': // assignees and due_days read the same as a person step's
     case 'human_task': {
       const c = (n.config ?? {}) as Partial<HumanTaskConfig> & { booking?: { duration_min: number } }
       const a = { users: c.assignees?.users ?? [], roles: c.assignees?.roles ?? [], job_owner: !!c.assignees?.job_owner }

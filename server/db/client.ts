@@ -10,7 +10,7 @@ export type Db = PgDatabase<PgQueryResultHKT, typeof schema> & { close: () => Pr
 // Hyperdrive does the real pooling, so keep this small.
 export function createDb(connectionString: string): Db {
   const client = postgres(connectionString, { max: 5, fetch_types: false, prepare: true })
-  return Object.assign(drizzle(client, { schema }), { close: () => client.end() })
+  return Object.assign(drizzle(client, { schema }), { close: () => client.end({ timeout: 5 }).catch(() => {}) }) // closing a dead socket must not throw
 }
 
 export type Tx = Parameters<Parameters<Db['transaction']>[0]>[0]

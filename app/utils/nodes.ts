@@ -8,6 +8,7 @@ export const NODE_META: Record<string, { icon: string, noun: string, slot: 'acce
   set_variable: { icon: 'braces', noun: 'Set values', slot: 'line' },
   condition: { icon: 'split', noun: 'Decision', slot: 'line' },
   human_task: { icon: 'person', noun: 'Person', slot: 'accent' },
+  request_documents: { icon: 'file', noun: 'Documents', slot: 'accent' },
   send_email: { icon: 'mail', noun: 'Email', slot: 'ink' },
   end: { icon: 'flag', noun: 'End', slot: 'line' },
 }

@@ -177,7 +177,7 @@ const maxLabel = (t: FieldType) => t === 'number' ? 'Highest value' : t === 'lis
             <div class="field">
               <label :for="`f-key-${r.uid}`">Key</label>
               <div class="key-wrap">
-                <input :id="`f-key-${r.uid}`" v-model="r.key" class="mono" :readonly="locked(r)" maxlength="40" spellcheck="false" autocomplete="off" @input="r.keyTouched = true">
+                <input :id="`f-key-${r.uid}`" v-model="r.key" class="mono" :readonly="locked(r)" maxlength="40" placeholder="e.g. portfolio_link" spellcheck="false" autocomplete="off" @input="r.keyTouched = true">
                 <Icon v-if="locked(r)" name="lock" :size="14" class="key-lock" /><span v-if="locked(r)" class="sr-only">Locked: in the published version</span>
               </div>
             </div>
@@ -193,11 +193,11 @@ const maxLabel = (t: FieldType) => t === 'number' ? 'Highest value' : t === 'lis
           <div v-if="hasRange(r.type)" class="grid2">
             <div class="field">
               <label :for="`f-min-${r.uid}`">{{ minLabel(r.type) }}</label>
-              <input :id="`f-min-${r.uid}`" v-model.number="r.min" type="number" :min="r.type === 'number' ? undefined : 0">
+              <input :id="`f-min-${r.uid}`" v-model.number="r.min" type="number" :min="r.type === 'number' ? undefined : 0" placeholder="No limit">
             </div>
             <div class="field">
               <label :for="`f-max-${r.uid}`">{{ maxLabel(r.type) }}</label>
-              <input :id="`f-max-${r.uid}`" v-model.number="r.max" type="number" :min="r.type === 'number' ? undefined : 0">
+              <input :id="`f-max-${r.uid}`" v-model.number="r.max" type="number" :min="r.type === 'number' ? undefined : 0" placeholder="No limit">
             </div>
           </div>
 

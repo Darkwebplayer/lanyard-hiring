@@ -33,6 +33,13 @@ useHead({ title: () => name.value || 'Candidate' })
 const app = computed(() => tl.value?.application)
 const active = computed(() => app.value?.status === 'active')
 const latest = computed(() => tl.value?.runs.at(-1))
+// after a move or an answer the next step is often still starting; look again until it settles
+// ponytail: fixed 3s × 10 poll, a push channel if pages ever need live updates
+let polls = 0
+watch(latest, (r) => {
+  if (r && ['pending', 'running'].includes(r.status) && polls++ < 10) { const at = id.value; setTimeout(() => at === id.value && load(), 3000) }
+  else if (r && !['pending', 'running'].includes(r.status)) polls = 0
+})
 // a worker that died mid-step: the backend calls a run stale after 15 min (claimedAt, which we don't get; createdAt is close)
 const stuck = computed(() => latest.value?.status === 'running' && Date.now() - Date.parse(latest.value.createdAt) > 15 * 60_000)
 const needsHand = computed(() => active.value && (latest.value?.status === 'failed' || stuck.value))
@@ -93,7 +100,7 @@ async function onMoved(to: { node: string } | { close: string }) {
 }
 
 // Steps and the things people did, in time order (ties: the event first, it caused the step).
-const SHOWN = new Set(['manual_move', 'run_retried', 'task_reassigned', 'imported', 'offer_made', 'offer_withdrawn', 'booked'])
+const SHOWN = new Set(['manual_move', 'run_retried', 'task_reassigned', 'imported', 'offer_made', 'offer_withdrawn', 'offer_answered', 'booked', 'booking_cancelled'])
 const items = computed(() => {
   const t = tl.value
   if (!t) return []
@@ -109,10 +116,15 @@ function eventText(e: TimelineEvent) {
   if (e.type === 'imported') return `${who} imported ${t.candidate.firstName} from a spreadsheet${e.data?.node ? ` at ${stepName(t, e.data.node)}` : ''}`
   if (e.type === 'offer_made') return `${who} made an offer${e.data?.replaced?.length ? ', replacing the earlier one' : ''}`
   if (e.type === 'offer_withdrawn') return `${who} withdrew the offer`
+  if (e.type === 'offer_answered') {
+    const said = e.data?.accepted ? 'accepted the offer' : 'declined the offer'
+    return e.data?.via === 'link' ? `${t.candidate.firstName} ${said} on the link` : `${who} recorded that ${t.candidate.firstName} ${said} ${({ phone: 'on the phone', email: 'by email', in_person: 'in person' } as Record<string, string>)[e.data?.via] ?? ''}`.trim()
+  }
+  if (e.type === 'booking_cancelled') return `The interview booked for ${fmtBooked(e.data?.startsAt)} was cancelled`
   if (e.type === 'booked') {
     const r = t.runs.find(x => x.id === e.data?.runId)
     const was = e.data?.previous ? `, moved from ${fmtDateTime(e.data.previous)}` : ''
-    return `${t.candidate.firstName} booked ${r ? stepName(t, r.nodeKey) : 'a time'} for ${fmtDateTime(e.data?.startsAt)}${was}`
+    return `${t.candidate.firstName} booked ${r ? stepName(t, r.nodeKey) : 'a time'} for ${fmtBooked(e.data?.startsAt)}${was}`
   }
   if (e.type === 'manual_move') {
     if (e.data?.to?.close) return `${who} closed this as ${e.data.to.close}`
@@ -237,6 +249,8 @@ const isUrl = (v: unknown) => typeof v === 'string' && /^https?:\/\/\S+$/.test(v
             <CandidateWhy v-if="isManager" :tl="tl" class="why" />
           </div>
 
+          <CandidateOffer v-if="isManager" ref="offerRef" :tl="tl" @changed="load" />
+
           <section aria-labelledby="steps-h">
             <h2 id="steps-h" class="sec">Steps</h2>
             <ol class="timeline">
@@ -248,7 +262,7 @@ const isUrl = (v: unknown) => typeof v === 'string' && /^https?:\/\/\S+$/.test(v
                 <li v-else-if="it.ev" class="event">
                   <span class="edot" aria-hidden="true" />
                   <div>
-                    <p><Avatar :name="it.ev.type === 'booked' ? name : it.ev.actorName" :size="20" /> <span>{{ eventText(it.ev) }}</span> <time class="when" :datetime="it.ev.createdAt">{{ fmtDateTime(it.ev.createdAt) }}</time></p>
+                    <p><Avatar :name="it.ev.type === 'booked' || it.ev.data?.via === 'link' ? name : it.ev.actorName" :size="20" /> <span>{{ eventText(it.ev) }}</span> <time class="when" :datetime="it.ev.createdAt">{{ fmtDateTime(it.ev.createdAt) }}</time></p>
                     <p v-if="it.ev.data?.reasonCode || it.ev.data?.reason || it.ev.data?.note" class="reason">
                       <b v-if="it.ev.data?.reasonCode">{{ it.ev.data.reasonCode }}</b><template v-if="it.ev.data?.reasonCode && (it.ev.data?.reason || it.ev.data?.note)"> · </template><template v-if="it.ev.data?.reason || it.ev.data?.note">“{{ it.ev.data.reason || it.ev.data.note }}”</template>
                     </p>
@@ -265,7 +279,8 @@ const isUrl = (v: unknown) => typeof v === 'string' && /^https?:\/\/\S+$/.test(v
 
         <aside class="side">
           <CandidateBooking v-if="bookingRun" :run-id="bookingRun.id" :first-name="tl.candidate.firstName" />
-          <CandidateOffer v-if="isManager" ref="offerRef" :tl="tl" @changed="load" />
+          <CandidateDocuments :application-id="app.id" :first-name="tl.candidate.firstName" :stamp="tl" @changed="load" />
+          <CandidateEmails :tl="tl" />
           <CandidateFlowPanel v-if="isManager && tl.graph" ref="flowRef" :tl="tl" :graph="tl.graph" />
           <section class="panel answers" aria-labelledby="ans-h">
             <h2 id="ans-h" class="sec">Application</h2>

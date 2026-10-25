@@ -12,7 +12,7 @@ const { me } = useMe()
 const meta = computed(() => nodeMeta(props.run.nodeType))
 const name = computed(() => stepName(props.tl, props.run.nodeKey))
 const out = computed(() => props.run.output ?? null)
-const err = computed(() => runErrorText(props.run.error))
+const err = computed(() => runErrorText(props.run.error, props.tl.nodes.some(n => n.type === 'human_task' && /review/i.test(`${n.key} ${n.label ?? ''}`))))
 const waiting = computed(() => props.run.status === 'waiting_on_human')
 const canRetry = computed(() => props.manager && props.latest && props.run.status === 'failed' && props.tl.application.status === 'active')
 const human = computed(() => props.run.nodeType === 'human_task')
@@ -54,8 +54,10 @@ async function reassign(body: { add?: string[], remove?: string[] }) {
     busy.value = false
   }
 }
+// a Make offer step has no scorecard: the offer's answer closes it, so "didn't send" would read as a miss
+const offerStep = computed(() => !!out.value && 'accepted' in out.value)
 const state = (a: Assignment) =>
-  a.submittedAt ? `Sent ${fmtDateTime(a.submittedAt)}` : a.closedAt ? (waiting.value ? 'Removed' : 'Didn’t send') : 'Not sent yet'
+  a.submittedAt ? `Sent ${fmtDateTime(a.submittedAt)}` : offerStep.value ? 'Offer answered' : a.closedAt ? (waiting.value ? 'Removed' : 'Didn’t send') : 'Not sent yet'
 const scoreRows = (v: Record<string, unknown>) => Object.entries(v).filter(([k]) => k !== 'notes')
 </script>
 

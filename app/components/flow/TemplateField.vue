@@ -3,7 +3,7 @@ import type { Field, Graph } from '~~/shared/workflow/types'
 import { groupFields } from '~/lib/flow'
 
 // A text field that takes {{field}} references, with an "Insert field" menu of what this step can read.
-const props = defineProps<{ label: string, fields: Field[], graph: Graph, multiline?: boolean, hideProtected?: boolean, hint?: string }>()
+const props = defineProps<{ label: string, fields: Field[], graph: Graph, multiline?: boolean, hideProtected?: boolean, hint?: string, placeholder?: string }>()
 const model = defineModel<string>({ default: '' })
 const id = useId()
 const el = ref<HTMLInputElement | HTMLTextAreaElement>()
@@ -36,8 +36,8 @@ function insert(path: string) {
         <Icon name="braces" />Insert field
       </button>
     </div>
-    <textarea v-if="multiline" :id="id" ref="el" v-model="model" rows="5" />
-    <input v-else :id="id" ref="el" v-model="model">
+    <textarea v-if="multiline" :id="id" ref="el" v-model="model" rows="5" :placeholder="placeholder" />
+    <input v-else :id="id" ref="el" v-model="model" :placeholder="placeholder">
     <p v-if="hint" class="hint">{{ hint }}</p>
     <div :id="`${id}-menu`" ref="menu" popover class="menu ins-menu" :style="{ positionAnchor: `--${id}` }" @toggle="q = ''">
       <input v-model="q" type="search" placeholder="Find a field" aria-label="Find a field">

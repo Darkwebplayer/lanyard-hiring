@@ -1,8 +1,8 @@
 <template>
-  <!-- What the AI review is given: the CV and the two structured requirements, never the description -->
-  <div class="reads" role="img" aria-label="The AI reads the CV, the must-have skills and the minimum years. It does not read the description.">
+  <!-- What the AI review is given: the CV, the two structured requirements and the description; never who the candidate is -->
+  <div class="reads" role="img" aria-label="The AI reads the CV, the must-have skills, the minimum years and the description. It does not read the candidate’s name or contact details.">
     <div class="ins" aria-hidden="true">
-      <span class="in">CV</span><span class="in">Must-have skills</span><span class="in">Minimum years</span><span class="in no">Description</span>
+      <span class="in">CV</span><span class="in">Must-have skills</span><span class="in">Minimum years</span><span class="in">Description</span><span class="in no">Name and contact</span>
     </div>
     <span class="arrow" aria-hidden="true" />
     <div class="engine" aria-hidden="true">AI review<b>78</b><span>score</span></div>
@@ -27,6 +27,7 @@
 }
 .in:nth-child(2)::after { animation-delay: 0.3s; }
 .in:nth-child(3)::after { animation-delay: 0.6s; }
+.in:nth-child(4)::after { animation-delay: 0.9s; }
 @keyframes sweep { 0% { translate: -100% 0; } 40%, 100% { translate: 100% 0; } }
 .in.no { background: var(--sunk); color: var(--ink-3); text-decoration: line-through; }
 .in.no::after { display: none; }

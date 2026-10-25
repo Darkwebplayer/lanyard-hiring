@@ -25,7 +25,7 @@ function fromJob(j: Job) {
     salaryMin: (r.salary_min ?? '') as number | '', salaryMax: (r.salary_max ?? '') as number | '',
     location: r.location ?? '', employmentType: r.employment_type ?? '',
     workplace: (r.workplace_type ?? '') as '' | 'on_site' | 'hybrid' | 'remote',
-    currency: r.salary_currency ?? 'EUR', showSalary: !!r.show_salary,
+    currency: r.salary_currency ?? 'SGD', showSalary: !!r.show_salary,
   }
 }
 type Draft = ReturnType<typeof fromJob>
@@ -50,7 +50,7 @@ function requirementsOf(f: Draft): Requirements {
   if (f.location.trim()) r.location = f.location.trim()
   if (f.employmentType.trim()) r.employment_type = f.employmentType.trim()
   if (f.workplace) r.workplace_type = f.workplace
-  if (f.salaryMin !== '' || f.salaryMax !== '') r.salary_currency = f.currency.trim().toUpperCase() || 'EUR'
+  if (f.salaryMin !== '' || f.salaryMax !== '') r.salary_currency = f.currency.trim().toUpperCase() || 'SGD'
   if (f.showSalary) r.show_salary = true
   return r
 }
@@ -142,7 +142,7 @@ const ownerLabel = computed(() => job.value?.ownerId === me.value?.id ? `${me.va
         <h2>About the job</h2>
         <div class="field">
           <label for="d-title">Title</label>
-          <input id="d-title" v-model="fields.title" required maxlength="200">
+          <input id="d-title" v-model="fields.title" required maxlength="200" placeholder="e.g. Shop assistant">
         </div>
         <div class="field">
           <label for="d-desc">Description</label>
@@ -196,7 +196,7 @@ const ownerLabel = computed(() => job.value?.ownerId === me.value?.id ? `${me.va
         </div>
         <div class="field">
           <label for="d-skill">Must-have skills</label>
-          <JobSkillsInput id="d-skill" v-model="fields.skills" placeholder="Figma, user research, …" />
+          <JobSkillsInput id="d-skill" v-model="fields.skills" placeholder="e.g. Food hygiene, Excel" />
           <span class="hint">Press Enter or comma after each. Paste a comma list to add several.</span>
         </div>
         <div class="field">
@@ -204,7 +204,7 @@ const ownerLabel = computed(() => job.value?.ownerId === me.value?.id ? `${me.va
           <div class="row salary">
             <input v-model.number="fields.salaryMin" type="number" min="0" aria-label="Salary minimum" placeholder="Min" :aria-invalid="!!salaryError">
             <input v-model.number="fields.salaryMax" type="number" min="0" aria-label="Salary maximum" placeholder="Max" :aria-invalid="!!salaryError">
-            <input v-model="fields.currency" class="cur" maxlength="3" aria-label="Currency, three letters" placeholder="EUR" autocapitalize="characters" spellcheck="false">
+            <input v-model="fields.currency" class="cur" maxlength="3" aria-label="Currency, three letters" placeholder="SGD" autocapitalize="characters" spellcheck="false">
           </div>
           <span v-if="salaryError" class="error"><Icon name="alert" :size="14" />{{ salaryError }}</span>
           <label class="check"><input v-model="fields.showSalary" type="checkbox" :disabled="fields.salaryMin === '' && fields.salaryMax === ''">Show the salary on the apply page</label>
@@ -218,7 +218,7 @@ const ownerLabel = computed(() => job.value?.ownerId === me.value?.id ? `${me.va
         </div>
         <div class="field">
           <label for="d-loc">Location</label>
-          <input id="d-loc" v-model="fields.location" maxlength="200" placeholder="e.g. Berlin or Remote (EU)">
+          <input id="d-loc" v-model="fields.location" maxlength="200" placeholder="e.g. Jurong East or Tampines">
         </div>
       </section>
     </fieldset>

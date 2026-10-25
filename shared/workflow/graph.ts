@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { CORE_FIELDS, formFieldSchema, formFields, formSchemaDef, validateForm } from './form'
 import { type NodeDef, REGISTRY, conditionBranchKeys } from './registry'
 import type { ConditionConfig } from './rules'
+import { render } from './template'
 import { type Field, type FormField, type Graph, type GraphNode, type Issue, KEY_RE } from './types'
 import { nodeLabel } from '../../app/utils/nodes'
 
@@ -79,7 +80,7 @@ function dominators(order: string[], edges: Graph['edges'], trigger: string) {
 
 const outputsOf = (p: Parsed): Field[] =>
   p.def && p.config !== undefined
-    ? p.def.outputs(p.config).map(o => ({ path: `nodes.${p.node.key}.${o.key}`, type: o.type, label: `${nodeLabel(p.node)}: ${o.label}`, nodeType: p.node.type, ...(o.options && { options: o.options }) }))
+    ? p.def.outputs(p.config).map(o => ({ path: `nodes.${p.node.key}.${o.key}`, type: o.type, label: `${nodeLabel(p.node)}: ${o.label}`, nodeType: p.node.type, ...(o.options && { options: o.options }), ...(o.rule === false && { rule: false as const }) }))
     : []
 
 const baseFields = (form: FormField[]) => [...CORE_FIELDS, ...formFields(form), ...JOB_FIELDS]
@@ -207,4 +208,34 @@ export function checkVersionCompat(previous: { form: FormField[], workflow: Grap
     issues.push({ node: t.node, code: k.startsWith('form.') ? 'field_type_changed' : 'node_type_changed', message: `${name} was ${was} in an earlier version; use a new key for a ${t.type}` })
   }
   return issues
+}
+
+// The flow's rejection email: a send_email step that leads straight to a rejected End. A manual reject can send it.
+export const rejectionEmailNode = (g: Graph): GraphNode | undefined => g.nodes.find(n => n.type === 'send_email' && g.edges.some((e) => {
+  const to = e.from === n.key && g.nodes.find(m => m.key === e.to)
+  return to && to.type === 'end' && (to.config as { outcome?: string } | null)?.outcome === 'rejected'
+}))
+
+// Not blocking, but likely a mistake: an AI step with nothing to read, or an AI review with nothing to score against.
+// Run on a well-formed version (after validateVersion passes).
+export function aiWarnings(graph: Graph, form: FormField[], requirements: { must_have_skills?: string[], min_experience_years?: number } | null): Issue[] {
+  const out: Issue[] = []
+  const answers = form.some(f => !f.protected && f.type !== 'file')
+  const noReqs = !requirements?.must_have_skills?.length && requirements?.min_experience_years === undefined
+  for (const n of graph.nodes) {
+    if (n.type !== 'ai_review' && n.type !== 'ai_check') continue
+    const name = nodeLabel(n)
+    // cv_text_ref is the only way CV text reaches the AI (a Read CV output, or a pasted-CV text field)
+    const cv = !!(n.config as { cv_text_ref?: string } | undefined)?.cv_text_ref
+    if (n.type === 'ai_review' && !cv) out.push({ node: n.key, code: 'ai_no_cv', message: `${name} has no CV to read, so it scores the form answers only. Add a CV file field and a Read CV step, then pick it under “CV text from”.` })
+    if (n.type === 'ai_check' && !cv && !answers) out.push({ node: n.key, code: 'ai_nothing_to_read', message: `${name} has nothing to read: no CV text and no form answers.` })
+    if (n.type === 'ai_review' && noReqs) out.push({ node: n.key, code: 'ai_no_requirements', message: `${name} has nothing to score against. Add must-have skills or minimum years in Details.` })
+  }
+  return out
+}
+
+// What a manual reject's email is called, for the "Send them the rejection email" checkbox (domain/emails.ts has the default).
+export const rejectionSubject = (g: Graph | null | undefined, jobTitle: string) => {
+  const n = g && rejectionEmailNode(g)
+  return n ? render((n.config as { subject: string }).subject, { job: { title: jobTitle } }) : `Your application for ${jobTitle}`
 }

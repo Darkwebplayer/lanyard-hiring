@@ -5,6 +5,8 @@ import type { Db } from '../server/db/client'
 import * as s from '../server/db/schema'
 import { DomainError } from '../server/domain/errors'
 import { createJob, publish, saveDraft } from '../server/domain/jobs'
+import { makeOffer, offerInput, respondToOffer } from '../server/domain/offers'
+import { listDocuments, markReceived } from '../server/domain/documents'
 import {
   type AutoHandler, type EngineDeps, type Enqueued, executeAutoRun, HandlerError, moveApplication, reassignTask,
   retryRun, startApplication, submitTask, sweep,
@@ -29,6 +31,7 @@ const handlers: Record<string, AutoHandler> = {
     if (!sent.has(run.id)) sent.set(run.id, run.nodeKey) // provider dedupes by idempotency key
     return { output: { sent: true } }
   },
+  request_documents: async () => ({ output: {} }), // the link email; the run then waits for the documents
 }
 const deps = (extra: Partial<EngineDeps> = {}): EngineDeps => ({
   db,
@@ -111,7 +114,7 @@ beforeEach(() => {
 })
 
 describe('normal flow', () => {
-  it('1. happy path: CV → AI → shortlist → interview → hire → offer email → End(hired)', async () => {
+  it('1. happy path: CV → AI → shortlist → interview → hire → Make offer → accepted → End(hired)', async () => {
     const job = await publishedJob()
     const id = await apply(job)
     expect((await latest(id)).nodeKey).toBe('cv') // trigger completed in the start transaction
@@ -121,11 +124,42 @@ describe('normal flow', () => {
     expect(task.input).toEqual({ title: 'Interview Jane Doe' })
 
     await submitTask(deps(), task.id, 'owner', interview({ technical: 4, communication: 5, hire: true }))
-    expect(await drain()).toEqual(['completed']) // offer email
+    expect(await drain()).toEqual([])
+    // waits at Make offer: no scorecard, the offer's answer completes it
+    const step = await latest(id)
+    expect(step).toMatchObject({ nodeKey: 'make_offer', status: 'waiting_on_human' })
+    await rejects(submitTask(deps(), step.id, 'owner', {}), 409, 'answer_with_offer')
+    const o = await makeOffer(db, id, offerInput.parse({ templateId: null, terms: { salary: 'SGD 4,800 a month', start_date: '2026-12-01' } }), 'owner', t)
+    expect(await app(id)).toMatchObject({ status: 'active' }) // not hired before an offer is accepted
+    await respondToOffer(deps(), o.token, { action: 'accept', signedName: 'Jane Doe' })
+    await drain() // the documents request emails its link, then waits
+    expect(await app(id)).toMatchObject({ status: 'active', currentNodeKey: 'documents' })
+    const [req] = await listDocuments(db, { userId: 'owner', level: 'manager' }, id)
+    for (const i of [0, 1]) await markReceived(deps(), { userId: 'owner', level: 'manager' }, { id: 'owner', name: 'Owner' }, req!.id, i)
+    await drain()
+    expect(await app(id)).toMatchObject({ status: 'closed', outcome: 'hired', currentNodeKey: 'hired' })
+    expect([...sent.values()]).toEqual([])
+    expect((await runs(id)).map(r => r.nodeKey)).toEqual(['start', 'cv', 'ai', 'screen', 'interview', 'decision', 'make_offer', 'offer_answer', 'documents', 'hired'])
+    expect((await runs(id)).find(r => r.nodeKey === 'make_offer')!.output).toEqual({ accepted: true })
+    expect(await events(id)).toEqual(['application_submitted', 'task_assigned', 'task_submitted', 'task_assigned', 'offer_made', 'offer_answered',
+      'task_assigned', 'document_received', 'document_received', 'documents_in', 'closed'])
+  })
+
+  it('1b. a version published before Make offer (hire → offer email → End(hired)) still runs as it did', async () => {
+    const job = await publishedJob((tpl) => {
+      const w = tpl.workflow
+      w.nodes = w.nodes.filter(n => !['make_offer', 'offer_answer', 'documents', 'withdrawn'].includes(n.key))
+      w.nodes.push({ key: 'offer_email', type: 'send_email', config: { subject: 'Your offer for {{job.title}}', body: 'Hi {{candidate.first_name}}, an offer.' } })
+      w.edges = [...w.edges.filter(e => !['make_offer', 'offer_answer', 'documents'].includes(e.from) && e.to !== 'make_offer'),
+        { from: 'decision', to: 'offer_email', branch: 'hire' }, { from: 'offer_email', to: 'hired' }]
+      w.stages = w.stages!.filter(s => s.id !== 'offer').map(s => s.id === 'decision' ? { ...s, nodeKeys: ['offer_email', 'rejection_email'] } : s)
+    })
+    const id = await apply(job)
+    await drain()
+    await submitTask(deps(), (await latest(id)).id, 'owner', interview({ technical: 4, communication: 5, hire: true }))
+    expect(await drain()).toEqual(['completed'])
     expect(await app(id)).toMatchObject({ status: 'closed', outcome: 'hired', currentNodeKey: 'hired' })
     expect([...sent.values()]).toEqual(['offer_email'])
-    expect((await runs(id)).map(r => r.nodeKey)).toEqual(['start', 'cv', 'ai', 'screen', 'interview', 'decision', 'offer_email', 'hired'])
-    expect(await events(id)).toEqual(['application_submitted', 'task_assigned', 'task_submitted', 'closed'])
   })
 
   it('2. low AI score rejects, and the stored evaluation explains why', async () => {

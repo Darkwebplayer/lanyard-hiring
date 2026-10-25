@@ -100,7 +100,7 @@ export function boltLine(graph: Graph | null, stageId: string, nameOf: Names) {
     if (e.kind === 'email') return e.text.replace('Sends them', 'Emails')
     return e.text
   })
-  return parts.join(' · ')
+  return [...new Set(parts)].join(' · ') // Make offer and Documents both assign the owner: say it once
 }
 
 // The list's AI score filter, as presets a person picks without typing numbers.

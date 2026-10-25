@@ -78,13 +78,15 @@ const confirmDlg = ref<HTMLDialogElement>()
 const checking = ref(false)
 const publishing = ref(false)
 const publishError = ref<string | null>(null)
+const warnings = ref<Issue[]>([]) // allowed, but worth a look: shown in the publish confirmation
 
 // Runs the publish checks and shows what blocks; null if the check itself failed.
 async function check() {
   checking.value = true
   publishError.value = null
   try {
-    const { issues } = await api<{ issues: Issue[] }>(`/api/jobs/${id}/validate`, { method: 'POST' })
+    const { issues, warnings: w } = await api<{ issues: Issue[], warnings?: Issue[] }>(`/api/jobs/${id}/validate`, { method: 'POST' })
+    warnings.value = w ?? []
     panel.value = issues.length ? { kind: 'issues', issues } : null
     return issues
   }
@@ -129,10 +131,11 @@ async function publish() {
 const ASSIGNEE_TEXT: Record<string, string> = {
   bad_assignee: 'Assigned to someone who can’t sign in any more. Pick someone else, or the job owner.',
   bad_role: 'Assigned to a role that was deleted. Pick another role.',
+  offer_needs_manager: 'Only managers can make offers. Assign a manager or a manager role, not an employee.',
 }
 function assigneeText(i: Issue) {
   const [need, have] = i.code === 'not_enough_assignees' ? i.message.match(/\d+/g) ?? [] : []
-  if (need) return `Needs ${plural(+need, 'scorecard')}, but only ${plural(+(have ?? 0), 'person', 'people')} can be assigned. Add people or a role.`
+  if (need) return `Needs ${plural(+need, 'scorecard')}, but ${+(have ?? 0) ? `only ${plural(+have!, 'person', 'people')} can` : 'nobody can'} be assigned yet. Add people or a role.`
   const changed = i.code.endsWith('_type_changed') && /^(\S+) was (\w+) in an earlier version; use a new key for a (\w+)$/.exec(i.message)
   if (changed) return `“${changed[1]!.split('.').at(-1)}” was ${changed[2]} in an earlier version. Give the ${changed[3]} a new key.`
   return ASSIGNEE_TEXT[i.code]
@@ -156,6 +159,25 @@ const issueGroups = computed(() => {
   }
   return [...groups.values()]
 })
+
+// ---- every opening filled: offer to stop taking applications ----
+// Shown here, not where the hire happens: offers are accepted on a public link, so this is where the manager sees it.
+// "Keep open" hides it until the next hire.
+const hiredCount = computed(() => board.value?.counts.filter(c => c.outcome === 'hired').reduce((n, c) => n + c.n, 0) ?? 0)
+const fullKey = computed(() => `job-full-${id}-${hiredCount.value}`)
+const keptOpen = ref<string | null>(null)
+const full = computed(() => {
+  const j = job.value
+  if (!j || j.status !== 'open' || !board.value || hiredCount.value < j.openings || keptOpen.value === fullKey.value || seen(fullKey.value)) return null
+  const hires = board.value.preview.filter(r => r.outcome === 'hired')
+  const who = hiredCount.value === 1 && hires[0] ? `${fullName(hires[0].candidate)} is hired.` : `${plural(hiredCount.value, 'person', 'people')} hired.`
+  const left = board.value.counts.filter(c => c.status === 'active').reduce((n, c) => n + c.n, 0)
+  return { who, openings: j.openings, left }
+})
+function keepOpen() {
+  markSeen(fullKey.value)
+  keptOpen.value = fullKey.value
+}
 
 // ---- status ----
 const statusError = ref<string | null>(null)
@@ -267,6 +289,15 @@ function askArchive() {
         <button class="btn btn-icon btn-sm btn-quiet" aria-label="Got it, hide this" @click="dismissCoach"><Icon name="x" /></button>
       </aside>
 
+      <aside v-if="full" class="coach full" aria-label="Every opening is filled">
+        <p>
+          <b>{{ full.who }}</b> That fills {{ full.openings === 1 ? 'the 1 opening' : `all ${full.openings} openings` }} for {{ job?.title }}.
+          {{ full.left ? `${plural(full.left, 'person is', 'people are')} still in progress. ` : '' }}Stop taking applications?
+        </p>
+        <button class="btn btn-sm btn-primary" :aria-busy="changing" :disabled="changing" @click="setStatus('closed')">Close applications</button>
+        <button class="btn btn-sm btn-quiet" @click="keepOpen">Keep open</button>
+      </aside>
+
       <p v-if="archived" class="banner"><Icon name="lock" :size="16" />This job is archived. It’s kept for the record and can’t be changed.</p>
 
       <div class="tab-body">
@@ -279,6 +310,12 @@ function askArchive() {
         <h2 id="pub-h">Publish v{{ draft?.version }}?</h2>
         <p v-if="published">Candidates who already applied stay on v{{ published.version }}. New applications use v{{ draft?.version }}.</p>
         <p v-else-if="job?.status === 'draft'">The job goes live and starts taking applications at its apply link.</p>
+        <div v-if="warnings.length" class="pub-warn" role="status">
+          <p><Icon name="alert" :size="16" /><b>Worth a look first</b> (you can still publish)</p>
+          <ul>
+            <li v-for="(w, n) in warnings" :key="n"><NuxtLink :to="w.code === 'ai_no_requirements' ? `${base}/details` : `${base}/flow?node=${w.node}`" @click="confirmDlg?.close()">{{ w.message }}</NuxtLink></li>
+          </ul>
+        </div>
       </div>
       <div class="dialog-foot">
         <button class="btn btn-quiet" @click="confirmDlg?.close()">Cancel</button>
@@ -328,4 +365,10 @@ function askArchive() {
 .tab-body { padding-top: 20px; }
 .coach { display: flex; align-items: flex-start; gap: 8px; margin-top: 12px; padding: 8px 8px 8px 14px; border-radius: var(--r-panel); background: var(--accent-tint); color: var(--ink); font-size: var(--t-sm); text-wrap: pretty; }
 .coach p { flex: 1; padding-top: 5px; }
+.coach.full { align-items: center; flex-wrap: wrap; }
+.coach.full p { padding-top: 0; min-width: 16rem; }
+.pub-warn { margin-top: 14px; padding: 10px 12px; border-radius: var(--r-field); background: var(--warn-tint); font-size: var(--t-sm); display: grid; gap: 6px; }
+.pub-warn p { display: flex; gap: 6px; align-items: center; }
+.pub-warn svg { color: var(--warn); flex: none; }
+.pub-warn ul { margin: 0; padding-left: 22px; display: grid; gap: 4px; }
 </style>

@@ -131,7 +131,7 @@ async function save() {
         </div>
         <div v-if="draft.mode === 'new'" class="field">
           <label for="sp-name">Name</label>
-          <input id="sp-name" v-model="draft.name" required maxlength="100" autocomplete="off" placeholder="e.g. Engineering loop">
+          <input id="sp-name" v-model="draft.name" required maxlength="100" autocomplete="off" placeholder="e.g. Weekend shop staff">
         </div>
         <div v-else class="field">
           <label for="sp-target">Preset to replace</label>

@@ -1,13 +1,15 @@
-import { and, desc, eq, inArray, isNull, lt, lte, max, or, sql } from 'drizzle-orm'
-import { aggregateScorecard, type HumanTaskConfig, normalizeOutput, REGISTRY, runSetVariable, scorecardSchema } from '../../shared/workflow/registry'
+import { and, asc, desc, eq, inArray, isNull, lt, lte, max, or, sql } from 'drizzle-orm'
+import { aggregateScorecard, type HumanTaskConfig, normalizeOutput, REGISTRY, type RequestDocumentsConfig, runSetVariable, scorecardSchema } from '../../shared/workflow/registry'
 import { type ConditionConfig, pickBranch } from '../../shared/workflow/rules'
 import { render } from '../../shared/workflow/template'
 import { answersSchema } from '../../shared/workflow/form'
+import { rejectionEmailNode } from '../../shared/workflow/graph'
 import { relation } from '../../shared/workflow/stages'
 import type { Context, FormField, Graph, GraphNode } from '../../shared/workflow/types'
 import type { Db, Tx } from '../db/client'
-import { applicationEvents, applications, bookings, jobs, jobVersions, nodeRuns, offers, roles, taskAssignments, user } from '../db/schema'
+import { applicationEvents, applications, bookings, type DocItem, documentRequests, jobs, jobVersions, nodeRuns, offers, roles, taskAssignments, user } from '../db/schema'
 import { newBookingToken } from '../domain/bookings'
+import { deliver, deliverLater, queueEmail, type Send, words } from '../domain/emails'
 import { accessLevel } from '../domain/access'
 import { DomainError } from '../domain/errors'
 import { getSettings } from '../domain/settings'
@@ -45,6 +47,8 @@ export interface EngineDeps {
   adminEmail: string
   disabledTypes?: Set<string>
   now?: () => Date
+  sendEmail?: Send // delivers queued candidate emails after commit; left out (tests), they stay queued
+  appUrl?: string // for links in candidate emails
 }
 
 export const MAX_RETRIES = 3
@@ -57,7 +61,9 @@ const STEP_CAP = 100
 const now = (deps: EngineDeps) => deps.now?.() ?? new Date()
 
 // After commit only. A lost send is recovered by the sweeper, so failures here are logged, not thrown.
-async function flush(deps: EngineDeps, out: Enqueued[]) {
+// With an application id, also sends the candidate emails the transaction queued.
+export async function flush(deps: EngineDeps, out: Enqueued[], applicationId?: string) {
+  if (applicationId) await deliverLater(deps.db, deps.sendEmail, applicationId)
   if (!out.length) return
   try {
     await deps.enqueue(out)
@@ -76,6 +82,17 @@ async function withdrawOffers(tx: Tx, applicationId: string, actorId?: string | 
   const gone = await tx.update(offers).set({ status: 'withdrawn' })
     .where(and(eq(offers.applicationId, applicationId), eq(offers.status, 'sent'))).returning({ id: offers.id })
   for (const o of gone) await event(tx, applicationId, 'offer_withdrawn', { offerId: o.id }, actorId)
+}
+
+// An interview booked for later can't happen once the step or the application is gone: mark it cancelled, so the
+// booking page and the interviewers' inbox say so. `runIds` limits it to those runs; otherwise every booking of the application.
+export async function cancelBookings(tx: Tx, applicationId: string, t: Date, actorId?: string | null, runIds?: string[]) {
+  if (runIds && !runIds.length) return
+  const gone = await tx.update(bookings).set({ cancelledAt: t })
+    .where(and(isNull(bookings.cancelledAt), sql`${bookings.startsAt} > ${t.toISOString()}::timestamptz`,
+      runIds ? inArray(bookings.runId, runIds) : inArray(bookings.runId, tx.select({ id: nodeRuns.id }).from(nodeRuns).where(eq(nodeRuns.applicationId, applicationId)))))
+    .returning({ runId: bookings.runId, startsAt: bookings.startsAt })
+  for (const b of gone) await event(tx, applicationId, 'booking_cancelled', { runId: b.runId, startsAt: b.startsAt!.toISOString() }, actorId)
 }
 
 async function lockApplication(tx: Tx, applicationId: string) {
@@ -145,12 +162,17 @@ async function activate(w: Walk, nodeKey: string) {
       await tx.insert(nodeRuns).values({ ...base, status: 'completed', output: { outcome }, completedAt: t })
       await tx.update(applications).set({ status: 'closed', outcome }).where(eq(applications.id, app.id))
       await withdrawOffers(tx, app.id, w.actorId)
+      await cancelBookings(tx, app.id, t, w.actorId)
       await event(tx, app.id, 'closed', { outcome, node: key }, w.actorId)
       return
     }
     else if (def.kind === 'auto') {
       const [run] = await tx.insert(nodeRuns).values({ ...base, status: 'pending', nextAttemptAt: t }).returning()
       w.out.push({ runId: run!.id })
+      return
+    }
+    else if (node.type === 'request_documents') {
+      await activateDocuments(w, node, config as RequestDocumentsConfig, base, t)
       return
     }
     else {
@@ -173,8 +195,60 @@ async function activateHumanTask(w: Walk, node: GraphNode, config: HumanTaskConf
   const instructions = config.instructions ? render(config.instructions, w.ctx) : undefined
   const [run] = await tx.insert(nodeRuns).values({ ...base, status: 'waiting_on_human', dueAt, input: { title, instructions } }).returning()
   await tx.insert(taskAssignments).values(assignees.map(userId => ({ runId: run!.id, userId })))
-  if (config.booking) await tx.insert(bookings).values({ runId: run!.id, token: newBookingToken(), durationMin: config.booking.duration_min })
+  if (config.booking) {
+    const [b] = await tx.insert(bookings).values({ runId: run!.id, token: newBookingToken(), durationMin: config.booking.duration_min, location: config.booking.where ?? null }).returning()
+    const names = await tx.select({ name: user.name }).from(user).where(inArray(user.id, assignees)).orderBy(asc(user.name))
+    await queueEmail(tx, {
+      applicationId: app.id, kind: 'booking_request', key: `booking:${b!.id}`,
+      ...words.bookingRequest({
+        first: w.ctx.candidate.first_name, job: w.ctx.job.title, company: (await getSettings(tx)).companyName,
+        url: `${w.deps.appUrl ?? ''}/book/${b!.token}`, durationMin: b!.durationMin, interviewers: names.map(n => n.name), location: b!.location,
+      }),
+    })
+  }
   await event(tx, app.id, 'task_assigned', { node: node.key, runId: run!.id, assignees })
+}
+
+// Queued like an auto step: its handler emails the candidate the link, then the run waits for the documents
+// (executeAutoRun). The checklist and link carry over from an earlier visit to the step.
+async function activateDocuments(w: Walk, node: GraphNode, config: RequestDocumentsConfig, base: Omit<typeof nodeRuns.$inferInsert, 'status'>, t: Date) {
+  const { tx, app } = w
+  const assignees = await resolveAssignees(tx, w.deps.adminEmail, app.jobId, config.assignees)
+  if (!assignees.length) {
+    await tx.insert(nodeRuns).values({ ...base, status: 'failed', error: 'no_assignees', completedAt: t })
+    await event(tx, app.id, 'run_failed', { node: node.key, error: 'no_assignees', found: 0, needed: 1 })
+    return
+  }
+  const dueAt = config.due_days !== undefined ? new Date(t.getTime() + config.due_days * 86_400_000) : null
+  const [run] = await tx.insert(nodeRuns).values({ ...base, status: 'pending', nextAttemptAt: t, dueAt }).returning()
+  await tx.insert(taskAssignments).values(assignees.map(userId => ({ runId: run!.id, userId })))
+  const [prev] = await tx.select().from(documentRequests).where(and(eq(documentRequests.applicationId, app.id), eq(documentRequests.nodeKey, node.key)))
+  const items: DocItem[] = config.documents.map((d) => {
+    const received = prev?.items.find(i => i.label === d.label)?.received
+    return { ...d, ...(received && { received }) }
+  })
+  const token = prev?.token ?? newBookingToken()
+  if (prev) await tx.update(documentRequests).set({ runId: run!.id, items }).where(eq(documentRequests.id, prev.id))
+  else await tx.insert(documentRequests).values({ applicationId: app.id, nodeKey: node.key, runId: run!.id, token, items })
+  // the handler can't read the database: it gets the link from the run
+  await tx.update(nodeRuns).set({ input: { title: `Documents from ${w.ctx.candidate.first_name} ${w.ctx.candidate.last_name}`, token } }).where(eq(nodeRuns.id, run!.id))
+  await event(tx, app.id, 'task_assigned', { node: node.key, runId: run!.id, assignees })
+  w.out.push({ runId: run!.id })
+}
+
+// Completes a waiting request_documents run once every required document is in, and walks on. Caller holds the application lock.
+export async function finishDocuments(tx: Tx, deps: EngineDeps, app: Application, runId: string, items: DocItem[], out: Enqueued[]) {
+  if (!items.every(i => !i.required || i.received)) return false
+  const t = now(deps)
+  const [done] = await tx.update(nodeRuns).set({ status: 'completed', output: { received_count: items.filter(i => i.received).length }, completedAt: t })
+    .where(and(eq(nodeRuns.id, runId), eq(nodeRuns.status, 'waiting_on_human'))).returning()
+  if (!done) return false
+  // marked done rather than closed, so the follow-up people keep seeing the candidate (holdsAssignment)
+  await tx.update(taskAssignments).set({ submittedAt: t, closedAt: t }).where(and(eq(taskAssignments.runId, runId), isNull(taskAssignments.closedAt)))
+  await event(tx, app.id, 'documents_in', { node: done.nodeKey, runId })
+  const next = successor(await loadGraph(tx, app.jobVersionId), done.nodeKey)
+  if (next) await walkFrom(tx, deps, app, next, out)
+  return true
 }
 
 // Specific users ∪ active members of the roles ∪ the job owner; only people who can still sign in.
@@ -209,7 +283,7 @@ export async function startApplication(deps: EngineDeps, applicationId: string) 
     if (app.source !== 'import') await event(tx, app.id, 'application_submitted', { jobVersionId: app.jobVersionId })
     await activate({ tx, deps, app, graph, ctx: await buildContext(tx, app.id), out }, app.currentNodeKey ?? trigger.key)
   })
-  await flush(deps, out)
+  await flush(deps, out, applicationId)
 }
 
 export type ExecuteResult = 'completed' | 'retrying' | 'failed' | 'cancelled' | 'noop' | 'stale'
@@ -248,17 +322,24 @@ export async function executeAutoRun(deps: EngineDeps, runId: string): Promise<E
   const out: Enqueued[] = []
   const status = await db.transaction(async (tx) => {
     const app = await lockApplication(tx, run.applicationId) // serialises with manual moves and submissions
+    // a person step queued for its email (request_documents) now waits for people
+    const waits = REGISTRY[run.nodeType]?.kind === 'human'
     const [done] = await tx.update(nodeRuns)
-      .set({ status: 'completed', output: result.output, input: result.input ?? null, completedAt: now(deps), error: null })
+      .set(waits ? { status: 'waiting_on_human', error: null } : { status: 'completed', output: result.output, input: result.input ?? null, completedAt: now(deps), error: null })
       .where(fenced).returning()
     if (!done) return 'stale' as const // cancelled by a move, or recovered by the sweeper and claimed again
     if (app.status !== 'active') return 'completed' as const
+    if (waits) {
+      const [req] = await tx.select({ items: documentRequests.items }).from(documentRequests).where(eq(documentRequests.runId, run.id))
+      if (req) await finishDocuments(tx, deps, app, run.id, req.items, out) // the team may have ticked everything off already
+      return 'completed' as const
+    }
     const graph = await loadGraph(tx, app.jobVersionId)
     const next = successor(graph, run.nodeKey)
     if (next) await walkFrom(tx, deps, app, next, out)
     return 'completed' as const
   })
-  await flush(deps, out)
+  await flush(deps, out, run.applicationId)
   return status
 }
 
@@ -302,6 +383,7 @@ export async function submitTask(deps: EngineDeps, runId: string, userId: string
 
     const graph = await loadGraph(tx, app.jobVersionId)
     const config = configOf(findNode(graph, run!.nodeKey)) as HumanTaskConfig
+    if (config.offer) throw new DomainError(409, 'answer_with_offer') // answerOfferStep completes it
     const parsed = scorecardSchema(config.scorecard).safeParse(values)
     if (!parsed.success) {
       throw new DomainError(422, 'invalid_scorecard', parsed.error.issues.map(i => ({ code: 'invalid_value', message: `${i.path.join('.')}: ${i.message}` })))
@@ -313,17 +395,35 @@ export async function submitTask(deps: EngineDeps, runId: string, userId: string
 
     const submitted = await tx.select({ values: taskAssignments.values }).from(taskAssignments)
       .where(and(eq(taskAssignments.runId, runId), sql`${taskAssignments.submittedAt} is not null`))
-    if (submitted.length < config.min_submissions) return { completed: false }
+    if (submitted.length < config.min_submissions) return { completed: false, applicationId: app.id }
 
     const output = aggregateScorecard(config.scorecard, submitted.map(s => s.values as Record<string, unknown>))
     await tx.update(nodeRuns).set({ status: 'completed', output, completedAt: t }).where(eq(nodeRuns.id, runId))
     await tx.update(taskAssignments).set({ closedAt: t }).where(and(eq(taskAssignments.runId, runId), isNull(taskAssignments.closedAt)))
     const next = successor(graph, run!.nodeKey)
     if (next) await walkFrom(tx, deps, app, next, out)
-    return { completed: true }
+    return { completed: true, applicationId: app.id }
   })
-  await flush(deps, out)
-  return result
+  await flush(deps, out, result.applicationId)
+  return { completed: result.completed }
+}
+
+// The Make offer step is a human task with `offer: true`. It waits for the offer's answer instead of a scorecard:
+// the candidate's link or a recorded answer completes it with { accepted, decline_reason? }, and the flow walks on
+// (the templates route accepted → hired, otherwise → withdrawn). Caller holds the application lock and flushes `out`.
+// False when the application isn't waiting at such a step (older flows, an offer made from elsewhere).
+export async function answerOfferStep(tx: Tx, deps: EngineDeps, app: Application, output: { accepted: boolean, decline_reason?: string }, actorId: string | null, out: Enqueued[]) {
+  const [run] = await tx.select().from(nodeRuns).where(and(eq(nodeRuns.applicationId, app.id), eq(nodeRuns.status, 'waiting_on_human')))
+  if (!run || run.nodeType !== 'human_task') return false
+  const graph = await loadGraph(tx, app.jobVersionId)
+  const node = graph.nodes.find(n => n.key === run.nodeKey)
+  if (!node || !(configOf(node) as HumanTaskConfig).offer) return false
+  const t = now(deps)
+  await tx.update(nodeRuns).set({ status: 'completed', output, completedAt: t, actorId }).where(eq(nodeRuns.id, run.id))
+  await tx.update(taskAssignments).set({ closedAt: t }).where(and(eq(taskAssignments.runId, run.id), isNull(taskAssignments.closedAt)))
+  const next = successor(graph, run.nodeKey)
+  if (next) await walkFrom(tx, deps, app, next, out, actorId)
+  return true
 }
 
 // Add or remove assignees on a waiting task. Submissions already made are kept.
@@ -374,7 +474,8 @@ const isAt = (app: Application, from: MoveFrom) => 'node' in from
 
 // What the mover says: a free-text reason, a reason from settings.reject_reasons (closing as rejected),
 // and answers to the target stage's `ask`.
-export interface MoveInput { reason?: string, reasonCode?: string, answers?: Record<string, unknown> }
+// `notify` (closing as rejected): also email them the flow's rejection email, or a plain one.
+export interface MoveInput { reason?: string, reasonCode?: string, answers?: Record<string, unknown>, notify?: boolean }
 
 // Checks a move against the flow and settings; returns what goes on the event. Throws 422.
 // Rejecting needs a listed reasonCode (reason is then an optional note); any other move needs a
@@ -402,6 +503,19 @@ export function checkMove(graph: Graph, at: MoveFrom | null, target: MoveTarget,
   return { reason: reason || null, ...(reasonCode && { reasonCode }), ...(answers && { answers }) }
 }
 
+// The flow's own rejection email when it has one (its words, rendered now), else a plain one.
+async function queueRejection(tx: Tx, app: Application, graph: Graph, key: string) {
+  const ctx = await buildContext(tx, app.id)
+  const node = rejectionEmailNode(graph)
+  const own = node && configOf(node) as { subject: string, body: string }
+  await queueEmail(tx, {
+    applicationId: app.id, kind: 'rejection', key,
+    ...(own
+      ? { subject: render(own.subject, ctx), text: render(own.body, ctx) }
+      : words.rejection({ first: ctx.candidate.first_name, job: ctx.job.title, company: (await getSettings(tx)).companyName })),
+  })
+}
+
 // Manual override: cancel whatever is active, then jump to any node (or close). Also reopens.
 export async function moveApplication(deps: EngineDeps, applicationId: string, target: MoveTarget, input: MoveInput, actorId: string, from?: MoveFrom): Promise<MoveResult> {
   const out: Enqueued[] = []
@@ -422,6 +536,7 @@ export async function moveApplication(deps: EngineDeps, applicationId: string, t
       await tx.update(taskAssignments).set({ closedAt: t })
         .where(and(inArray(taskAssignments.runId, cancelled.map(c => c.id)), isNull(taskAssignments.closedAt)))
     }
+    await cancelBookings(tx, app.id, t, actorId, 'close' in target ? undefined : cancelled.map(c => c.id))
     await event(tx, app.id, 'manual_move', {
       ...said, to: target,
       previous: { status: app.status, outcome: app.outcome, node: app.currentNodeKey, cancelledRuns: cancelled.map(c => c.id) },
@@ -431,6 +546,7 @@ export async function moveApplication(deps: EngineDeps, applicationId: string, t
       await tx.update(applications).set({ status: 'closed', outcome: target.close }).where(eq(applications.id, app.id))
       await withdrawOffers(tx, app.id, actorId)
       await event(tx, app.id, 'closed', { outcome: target.close, manual: true }, actorId)
+      if (target.close === 'rejected' && input.notify) await queueRejection(tx, app, graph, `rejection:${app.id}:${t.getTime()}`)
       return true
     }
     if (app.status === 'closed') {
@@ -440,7 +556,7 @@ export async function moveApplication(deps: EngineDeps, applicationId: string, t
     await walkFrom(tx, deps, { ...app, status: 'active', outcome: null }, target.node, out, actorId)
     return true
   })
-  await flush(deps, out)
+  await flush(deps, out, applicationId)
   // the walk may carry on past the target (a condition, an End), so report where it actually stopped
   const [pos] = await deps.db.select({ currentNodeKey: applications.currentNodeKey, status: applications.status, outcome: applications.outcome })
     .from(applications).where(eq(applications.id, applicationId))
@@ -463,8 +579,8 @@ export async function retryRun(deps: EngineDeps, runId: string, actorId: string)
     if (stale) await tx.update(nodeRuns).set({ status: 'failed', error: 'stale_running', completedAt: now(deps) }).where(eq(nodeRuns.id, runId))
     await event(tx, app.id, 'run_retried', { node: latest!.nodeKey, runId }, actorId)
     await walkFrom(tx, deps, app, latest!.nodeKey, out, actorId)
-  })
-  await flush(deps, out)
+    return app.id
+  }).then(id => flush(deps, out, id))
 }
 
 // Cron, every 5 minutes. Re-sends lost messages and recovers runs whose worker died.
@@ -487,5 +603,8 @@ export async function sweep(deps: EngineDeps) {
     .where(and(eq(applications.status, 'active'), lt(applications.createdAt, new Date(t - LOST_PENDING_MS)),
       sql`not exists (select 1 from ${nodeRuns} r where r.application_id = ${applications.id})`)).limit(500)
   await each(unstarted, a => startApplication(deps, a.id))
-  return { requeued: lost.length, recovered: dead.length, started: unstarted.length }
+
+  // candidate emails a crashed request queued but never sent
+  const emails = deps.sendEmail ? await deliver(deps.db, deps.sendEmail, { before: new Date(t - LOST_PENDING_MS) }).catch((e) => { console.error('[engine] sweep emails failed', e); return 0 }) : 0
+  return { requeued: lost.length, recovered: dead.length, started: unstarted.length, emails }
 }

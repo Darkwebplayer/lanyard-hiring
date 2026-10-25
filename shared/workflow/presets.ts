@@ -5,7 +5,7 @@ import { STANDARD_HIRE } from './templates'
 export const PRESET_SECTIONS = [
   { key: 'system', label: 'System steps', types: ['cv_parse', 'ai_review', 'ai_check', 'send_email'] },
   { key: 'decisions', label: 'Decisions', types: ['condition', 'set_variable'] },
-  { key: 'person', label: 'Person steps', types: ['human_task'] },
+  { key: 'person', label: 'Person steps', types: ['human_task', 'request_documents'] },
   { key: 'endings', label: 'Endings', types: ['end'] },
 ] as const
 export const PRESET_TYPES: string[] = PRESET_SECTIONS.flatMap(s => [...s.types])
@@ -17,7 +17,7 @@ const owner = { users: [], roles: [], job_owner: true }
 // for existing companies). Kept here so the seed and the tests read one source.
 export const BUILTIN_PRESETS: { type: string, label: string, description: string, config: unknown }[] = [
   { type: 'ai_review', label: 'AI review: skills and experience', description: 'Scores the CV against the must-have skills and the minimum years.', config: fromTemplate('ai') },
-  { type: 'send_email', label: 'Offer email', description: 'Tells the candidate they have an offer.', config: fromTemplate('offer_email') },
+  { type: 'human_task', label: 'Make offer', description: 'You make the offer; their answer, on the link or recorded, moves them on.', config: fromTemplate('make_offer') },
   { type: 'send_email', label: 'Rejection email', description: 'Thanks the candidate and says how to ask for another look.', config: fromTemplate('rejection_email') },
   { type: 'condition', label: 'Screen by AI score', description: 'Shortlist at 70 or more, reject under 40, a person reviews the rest.', config: fromTemplate('screen') },
   ...Object.values(HUMAN_TASK_PRESETS).map(p => ({ type: 'human_task', label: p.label, description: `${p.config.scorecard.length} questions, due in ${p.config.due_days} days.`, config: { ...structuredClone(p.config), assignees: owner } })),

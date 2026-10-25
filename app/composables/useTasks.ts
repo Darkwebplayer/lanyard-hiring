@@ -2,9 +2,10 @@ export interface TaskRow {
   runId: string, nodeKey: string, nodeType: string, status: string, title: string
   dueAt: string | null, overdue: boolean, error: string | null, retries: number, createdAt: string
   applicationId: string, candidateName: string, jobId: string, jobTitle: string
-  booking?: { startsAt: string | null } | null // the step lets the candidate book a time; startsAt once they have
+  booking?: { startsAt: string | null, cancelledAt?: string | null } | null // the step lets the candidate book a time; startsAt once they have
 }
-export interface Inbox { mine: TaskRow[], overdue?: TaskRow[], blocked?: TaskRow[], failed?: TaskRow[], stuck?: TaskRow[] }
+// calledOff: your interviews cancelled in the last week (an accepted offer, a close)
+export interface Inbox { mine: TaskRow[], calledOff?: TaskRow[], overdue?: TaskRow[], blocked?: TaskRow[], failed?: TaskRow[], stuck?: TaskRow[] }
 
 // Shared by the rail (count) and the inbox page, so the inbox loads once.
 export const useTasks = () => {

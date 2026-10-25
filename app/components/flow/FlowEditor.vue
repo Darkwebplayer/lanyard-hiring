@@ -28,7 +28,8 @@ const { fitView, zoomIn, zoomOut, setCenter, setViewport, getViewport, findNode,
 
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v))
 const wf = ref<Graph>(clone(props.source.workflow.value!))
-const form = computed(() => props.source.form.value ?? [])
+// a draft from a description may add a field (a CV upload); it shows here until the draft is saved or discarded
+const form = computed(() => aiDraft.value?.form ?? props.source.form.value ?? [])
 const readOnly = computed(() => props.source.readOnly.value)
 const isJob = props.source.kind === 'job'
 const reduced = import.meta.client && matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -38,10 +39,13 @@ const ms = (n: number) => (reduced ? 0 : n)
 const { canAsk: aiOn } = useMe()
 // the New job wizard hands over what was written there, once
 const seed = useState<string>('describe-seed', () => '')
-const description = ref(seed.value)
+// kept per job or preset for the visit, not per mount: after a trip to the Form tab, the toolbar's
+// "Draft from a description" opens on the words used last time, as "Edit and redraft" does
+const description = useState<string>(`describe:${props.source.flowHref()}`, () => '')
+if (seed.value) description.value = seed.value
 seed.value = ''
 // the draft the server sent back, shown unsaved; `before` is the graph to put back on Discard
-const aiDraft = ref<{ summary: string, before: Graph } | null>(null)
+const aiDraft = ref<{ summary: string, before: Graph, form?: FormField[] } | null>(null)
 const startedEmpty = ref(false) // "Start empty" puts the card away for this visit
 const isEmpty = computed(() => wf.value.nodes.every(n => n.type === 'application_received'))
 const describeInline = computed(() => aiOn.value && !readOnly.value && isEmpty.value && !startedEmpty.value && !aiDraft.value)
@@ -171,7 +175,7 @@ let inFlight = false
 let again = false
 let pending: Promise<void> = Promise.resolve()
 const dirty = ref(false)
-function save() {
+function save(withForm?: FormField[]) {
   clearTimeout(saveTimer)
   if (inFlight) return void (again = true)
   inFlight = true
@@ -179,7 +183,7 @@ function save() {
   dirty.value = false
   pending = (async () => {
     try {
-      await props.source.save({ workflow: clone(wf.value) })
+      await props.source.save({ workflow: clone(wf.value), ...(withForm && { form: withForm }) })
       saveState.value = 'saved'
     }
     catch (e) {
@@ -644,12 +648,19 @@ function measure() {
     pullUp.value = extra > 0 && extra < 120 ? extra : 0
   })
 }
+// a banner above us (publish issues, "v2 is live") moves our top after mount; a stale height lets the page
+// scroll, and a scrollIntoView in the panel then slides the header away. Re-measure when the page changes size.
+const resized = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => measure())
 onMounted(() => {
   measure()
   requestAnimationFrame(measure)
   window.addEventListener('resize', measure)
+  resized?.observe(document.body)
 })
-onBeforeUnmount(() => window.removeEventListener('resize', measure))
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', measure)
+  resized?.disconnect()
+})
 
 // ---------- describe your flow: draft, then Save or Discard ----------
 const describeDlg = ref<HTMLDialogElement>()
@@ -674,8 +685,8 @@ async function draftFlow() {
   draftError.value = null
   try {
     await flush() // a pending edit must reach the server before the draft takes the canvas
-    const res = await api<{ workflow: Graph, issues: Issue[], summary: string }>('/api/flows/generate', {
-      method: 'POST', body: { description: description.value.trim(), form: form.value }, signal: ctl.signal,
+    const res = await api<{ workflow: Graph, issues: Issue[], summary: string, form?: FormField[] }>('/api/flows/generate', {
+      method: 'POST', body: { description: description.value.trim(), form: props.source.form.value ?? [] }, signal: ctl.signal,
     })
     if (ctl.signal.aborted) return
     // a reply the server couldn't read at all comes back with no steps; never let it wipe the canvas
@@ -685,7 +696,7 @@ async function draftFlow() {
     }
     const pos = layout(res.workflow)
     const next: Graph = { ...res.workflow, nodes: res.workflow.nodes.map(n => ({ ...n, position: pos.get(n.key) ?? { x: 0, y: 0 } })) }
-    aiDraft.value = { summary: res.summary, before: aiDraft.value?.before ?? clone(wf.value) }
+    aiDraft.value = { summary: res.summary, before: aiDraft.value?.before ?? clone(wf.value), ...(res.form && { form: res.form }) }
     describeDlg.value?.close()
     select(null)
     resetHistory(next)
@@ -723,9 +734,10 @@ function discardDraft() {
 }
 function saveDraftFlow() {
   if (!aiDraft.value) return
+  const f = aiDraft.value.form
   aiDraft.value = null
   emit('edit')
-  save()
+  save(f)
 }
 onBeforeRouteLeave(() => !aiDraft.value || confirm('Leave without saving the draft? The steps from your description will be lost.'))
 const draftBar = ref<HTMLElement>()
@@ -831,7 +843,7 @@ function goTo(key?: string) {
             <template v-else-if="saveState === 'saved'">Saved to the draft. Publish to use it for new applicants.</template>
             <template v-else-if="saveState === 'error'">
               <span class="save-err">Not saved: {{ saveError }}</span>
-              <button type="button" class="btn btn-sm" @click="save">Retry</button>
+              <button type="button" class="btn btn-sm" @click="save()">Retry</button>
             </template>
             <template v-else>Changes save as you go.</template>
           </span>
@@ -901,7 +913,7 @@ function goTo(key?: string) {
           <template v-else-if="saveState === 'saved'">Saved</template>
           <template v-else-if="saveState === 'error'">
             <span class="save-err">Not saved: {{ saveError }}</span>
-            <button type="button" class="btn btn-sm" @click="save">Retry</button>
+            <button type="button" class="btn btn-sm" @click="save()">Retry</button>
           </template>
         </span>
       </div>
@@ -936,7 +948,7 @@ function goTo(key?: string) {
 
     <StepPanel
       v-if="selected" :key="selected.key" class="side" :node="selected" :graph="wf" :form="form" :roles="roles" :people="people"
-      :issues="issuesBy.get(selected.key) ?? []" :key-locked="source.lockedKeys.value.has(selected.key)" :read-only="readOnly"
+      :issues="issuesBy.get(selected.key) ?? []" :key-locked="source.lockedKeys.value.has(selected.key)" :live-questions="source.lockedQuestions.value.get(selected.key)" :read-only="readOnly"
       :form-href="source.formHref" :job="source.sample.value"
       @rename="renameNode" @connect="(b, to) => connect(selected!.key, to, b)" @remove="view === 'stages' ? removeInStages(selected!.key) : removeNode(selected!.key)" @close="select(null)"
       @save-preset="saveAsPreset(selected!.key)"

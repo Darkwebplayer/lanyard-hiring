@@ -6,10 +6,11 @@
     <h4>What it reads</h4>
     <ul>
       <li>The job’s <b>requirements</b> from Details: must-have skills, minimum years, type and place of work.</li>
+      <li>The job <b>description</b>, as background. The scores are against the requirements, so put hard rules there.</li>
       <li>The <b>CV text</b>, with the candidate’s name and contact details taken out.</li>
       <li>Their <b>form answers</b>, except protected ones and files.</li>
     </ul>
-    <p>It does <b>not</b> read the job description, the candidate’s name or email, or any field marked Protected.</p>
+    <p>It does <b>not</b> read the candidate’s name, email or phone, or any field marked Protected.</p>
 
     <h4>Score bands</h4>
     <div class="bands" role="img" aria-label="Under 40 is a clear no, 40 to 69 goes to a person, 70 and up is a clear yes.">

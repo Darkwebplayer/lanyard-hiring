@@ -27,7 +27,8 @@ const attention = computed(() => [
 ].filter(s => s.rows.length))
 const attentionCount = computed(() => attention.value.reduce((n, s) => n + s.rows.length, 0))
 
-const linkTo = (t: TaskRow) => ({ path: `/inbox/${t.runId}`, query: route.query })
+// documents have no scorecard: their checklist lives on the candidate page
+const linkTo = (t: TaskRow) => (t.nodeType === 'request_documents' ? `/candidates/${t.applicationId}` : { path: `/inbox/${t.runId}`, query: route.query })
 // the open task stays only if the list switched to also holds it; else back to the list's own start
 const setView = (v: string) => {
   const rows = v === 'attention' ? attention.value.flatMap(s => s.rows) : mine.value
@@ -109,6 +110,12 @@ watch(selected, async (id) => {
             <li v-for="t in mine" :key="t.runId"><InboxTaskRow :task="t" :to="linkTo(t)" :current="t.runId === selected" /></li>
           </ul>
         </section>
+        <section v-if="inbox.calledOff?.length" aria-labelledby="sec-off">
+          <h2 id="sec-off" class="sec">Interviews called off <span class="faint">{{ inbox.calledOff.length }}</span></h2>
+          <ul class="rows">
+            <li v-for="t in inbox.calledOff" :key="t.runId"><InboxTaskRow :task="t" :to="`/candidates/${t.applicationId}`" :current="false" /></li>
+          </ul>
+        </section>
       </template>
 
       <template v-else-if="inbox">
@@ -127,7 +134,7 @@ watch(selected, async (id) => {
                     <NuxtLink :to="`/candidates/${t.applicationId}`">{{ t.candidateName }}</NuxtLink>
                     for {{ t.jobTitle }}
                   </p>
-                  <p class="p-fix faint">{{ s.key === 'stuck' ? 'Retry.' : runErrorText(t.error).fix }}</p>
+                  <p class="p-fix faint">{{ s.key === 'stuck' ? 'Retry to start this step again. If it stops again, move them on from their page.' : runErrorText(t.error).fix }}</p>
                   <div class="p-act">
                     <button class="btn btn-sm" :aria-busy="retrying === t.runId" :disabled="!!retrying" @click="retry(t)">
                       <span v-if="retrying === t.runId" class="spinner" /><Icon v-else name="retry" />Retry

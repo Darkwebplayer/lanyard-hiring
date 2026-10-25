@@ -1,6 +1,6 @@
 import type { ModelMessage } from 'ai'
 import { describe, expect, it } from 'vitest'
-import { draftFlow, mockFlow } from '../server/domain/flowDraft'
+import { draftFlow, mockFlow, withCvField } from '../server/domain/flowDraft'
 import { validateVersion } from '../shared/workflow/graph'
 import { stageView } from '../shared/workflow/stages'
 import { STANDARD_HIRE } from '../shared/workflow/templates'
@@ -30,7 +30,7 @@ describe('mock draft', () => {
       const res = await draftFlow(generate, 'Café barista', form)
       expect(calls).toHaveLength(1) // valid first time: no repair
       expect(res.issues).toEqual([])
-      expect(res.summary).toBe(name === 'Standard hire' ? '6 steps in 4 stages' : '5 steps in 4 stages')
+      expect(res.summary).toBe(name === 'Standard hire' ? '6 steps in 5 stages' : '5 steps in 5 stages')
     })
   }
 })
@@ -74,5 +74,20 @@ describe('repair loop', () => {
     await draftFlow(generate, 'x', form)
     expect(calls).toHaveLength(2)
     expect(calls[1]!.at(-1)!.content).toContain('isn’t in any stage')
+  })
+})
+
+describe('withCvField', () => {
+  const noFile = FORMS['no file field']!
+  it('adds a CV upload when the owner mentions CVs and the form has no file field', () => {
+    const { form, added } = withCvField('Read their resume, then a call', noFile)
+    expect(added).toMatchObject({ key: 'cv', type: 'file' })
+    expect(form).toEqual([...noFile, added])
+    expect(mockFlow(form).nodes.some(n => n.type === 'cv_parse')).toBe(true)
+  })
+  it('leaves the form alone otherwise', () => {
+    expect(withCvField('Check their CV', STANDARD_HIRE.form)).toEqual({ form: STANDARD_HIRE.form })
+    expect(withCvField('A quick call, then a trial shift', noFile)).toEqual({ form: noFile })
+    expect(withCvField('Discover talent', noFile).added).toBeUndefined() // "cv" inside a word
   })
 })

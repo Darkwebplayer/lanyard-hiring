@@ -2,7 +2,14 @@
 useHead({ title: 'Hires' })
 
 interface Row { id: string, title: string, status: 'draft' | 'open' | 'closed' | 'archived', openings: number, applications: number, hired: number, fillRate: number }
-interface Report { jobs: Row[], totals: { jobs: number, openings: number, hires: number, fillRate: number }, bySource?: { source: string | null, applied: number, hired: number }[] }
+interface Hire {
+  id: string, firstName: string, lastName: string, jobId: string, jobTitle: string, hiredAt: string, startDate: string | null
+  how: 'link' | 'phone' | 'email' | 'in_person' | 'hand' | 'flow', documents: { received: number, required: number } | null
+}
+interface Report {
+  jobs: Row[], totals: { jobs: number, openings: number, hires: number, fillRate: number }, bySource?: { source: string | null, applied: number, hired: number }[]
+  hired?: Hire[]
+}
 
 const report = ref<Report | null>(null)
 const error = ref('')
@@ -30,6 +37,11 @@ const head = computed(() => {
 // Where hires came from: most hires first, then most applications; the bar shares one scale (the busiest source).
 const sources = computed(() => [...report.value?.bySource ?? []].sort((a, b) => b.hired - a.hired || b.applied - a.applied))
 const mostApplied = computed(() => Math.max(1, ...sources.value.map(s => s.applied)))
+const HOW: Record<Hire['how'], string> = {
+  link: 'signed on link', phone: 'recorded by phone', email: 'recorded by email', in_person: 'recorded in person', hand: 'moved by hand', flow: 'by the flow',
+}
+const starts = (d: string | null) => !d ? 'Not set' : /^\d{4}-\d{2}-\d{2}$/.test(d) ? fmtDate(`${d}T00:00`) : d
+const docsText = (d: Hire['documents']) => !d ? 'No step' : d.received >= d.required ? 'All in' : `${d.received} of ${d.required}`
 const applications = computed(() => (report.value?.jobs ?? []).reduce((s, j) => s + j.applications, 0))
 
 </script>
@@ -131,6 +143,27 @@ const applications = computed(() => (report.value?.jobs ?? []).reduce((s, j) => 
               <td class="num">{{ s.applied.toLocaleString() }}</td>
               <td class="num"><b v-if="s.hired">{{ s.hired }}</b><span v-else class="faint">0</span></td>
               <td class="num">{{ s.applied ? pct(s.hired / s.applied) : '—' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section v-if="report.hired?.length" class="panel table-wrap src" aria-labelledby="who">
+        <header class="src-head">
+          <h2 id="who">Who was hired</h2>
+          <p class="muted">Last 90 days. The start date comes from their accepted offer.</p>
+        </header>
+        <table class="table">
+          <thead>
+            <tr><th>Name</th><th>Job</th><th>Starts</th><th>Documents</th><th>Hired</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="h in report.hired" :key="h.id">
+              <td class="title"><NuxtLink :to="`/candidates/${h.id}`" class="row-link">{{ fullName(h) }}</NuxtLink></td>
+              <td><NuxtLink :to="`/jobs/${h.jobId}`">{{ h.jobTitle }}</NuxtLink></td>
+              <td :class="{ faint: !h.startDate }">{{ starts(h.startDate) }}</td>
+              <td :class="{ faint: !h.documents }">{{ docsText(h.documents) }}</td>
+              <td>{{ fmtDate(h.hiredAt) }} <span class="faint">· {{ HOW[h.how] }}</span></td>
             </tr>
           </tbody>
         </table>

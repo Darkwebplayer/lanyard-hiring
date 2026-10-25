@@ -4,6 +4,7 @@ import type { Db, Tx } from '../db/client'
 import { applicationEvents, applications, availability, bookings, candidates, jobs, nodeRuns, settings, taskAssignments, user } from '../db/schema'
 import { atLeastManager } from './access'
 import type { Viewer } from './applications'
+import { queueEmail, words } from './emails'
 import { DomainError } from './errors'
 
 // Interview booking: a human task with `booking` gets a link (bookings.token) where the candidate picks a
@@ -93,7 +94,7 @@ async function loadBooking(db: Db | Tx, token: string) {
   if (!TOKEN.test(token)) throw new DomainError(404, 'booking_not_found') // checked before any query
   const [b] = await db.select({
     id: bookings.id, runId: bookings.runId, durationMin: bookings.durationMin, startsAt: bookings.startsAt,
-    status: nodeRuns.status, applicationId: nodeRuns.applicationId, firstName: candidates.firstName, jobTitle: jobs.title,
+    location: bookings.location, cancelledAt: bookings.cancelledAt, token: bookings.token, status: nodeRuns.status, applicationId: nodeRuns.applicationId, firstName: candidates.firstName, jobTitle: jobs.title,
   }).from(bookings)
     .innerJoin(nodeRuns, eq(nodeRuns.id, bookings.runId))
     .innerJoin(applications, eq(applications.id, nodeRuns.applicationId))
@@ -115,13 +116,13 @@ const assignees = (db: Db | Tx, runId: string) =>
 async function offer(db: Db | Tx, b: Awaited<ReturnType<typeof loadBooking>>, now: Date) {
   const people = await assignees(db, b.runId)
   const withHours = people.filter(p => p.timezone).map(p => ({ timezone: p.timezone!, hours: p.hours! }))
-  const canBook = b.status === 'waiting_on_human' && (!b.startsAt || b.startsAt.getTime() - now.getTime() >= NOTICE_MS)
+  const canBook = b.status === 'waiting_on_human' && !b.cancelledAt && (!b.startsAt || b.startsAt.getTime() - now.getTime() >= NOTICE_MS)
   // other interviews of any of them: open assignments, or everyone on a finished run (it may still lie ahead)
   const busy = canBook && withHours.length
     ? (await db.select({ start: bookings.startsAt, minutes: bookings.durationMin }).from(bookings)
         .innerJoin(nodeRuns, eq(nodeRuns.id, bookings.runId))
         .innerJoin(taskAssignments, eq(taskAssignments.runId, bookings.runId))
-        .where(and(ne(bookings.runId, b.runId), ne(nodeRuns.status, 'cancelled'), inArray(taskAssignments.userId, people.map(p => p.id)),
+        .where(and(ne(bookings.runId, b.runId), ne(nodeRuns.status, 'cancelled'), isNull(bookings.cancelledAt), inArray(taskAssignments.userId, people.map(p => p.id)),
           or(isNull(taskAssignments.closedAt), eq(nodeRuns.status, 'completed')),
           gt(bookings.startsAt, new Date(now.getTime() - 86_400_000)), lt(bookings.startsAt, new Date(now.getTime() + WINDOW_MS)))))
         .map(r => ({ start: r.start!, end: new Date(r.start!.getTime() + r.minutes * 60_000) }))
@@ -145,6 +146,8 @@ export async function publicBooking(db: Db, token: string, now: Date) {
     candidateFirstName: b.firstName,
     interviewers: o.people.map(p => p.name),
     durationMin: b.durationMin,
+    location: b.location,
+    cancelled: !!b.cancelledAt,
     timezoneHint: o.people.find(p => p.timezone)?.timezone ?? null,
     startsAt: b.startsAt,
     canBook: o.canBook,
@@ -154,8 +157,9 @@ export async function publicBooking(db: Db, token: string, now: Date) {
 }
 
 // Picks (or changes) the time. Locks the application (like every run change) and then the assignees' user rows
-// in id order, so two candidates can't take the same person's slot at once.
-export async function book(db: Db, token: string, startsAt: Date, now: Date) {
+// in id order, so two candidates can't take the same person's slot at once. Emails "You're booked" in the
+// candidate's zone (`timezone`, from their browser; else the first interviewer's).
+export async function book(db: Db, token: string, startsAt: Date, now: Date, timezone?: string, appUrl = '') {
   return db.transaction(async (tx) => {
     const found = await loadBooking(tx, token)
     await tx.select({ id: applications.id }).from(applications).where(eq(applications.id, found.applicationId)).for('update')
@@ -165,17 +169,26 @@ export async function book(db: Db, token: string, startsAt: Date, now: Date) {
     const b = await loadBooking(tx, token) // re-read under the locks
     if (b.status !== 'waiting_on_human') throw new DomainError(409, 'booking_closed')
     if (b.startsAt && b.startsAt.getTime() - now.getTime() < NOTICE_MS) throw new DomainError(409, 'too_late_to_change')
-    const { slots } = await offer(tx, b, now)
+    const { slots, people } = await offer(tx, b, now)
     if (!slots.includes(startsAt.toISOString())) throw new DomainError(409, 'slot_unavailable')
     await tx.update(bookings).set({ startsAt }).where(eq(bookings.id, b.id))
-    await tx.insert(applicationEvents).values({ applicationId: b.applicationId, type: 'booked', data: { runId: b.runId, startsAt: startsAt.toISOString(), previous: b.startsAt?.toISOString() ?? null } })
-    return { startsAt }
+    const [ev] = await tx.insert(applicationEvents).values({ applicationId: b.applicationId, type: 'booked', data: { runId: b.runId, startsAt: startsAt.toISOString(), previous: b.startsAt?.toISOString() ?? null } }).returning({ id: applicationEvents.id })
+    const [s] = await tx.select({ companyName: settings.companyName }).from(settings)
+    await queueEmail(tx, {
+      applicationId: b.applicationId, kind: 'booked', key: `booked:${ev!.id}`, // one per change: a move back to an earlier slot still confirms
+      ...words.booked({
+        first: b.firstName, job: b.jobTitle, company: s?.companyName ?? null, start: startsAt, durationMin: b.durationMin, location: b.location,
+        timeZone: (timezone && validZone(timezone) ? timezone : people.find(p => p.timezone)?.timezone) ?? 'UTC',
+        url: `${appUrl}/book/${b.token}`, icsUrl: `${appUrl}/api/public/bookings/${b.token}/invite.ics`,
+      }),
+    })
+    return { startsAt, applicationId: b.applicationId }
   })
 }
 
 // For the recruiter's Copy link. Managers, or anyone assigned to the run.
 export async function runBooking(db: Db, viewer: Viewer, runId: string) {
-  const [b] = await db.select({ token: bookings.token, durationMin: bookings.durationMin, startsAt: bookings.startsAt }).from(bookings).where(eq(bookings.runId, runId))
+  const [b] = await db.select({ token: bookings.token, durationMin: bookings.durationMin, startsAt: bookings.startsAt, location: bookings.location, cancelledAt: bookings.cancelledAt }).from(bookings).where(eq(bookings.runId, runId))
   if (!b) throw new DomainError(404, 'booking_not_found')
   if (!atLeastManager(viewer.level)) {
     const [mine] = await db.select({ runId: taskAssignments.runId }).from(taskAssignments)
@@ -210,7 +223,7 @@ function fold(line: string) {
 
 export async function bookingIcs(db: Db, token: string, now: Date) {
   const b = await loadBooking(db, token)
-  if (!b.startsAt) throw new DomainError(404, 'booking_not_found')
+  if (!b.startsAt || b.cancelledAt) throw new DomainError(404, 'booking_not_found')
   const people = await assignees(db, b.runId)
   const [s] = await db.select({ companyName: settings.companyName }).from(settings)
   const who = people.map(p => p.name).join(', ')
@@ -222,6 +235,7 @@ export async function bookingIcs(db: Db, token: string, now: Date) {
     `DTSTART:${icsTime(b.startsAt)}`,
     `DTEND:${icsTime(new Date(b.startsAt.getTime() + b.durationMin * 60_000))}`,
     `SUMMARY:${icsText(`Interview: ${b.jobTitle}`)}`,
+    ...(b.location ? [`LOCATION:${icsText(b.location)}`] : []),
     ...(who || s?.companyName ? [`DESCRIPTION:${icsText([s?.companyName, who && `With ${who}`].filter(Boolean).join('\n'))}`] : []),
     'END:VEVENT', 'END:VCALENDAR',
   ].map(fold).join('\r\n') + '\r\n'

@@ -50,7 +50,7 @@ const remove = (i: number) => (fields.value = fields.value.filter((_, j) => j !=
     <ol v-if="fields.length" ref="list" class="qs">
       <li v-for="(f, i) in fields" :key="i" class="q">
         <input
-          class="q-label" :value="f.label" maxlength="200" :aria-label="`Question ${i + 1} for ${props.stageName}`" :disabled="readOnly"
+          class="q-label" :value="f.label" maxlength="200" placeholder="e.g. Start date agreed" :aria-label="`Question ${i + 1} for ${props.stageName}`" :disabled="readOnly"
           @change="setLabel(f, ($event.target as HTMLInputElement).value); ($event.target as HTMLInputElement).value = f.label"
         >
         <select :value="f.type" :aria-label="`Answer type for ${f.label}`" :disabled="readOnly" @change="setType(f, ($event.target as HTMLSelectElement).value as FieldType)">

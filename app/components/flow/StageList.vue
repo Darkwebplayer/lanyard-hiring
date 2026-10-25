@@ -3,7 +3,7 @@ import { fieldsAvailableAt } from '~~/shared/workflow/graph'
 import type { HumanTaskConfig } from '~~/shared/workflow/registry'
 import { type StageExit, type StageInfo, type StageStep, type StageView, removeStep, stageView } from '~~/shared/workflow/stages'
 import type { FormField, Graph, Issue } from '~~/shared/workflow/types'
-import { type PaletteItem, type Person, type Role, issueText, ruleWords, summaryOf, titleOf } from '~/lib/flow'
+import { type PaletteItem, type Person, type Role, issueText, onlySome, ruleWords, summaryOf, titleOf } from '~/lib/flow'
 import type { PipelineState } from '~/pages/jobs/[id].vue'
 import AskFields from './AskFields.vue'
 
@@ -43,6 +43,24 @@ const removable = (k: string) => !props.readOnly && !!removeStep(props.graph, k)
 // "What's this?" beside the two places people misread: person steps (only some reach them) and a stage with two emails (only one is sent)
 const { show: showHelp } = useHelp()
 const twoEmails = (s: StageInfo) => s.auto.filter(st => st.type === 'send_email').length > 1
+// person steps a decision sends only some people to ("Only AI review: Overall score 40–69")
+const only = (k: string) => {
+  const from = props.graph.edges.find(e => e.to === k)?.from
+  return from ? onlySome(props.graph, k, fieldsAvailableAt(props.graph, from, props.form)) : null
+}
+// a stage of emails sends each person one of them: say which branch of the stage before leads to which email
+function oneWay(i: number) {
+  const s = props.view.stages[i]!
+  const prev = props.view.stages[i - 1]
+  if (!prev || !twoEmails(s) || !s.auto.every(st => st.type === 'send_email')) return null
+  return new Map(s.auto.map((st) => {
+    const ins = exitsOf(prev).filter(x => !('closed' in x.to) && x.to.node === st.key)
+    const end = node(props.graph.edges.find(e => e.from === st.key)?.to ?? '')
+    const out = end?.type === 'end' ? OUT[(end.config as { outcome: keyof typeof OUT }).outcome] : ''
+    const when = ins.length ? [...new Set(ins.map(exitWhen))].join(' or ') : 'From an earlier stage'
+    return [st.key, `${when} → sends “${name(st.key)}”${out ? ` → ${out}` : ''}`]
+  }))
+}
 
 // ---------- exits: in words, without the moves that stay inside the stage ----------
 const exitsOf = (s: StageInfo) => s.exits.filter(x => 'closed' in x.to || x.to.stage !== s.id)
@@ -178,12 +196,13 @@ function closedLine(c: StageView['closed'][number]) {
               <h4 class="lbl">When someone arrives</h4>
               <button v-if="twoEmails(s)" type="button" class="what" aria-label="What’s this? Why only one of these emails is sent" @click="showHelp('stages')">What’s this?</button>
             </div>
+            <p v-if="oneWay(i)" class="sub">Goes <b>one</b> way, depending on what happened in {{ view.stages[i - 1]!.name }}:</p>
             <div v-for="st in s.auto" :key="st.key" class="row-wrap">
               <div class="act" :class="{ sel: st.key === selectedKey, bad: issuesBy.has(st.key) }">
                 <button type="button" class="act-main" :data-step="st.key" @click="emit('select', st.key)">
                   <span class="ic" aria-hidden="true"><Icon :name="nodeMeta(st.type).icon" :size="14" /></span>
-                  <b class="act-name">{{ autoText(st) }}</b>
-                  <span class="sub">{{ autoSub(st) }}</span>
+                  <b class="act-name">{{ oneWay(i)?.get(st.key) ?? autoText(st) }}</b>
+                  <span v-if="!oneWay(i)" class="sub">{{ autoSub(st) }}</span>
                 </button>
                 <button
                   v-if="!readOnly" type="button" class="btn btn-quiet btn-icon btn-sm rm" :aria-label="`Remove ${name(st.key)}`"
@@ -204,6 +223,7 @@ function closedLine(c: StageView['closed'][number]) {
                 <button type="button" class="act-main" :data-step="st.key" @click="emit('select', st.key)">
                   <span class="ic p" aria-hidden="true"><Icon name="person" :size="14" /></span>
                   <b class="act-name">{{ name(st.key) }}</b>
+                  <span v-if="only(st.key)" class="chip chip-warn only" :title="only(st.key) ?? undefined">{{ only(st.key) }}</span>
                   <span class="sub">{{ personLine(st).who }}<template v-if="personLine(st).asks"><br>Asks: {{ personLine(st).asks }}</template></span>
                 </button>
                 <button
@@ -327,7 +347,8 @@ function closedLine(c: StageView['closed'][number]) {
   background: none; text-align: left; font-size: var(--t-sm); color: var(--ink); cursor: pointer;
 }
 .act-main:hover { background: var(--hover); }
-.act-name { font-weight: 600; overflow-wrap: anywhere; }
+.act-name { font-weight: 600; flex-shrink: 0; max-width: 45%; overflow-wrap: break-word; }
+.only { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } /* a long rule never squeezes the step name */
 .sub { font-size: var(--t-xs); color: var(--ink-2); }
 .act .sub { margin-left: auto; text-align: right; max-width: 55%; overflow-wrap: anywhere; }
 .rm { margin-right: 4px; }

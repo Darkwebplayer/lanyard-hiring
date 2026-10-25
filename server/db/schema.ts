@@ -256,9 +256,29 @@ export const bookings = pgTable('bookings', {
   runId: uuid('run_id').notNull().references(() => nodeRuns.id).unique(),
   token: text('token').notNull().unique(),
   durationMin: integer('duration_min').notNull(),
+  location: text('location'), // the step's "Where", copied when the link is made, like the duration
   startsAt: ts('starts_at'),
+  cancelledAt: ts('cancelled_at'), // the application moved on (an accepted offer, a close) before the interview
   createdAt: createdAt(),
 })
+
+// A request_documents step's checklist and the candidate's upload link. One per application and step, so moving
+// back to the step (or a retry) keeps the link and what came in; run_id follows the step's latest run.
+export interface DocItem {
+  label: string
+  required: boolean
+  // set once uploaded (file) or ticked off by the team (by, note)
+  received?: { at: string, file?: { key: string, sha256: string, size: number, mime: string, name: string }, by?: { id: string, name: string }, note?: string }
+}
+export const documentRequests = pgTable('document_requests', {
+  id: id(),
+  applicationId: uuid('application_id').notNull().references(() => applications.id),
+  nodeKey: text('node_key').notNull(),
+  runId: uuid('run_id').notNull().references(() => nodeRuns.id),
+  token: text('token').notNull().unique(),
+  items: jsonb('items').$type<DocItem[]>().notNull(),
+  createdAt: createdAt(),
+}, t => [uniqueIndex('document_requests_app_node_uq').on(t.applicationId, t.nodeKey)])
 
 export const offerStatus = pgEnum('offer_status', ['sent', 'accepted', 'declined', 'withdrawn'])
 
@@ -273,6 +293,8 @@ export const offers = pgTable('offers', {
   expiresAt: ts('expires_at'),
   signedName: text('signed_name'),
   respondedAt: ts('responded_at'),
+  // how the answer came: on the link, or recorded by the team (by phone, email, in person) with an optional note
+  answer: jsonb('answer').$type<{ via: 'link' | 'phone' | 'email' | 'in_person', reason?: string, note?: string, by?: { id: string, name: string } }>(),
   createdBy: text('created_by').notNull().references(() => user.id),
   createdAt: createdAt(),
 }, t => [
@@ -280,6 +302,24 @@ export const offers = pgTable('offers', {
   // one live offer per application; a new one withdraws the old
   uniqueIndex('offers_one_sent_uq').on(t.applicationId).where(sql`${t.status} = 'sent'`),
 ])
+
+// Every email sent to a candidate, word for word: their record on the candidate page. Written in the same
+// transaction as what caused it, sent after commit (domain/emails.ts deliver); sent_at once the provider took it.
+export const candidateEmails = pgTable('candidate_emails', {
+  id: id(),
+  seq: seq(),
+  applicationId: uuid('application_id').notNull().references(() => applications.id),
+  kind: text('kind').notNull(), // flow · offer · offer_accepted · offer_declined · booking_request · booked · rejection
+  key: text('idempotency_key').notNull().unique(), // also the provider's idempotency key
+  to: text('to').notNull(),
+  replyTo: text('reply_to'),
+  subject: text('subject').notNull(),
+  body: text('body').notNull(),
+  createdAt: createdAt(),
+  sentAt: ts('sent_at'),
+  attempts: integer('attempts').notNull().default(0), // failed sends so far
+  failedAt: ts('failed_at'), // given up: too many attempts or a permanent error; the sweeper skips it
+}, t => [index('candidate_emails_app_idx').on(t.applicationId, t.seq)])
 
 export const reminderLog = pgTable('reminder_log', {
   runId: uuid('run_id').notNull().references(() => nodeRuns.id),

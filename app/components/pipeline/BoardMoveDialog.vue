@@ -22,6 +22,7 @@ const loadReasons = () => reasons ??= api<{ rejectReasons: string[] }>('/api/set
 
 <script setup lang="ts">
 import type { FormField, Graph } from '~~/shared/workflow/types'
+import { rejectionEmailNode, rejectionSubject } from '~~/shared/workflow/graph'
 import { dropEffects, needsReason, posId } from '~/lib/board'
 
 const props = defineProps<{ jobId: string, targets: (Row & { group: string })[], graph: Graph | null, nameOf: (id: string) => string | undefined }>()
@@ -34,6 +35,8 @@ const drop = ref<Drop | null>(null)
 const toId = ref('')
 const reason = ref('')
 const reasonCode = ref('')
+const notify = ref(false) // closing as rejected: off by default, they may have been told already
+const { detail: job } = useJob(props.jobId)
 const answers = ref<Record<string, any>>({}) // field values as typed; answerBody() converts them
 const busy = ref(false)
 const err = ref('')
@@ -58,6 +61,7 @@ function open(d: Drop) {
   toId.value = d.to?.id ?? ''
   reason.value = ''
   reasonCode.value = ''
+  notify.value = false
   answers.value = {}
   err.value = ''
   issues.value = []
@@ -82,9 +86,9 @@ function answerBody() {
   for (const f of ask.value) {
     const v = answers.value[f.key]
     if (f.type === 'boolean') out[f.key] = !!v
+    else if (f.type === 'list') { if (listItems(v).length) out[f.key] = listItems(v) }
     else if (v === undefined || v === '') continue
     else if (f.type === 'number') out[f.key] = Number(v)
-    else if (f.type === 'list') out[f.key] = String(v).split('\n').map(s => s.trim()).filter(Boolean)
     else out[f.key] = v
   }
   return out
@@ -97,6 +101,7 @@ const body = (p: Part, extra: object = {}) => ({
   to: 'node' in to.value!.pos ? { node: to.value!.pos.node } : { close: to.value!.pos.closed },
   ...(reason.value.trim() && { reason: reason.value.trim() }),
   ...(rejecting.value && reasonCode.value && { reasonCode: reasonCode.value }),
+  ...(closingRejected.value && notify.value && { notify: true }),
   ...(ask.value.length && { answers: answerBody() }),
   ...(p.except?.length && { except: p.except }),
   ...extra,
@@ -121,7 +126,10 @@ const title = computed(() => {
   if ('closed' in to.value.pos) return `Close ${who.value} as ${to.value.pos.closed}?`
   return `${reopening.value ? 'Reopen' : 'Move'} ${who.value} ${reopening.value ? 'at' : 'to'} ${to.value.label}?`
 })
-const effects = computed(() => to.value ? dropEffects(props.graph, to.value.pos, props.nameOf, n.value > 1) : [])
+const closingRejected = computed(() => !!to.value && 'closed' in to.value.pos && to.value.pos.closed === 'rejected')
+const effects = computed(() => to.value
+  ? dropEffects(props.graph, to.value.pos, props.nameOf, n.value > 1).map(e => notify.value && closingRejected.value ? { ...e, text: e.text.replace('No email is sent.', `${n.value === 1 ? 'They’re' : 'Each is'} emailed the rejection.`) } : e)
+  : [])
 // closing as rejected, or a drop on a step whose path ends in a rejection ("Otherwise → Rejection email"):
 // either way the team's reason is asked, so the "why rejected" counts see the common path too
 const rejecting = computed(() => effects.value.some(e => e.outcome === 'rejected'))
@@ -234,6 +242,11 @@ async function submit() {
           </div>
         </fieldset>
 
+        <label v-if="closingRejected" class="check notify">
+          <input v-model="notify" type="checkbox">
+          <span>Send {{ n === 1 ? 'them' : 'each of them' }} the rejection email<br><span class="faint">{{ graph && rejectionEmailNode(graph) ? 'The one from this job’s flow' : 'A short, polite note' }}: “{{ rejectionSubject(graph, job?.job.title ?? 'this job') }}”. Off by default, because you may already have told them. Each email sent shows on the person’s page.</span></span>
+        </label>
+
         <div v-for="f in ask" :key="f.key" class="field">
           <label v-if="f.type === 'boolean'" class="check"><input v-model="answers[f.key]" type="checkbox">{{ f.label }}</label>
           <template v-else>
@@ -242,15 +255,15 @@ async function submit() {
               <option value="" disabled>Pick one</option>
               <option v-for="o in f.options" :key="o" :value="o">{{ o }}</option>
             </select>
-            <textarea v-else-if="f.type === 'text' || f.type === 'list'" :id="`bmove-a-${f.key}`" v-model="answers[f.key]" :required="f.required" rows="2" :aria-describedby="f.type === 'list' ? `bmove-h-${f.key}` : undefined" />
+            <ListInput v-else-if="f.type === 'list'" v-model="answers[f.key]" :id="`bmove-a-${f.key}`" :label="f.label" :max="f.max" :required="f.required" />
+            <textarea v-else-if="f.type === 'text'" :id="`bmove-a-${f.key}`" v-model="answers[f.key]" :required="f.required" rows="2" />
             <input v-else :id="`bmove-a-${f.key}`" v-model="answers[f.key]" :type="f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : 'text'" :required="f.required" :min="f.type === 'number' ? f.min : undefined" :max="f.type === 'number' ? f.max : undefined">
-            <span v-if="f.type === 'list'" :id="`bmove-h-${f.key}`" class="hint">One per line.</span>
           </template>
         </div>
 
         <div v-if="to" class="field">
           <label for="bmove-reason">{{ reasonNeeded ? 'Reason' : 'Note' }}<span v-if="!reasonNeeded" class="faint"> (optional)</span></label>
-          <textarea id="bmove-reason" v-model="reason" :required="reasonNeeded" maxlength="1000" rows="2" aria-describedby="bmove-reason-hint" />
+          <textarea id="bmove-reason" v-model="reason" :required="reasonNeeded" maxlength="1000" rows="2" aria-describedby="bmove-reason-hint" :placeholder="rejecting ? 'e.g. Can’t do weekend shifts' : reasonNeeded ? 'e.g. Owner wants to meet them this week' : 'e.g. Spoke on the phone, keen to start'" />
           <span id="bmove-reason-hint" class="hint">
             <template v-if="rejecting">Only your team sees it, in {{ n === 1 ? 'the candidate’s' : 'each candidate’s' }} history.</template>
             <template v-else-if="!reasonNeeded">Follows the flow, so no reason needed.</template>
@@ -297,6 +310,9 @@ async function submit() {
 .opt:has(:checked) { background: var(--accent-tint); box-shadow: inset 0 0 0 1px var(--accent-line); }
 .opt:has(:focus-visible) { outline: 2px solid var(--accent); outline-offset: 1px; }
 .opt input { margin-top: 0; }
+.notify { align-items: flex-start; font-size: var(--t-md); }
+.notify input { margin-top: 3px; }
+.notify .faint { font-size: var(--t-sm); }
 .dialog-foot { border-top: 1px solid var(--line); }
 .dialog-foot .form-error { flex-basis: 100%; }
 .issues { margin: 6px 0 0; padding-left: 1.1em; font-weight: 400; }

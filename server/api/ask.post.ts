@@ -8,5 +8,5 @@ export default defineEventHandler(async (event) => {
   const env = useEnv(event)
   await domain(assertAiOn(db, env))
   const ctx = await domain(contextFor(db, { userId: actor.user.id, level: actor.level }, where, env.ADMIN_EMAIL))
-  return askStream(env, ctx, question, history)
+  return domain(askStream(env, ctx, question, history))
 })

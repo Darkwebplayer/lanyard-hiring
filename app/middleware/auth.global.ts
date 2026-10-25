@@ -1,7 +1,7 @@
 import type { Me } from "~/composables/useMe"
 
 // candidate pages: no session, no /api/me
-const PUBLIC = ['/login', '/apply/', '/careers', '/book/', '/offer/']
+const PUBLIC = ['/login', '/apply/', '/careers', '/book/', '/offer/', '/documents/']
 
 export default defineNuxtRouteMiddleware(async (to) => {
   if (PUBLIC.some(p => to.path.startsWith(p))) return

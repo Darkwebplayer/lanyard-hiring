@@ -6,7 +6,8 @@ import { TEMPLATES } from '../shared/workflow/templates'
 vi.mock('~/utils/nodes', () => import('../app/utils/nodes'))
 vi.mock('~~/shared/workflow/presets', () => import('../shared/workflow/presets'))
 vi.mock('~~/shared/workflow/registry', () => import('../shared/workflow/registry'))
-const { insertBefore, removeBlocker, ruleWords } = await import('../app/lib/flow')
+const { insertBefore, onlySome, removeBlocker, ruleWords } = await import('../app/lib/flow')
+const { fieldsAvailableAt } = await import('../shared/workflow/graph')
 
 const email = { key: 'hello', type: 'send_email', config: { subject: 'Hi', body: 'Hi' } }
 
@@ -36,5 +37,24 @@ describe('stage editor helpers', () => {
     expect(ruleWords({ all: [{ ref: 'nodes.ai.overall', op: 'gte', value: 40 }, { ref: 'nodes.ai.overall', op: 'lt', value: 70 }] }, fields))
       .toBe('AI review: Overall score is at least 40 and AI review: Overall score is less than 70')
     expect(ruleWords({ ref: 'x', op: 'gte', value: 70 }, [{ path: 'x', type: 'number', label: 'AI review: Overall score (0–100)' }])).toBe('AI review: Overall score is at least 70')
+  })
+})
+
+describe('onlySome', () => {
+  const t = TEMPLATES.find(x => x.workflow.nodes.some(n => n.key === 'manual_review'))!
+  const g = t.workflow
+  const at = (k: string) => fieldsAvailableAt(g, k, t.form)
+  it('reads the range an Otherwise branch leaves between the other bounds', () => {
+    expect(onlySome(g, 'manual_review', at('screen'))).toBe('Only AI review: Overall score 40–69 or no score')
+  })
+  it('names the rule of a single branch, and says nothing when everyone gets there', () => {
+    const one = { ...g, edges: g.edges.filter(e => !(e.from === 'screen' && e.to === 'manual_review')).concat({ from: 'screen', to: 'manual_review', branch: 'shortlist' }) }
+    expect(onlySome(one, 'manual_review', at('screen'))).toBe('Only AI review: Overall score is at least 70')
+    expect(onlySome(g, 'ai', at('cv'))).toBeNull()
+  })
+  it('falls back to plain words when the rest is not a simple range', () => {
+    const mixed = structuredClone(g)
+    ;(mixed.nodes.find(n => n.key === 'screen')!.config as any).branches[1].rule = { ref: 'nodes.cv.years_experience', op: 'lt', value: 2 }
+    expect(onlySome(mixed, 'manual_review', at('screen'))).toBe('Only some people, see the rule')
   })
 })
