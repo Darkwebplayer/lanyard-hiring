@@ -63,6 +63,13 @@ const tabs = computed(() => [
   { to: `${base}/details`, label: 'Details' },
 ])
 const isFlow = computed(() => route.path.startsWith(`${base}/flow`))
+// once per person: the hand-off from the New job wizard to the tabs
+const { seen, markSeen } = useSeen()
+const coach = ref(!seen('job-hub'))
+function dismissCoach() {
+  markSeen('job-hub')
+  coach.value = false
+}
 
 // ---- publish ----
 type Panel = { kind: 'issues', issues: Issue[] } | { kind: 'done', version: number } | null
@@ -255,6 +262,11 @@ function askArchive() {
         </NuxtLink>
       </nav>
 
+      <aside v-if="coach && !archived" class="coach" aria-label="How a job works">
+        <p><b>Stages</b> = what happens to each person, <b>Form</b> = what you ask, <b>Details</b> = what candidates read and what the AI scores against. Nothing is live until you Publish.</p>
+        <button class="btn btn-icon btn-sm btn-quiet" aria-label="Got it, hide this" @click="dismissCoach"><Icon name="x" /></button>
+      </aside>
+
       <p v-if="archived" class="banner"><Icon name="lock" :size="16" />This job is archived. It’s kept for the record and can’t be changed.</p>
 
       <div class="tab-body">
@@ -314,4 +326,6 @@ function askArchive() {
 .tab-n { min-width: 20px; padding: 0 6px; border-radius: var(--r-pill); background: var(--sunk); font-size: var(--t-xs); line-height: 20px; text-align: center; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .banner { display: flex; align-items: center; gap: 8px; margin-top: 16px; padding: 10px 14px; border-radius: var(--r-panel); background: var(--sunk); color: var(--ink-2); font-weight: 500; }
 .tab-body { padding-top: 20px; }
+.coach { display: flex; align-items: flex-start; gap: 8px; margin-top: 12px; padding: 8px 8px 8px 14px; border-radius: var(--r-panel); background: var(--accent-tint); color: var(--ink); font-size: var(--t-sm); text-wrap: pretty; }
+.coach p { flex: 1; padding-top: 5px; }
 </style>

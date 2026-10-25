@@ -31,6 +31,8 @@ function fromJob(j: Job) {
 type Draft = ReturnType<typeof fromJob>
 const form = ref<Draft | null>(null)
 const original = ref<Draft | null>(null)
+// until the job arrives a blank, busy form stands in, so headings and labels show from the start
+const fields = computed(() => form.value ?? fromJob({ title: '', description: '', openings: '', closesAt: null, ownerId: '' } as never))
 watch(job, (j) => {
   // don't throw away someone's typing when the hub refreshes
   if (j && (!form.value || !dirty.value)) {
@@ -118,29 +120,6 @@ const aiReads = computed(() => editable.value?.workflow.nodes.some(n => n.type =
   : [])
 const listOf = (xs: string[]) => xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs.at(-1)}`
 
-// ---- skills: type and press Enter or comma; a pasted list splits ----
-const skill = ref('')
-function addSkills(text: string) {
-  if (!form.value) return
-  for (const s of text.split(',').map(s => s.trim()).filter(Boolean)) {
-    if (!form.value.skills.some(x => x.toLowerCase() === s.toLowerCase())) form.value.skills.push(s)
-  }
-  skill.value = ''
-}
-function onSkillKey(e: KeyboardEvent) {
-  if (e.key === 'Enter' || e.key === ',') {
-    e.preventDefault()
-    addSkills(skill.value)
-  }
-  else if (e.key === 'Backspace' && !skill.value) form.value?.skills.pop()
-}
-function onSkillPaste(e: ClipboardEvent) {
-  const text = e.clipboardData?.getData('text') ?? ''
-  if (!text.includes(',')) return
-  e.preventDefault()
-  addSkills(skill.value + text)
-}
-
 // ---- owner: any manager or admin who can sign in ----
 interface UserRow { id: string, name: string, roleLevel: string | null }
 const owners = ref<UserRow[]>([])
@@ -157,39 +136,36 @@ const ownerLabel = computed(() => job.value?.ownerId === me.value?.id ? `${me.va
 </script>
 
 <template>
-  <div v-if="!form" class="grid" aria-busy="true">
-    <div class="panel sk"><span v-for="i in 5" :key="i" class="skeleton" /></div>
-  </div>
-
-  <form v-else class="grid" @submit.prevent="save">
+  <form class="grid" :aria-busy="!form" :inert="!form" @submit.prevent="save">
     <fieldset :disabled="archived" class="cols">
       <section class="panel block">
         <h2>About the job</h2>
         <div class="field">
           <label for="d-title">Title</label>
-          <input id="d-title" v-model="form.title" required maxlength="200">
+          <input id="d-title" v-model="fields.title" required maxlength="200">
         </div>
         <div class="field">
           <label for="d-desc">Description</label>
-          <JobMarkdownEditor id="d-desc" v-model="form.description" :maxlength="20000" :disabled="archived" />
+          <JobMarkdownEditor id="d-desc" v-model="fields.description" :maxlength="20000" :disabled="archived" />
           <span class="hint">Candidates read this on the apply page, formatted as in Preview.</span>
         </div>
         <div class="row">
           <div class="field">
             <label for="d-open">Openings</label>
-            <input id="d-open" v-model.number="form.openings" type="number" min="1" max="10000" required>
+            <input id="d-open" v-model.number="fields.openings" type="number" min="1" max="10000" required>
           </div>
           <div class="field">
             <label for="d-close">Closes on</label>
-            <input id="d-close" v-model="form.closesAt" type="date">
+            <input id="d-close" v-model="fields.closesAt" type="date">
             <span class="hint">Leave empty to keep it open.</span>
           </div>
         </div>
         <div class="field">
           <label for="d-owner">Owner</label>
-          <select v-if="owners.length" id="d-owner" v-model="form.ownerId">
+          <select v-if="owners.length" id="d-owner" v-model="fields.ownerId">
             <option v-for="u in owners" :key="u.id" :value="u.id">{{ u.name }}{{ u.id === me?.id ? ' (you)' : '' }}</option>
           </select>
+          <span v-else-if="!form" class="skeleton" style="display: block; height: var(--h-md)" />
           <p v-else id="d-owner" class="readonly"><Avatar :name="ownerLabel" :size="24" />{{ ownerLabel }}</p>
           <span class="hint">Gets the steps assigned to “job owner”.</span>
         </div>
@@ -197,7 +173,10 @@ const ownerLabel = computed(() => job.value?.ownerId === me.value?.id ? `${me.va
 
       <section class="panel block">
         <div>
-          <h2>Requirements</h2>
+          <div class="req-head">
+            <h2>Requirements</h2>
+            <button type="button" class="btn btn-sm btn-quiet" @click="useHelp().show('ai')">What does the AI read?</button>
+          </div>
           <p class="muted note">Changes reach the flow when you next publish.</p>
         </div>
         <p v-if="emptyRead.length && !archived" class="reads" role="status">
@@ -207,44 +186,39 @@ const ownerLabel = computed(() => job.value?.ownerId === me.value?.id ? `${me.va
         <div class="row">
           <div class="field">
             <label for="d-years">Minimum years of experience</label>
-            <input id="d-years" v-model.number="form.minYears" type="number" min="0" max="60" step="0.5">
+            <input id="d-years" v-model.number="fields.minYears" type="number" min="0" max="60" step="0.5">
           </div>
           <div class="field">
             <label for="d-type">Employment type</label>
-            <input id="d-type" v-model="form.employmentType" list="emp-types" maxlength="50" placeholder="e.g. Full-time">
+            <input id="d-type" v-model="fields.employmentType" list="emp-types" maxlength="50" placeholder="e.g. Full-time">
             <datalist id="emp-types"><option>Full-time</option><option>Part-time</option><option>Contract</option><option>Internship</option><option>Temporary</option></datalist>
           </div>
         </div>
         <div class="field">
           <label for="d-skill">Must-have skills</label>
-          <div class="chips-input" @click="($event.currentTarget as HTMLElement).querySelector('input')?.focus()">
-            <span v-for="(s, i) in form.skills" :key="s" class="chip">
-              {{ s }}<button type="button" class="x" :aria-label="`Remove ${s}`" @click.stop="form.skills.splice(i, 1)"><Icon name="x" :size="12" /></button>
-            </span>
-            <input id="d-skill" v-model="skill" :placeholder="form.skills.length ? '' : 'Figma, user research, …'" @keydown="onSkillKey" @paste="onSkillPaste" @blur="addSkills(skill)">
-          </div>
+          <JobSkillsInput id="d-skill" v-model="fields.skills" placeholder="Figma, user research, …" />
           <span class="hint">Press Enter or comma after each. Paste a comma list to add several.</span>
         </div>
         <div class="field">
           <span class="label">Salary range</span>
           <div class="row salary">
-            <input v-model.number="form.salaryMin" type="number" min="0" aria-label="Salary minimum" placeholder="Min" :aria-invalid="!!salaryError">
-            <input v-model.number="form.salaryMax" type="number" min="0" aria-label="Salary maximum" placeholder="Max" :aria-invalid="!!salaryError">
-            <input v-model="form.currency" class="cur" maxlength="3" aria-label="Currency, three letters" placeholder="EUR" autocapitalize="characters" spellcheck="false">
+            <input v-model.number="fields.salaryMin" type="number" min="0" aria-label="Salary minimum" placeholder="Min" :aria-invalid="!!salaryError">
+            <input v-model.number="fields.salaryMax" type="number" min="0" aria-label="Salary maximum" placeholder="Max" :aria-invalid="!!salaryError">
+            <input v-model="fields.currency" class="cur" maxlength="3" aria-label="Currency, three letters" placeholder="EUR" autocapitalize="characters" spellcheck="false">
           </div>
           <span v-if="salaryError" class="error"><Icon name="alert" :size="14" />{{ salaryError }}</span>
-          <label class="check"><input v-model="form.showSalary" type="checkbox" :disabled="form.salaryMin === '' && form.salaryMax === ''">Show the salary on the apply page</label>
-          <span class="hint"><Icon :name="form.showSalary ? 'external' : 'eye-off'" :size="13" />{{ form.showSalary ? 'Candidates see this range from the next publish.' : 'Only your team sees it.' }}</span>
+          <label class="check"><input v-model="fields.showSalary" type="checkbox" :disabled="fields.salaryMin === '' && fields.salaryMax === ''">Show the salary on the apply page</label>
+          <span class="hint"><Icon :name="fields.showSalary ? 'external' : 'eye-off'" :size="13" />{{ fields.showSalary ? 'Candidates see this range from the next publish.' : 'Only your team sees it.' }}</span>
         </div>
         <div class="field">
           <span id="d-work" class="label">Workplace</span>
           <div class="seg" role="radiogroup" aria-labelledby="d-work">
-            <label v-for="w in WORKPLACES" :key="w.value"><input v-model="form.workplace" type="radio" name="workplace" :value="w.value"><span>{{ w.label }}</span></label>
+            <label v-for="w in WORKPLACES" :key="w.value"><input v-model="fields.workplace" type="radio" name="workplace" :value="w.value"><span>{{ w.label }}</span></label>
           </div>
         </div>
         <div class="field">
           <label for="d-loc">Location</label>
-          <input id="d-loc" v-model="form.location" maxlength="200" placeholder="e.g. Berlin or Remote (EU)">
+          <input id="d-loc" v-model="fields.location" maxlength="200" placeholder="e.g. Berlin or Remote (EU)">
         </div>
       </section>
     </fieldset>
@@ -265,25 +239,14 @@ const ownerLabel = computed(() => job.value?.ownerId === me.value?.id ? `${me.va
 .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 16px; align-items: start; }
 .block { padding: 20px; display: grid; gap: 18px; }
 .block h2 { font-size: var(--t-lg); }
+.req-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-block: -4px; }
 .note { margin-top: 4px; font-size: var(--t-sm); }
 .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
 .hint { display: inline-flex; align-items: center; gap: 6px; }
 .readonly { display: flex; align-items: center; gap: 8px; min-height: var(--h-md); font-weight: 500; }
-.chips-input {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: var(--h-md); padding: 5px 8px;
-  border: 1px solid var(--line-2); border-radius: var(--r-field); background: var(--surface); cursor: text;
-}
-.chips-input:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-tint), 0 0 0 1px var(--accent); }
-.chips-input input { flex: 1 1 120px; min-height: 26px; padding: 0 4px; border: 0; box-shadow: none !important; background: none; }
-.chips-input .chip { height: 26px; padding-right: 3px; font-size: var(--t-sm); color: var(--ink); }
-.x { display: grid; place-items: center; width: 24px; height: 24px; margin: -2px -4px -2px -2px; border: 0; border-radius: 50%; background: none; color: var(--ink-2); cursor: pointer; }
-.x:hover { background: var(--line); color: var(--ink); }
-fieldset:disabled .x { display: none; }
 .foot { position: sticky; bottom: 0; display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding: 12px 0; background: var(--bg); flex-wrap: wrap; }
 .foot .form-error { margin-right: auto; }
 .status { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); font-size: var(--t-sm); font-weight: 500; }
-.sk { padding: 20px; display: grid; gap: 16px; }
-.sk .skeleton { height: 38px; }
 .reads { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: var(--r-field); background: var(--warn-tint); color: var(--ink); font-size: var(--t-sm); text-wrap: pretty; }
 .reads svg { flex: none; margin-top: 1px; color: var(--warn); }
 .salary { grid-template-columns: 1fr 1fr 88px; }

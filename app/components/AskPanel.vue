@@ -2,10 +2,11 @@
 // Ask: the corner button (same place on every page) and the panel beside the page. Mounted once, in the default layout.
 // Drawn in ink, the colour for "the system acts"; magenta stays for people.
 const { me, isAdmin, canAsk } = useMe()
-const { open, thread, streaming, error, draft, focus, ctx, ctxLoading, ask, stop, retry, loadContext, floats } = useAsk()
+const { open, thread, streaming, error, draft, focus, ctx, reading, ask, stop, retry, loadContext, floats } = useAsk()
 const MAX = ASK_MAX
 const route = useRoute()
 const toast = useToast()
+const { open: helping } = useHelp()
 
 // AI off: hidden for everyone but admins, who see why and where to turn it on
 const show = computed(() => canAsk.value || isAdmin.value)
@@ -25,6 +26,7 @@ watch(open, async (o) => {
   }
   else {
     await nextTick()
+    if (helping.value) return // closed because Help opened: Help takes the focus
     ;(returnTo?.isConnected ? returnTo : corner.value)?.focus()
   }
 })
@@ -45,6 +47,9 @@ onMounted(() => {
   window.addEventListener('keydown', onKey)
 })
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+
+// while reading, the old page's words would be wrong here, so the generic ones stand in
+const placeholder = computed(() => (reading.value ? null : ctx.value?.placeholder) ?? 'Ask about this page')
 
 // the label's first part is the subject: "Ben Okafor · Barista, weekends"
 const subject = computed(() => {
@@ -98,11 +103,12 @@ function point(id: string) {
 
 <template>
   <template v-if="show && me">
-    <button v-if="!open" ref="corner" type="button" class="btn btn-sm corner" :aria-keyshortcuts="mac ? 'Meta+J' : 'Control+J'" @click="open = true">
+    <!-- hidden while Help is open, so it doesn't sit on the help header -->
+    <button v-if="!open && !helping" ref="corner" type="button" class="btn btn-sm corner" :aria-keyshortcuts="mac ? 'Meta+J' : 'Control+J'" @click="open = true">
       <Icon name="ask" :size="16" />Ask<span class="kbd">{{ keys }}</span>
     </button>
 
-    <aside v-else ref="panel" class="ask" :class="{ over: floats }" aria-label="Ask" @keydown.esc.stop="open = false">
+    <aside v-else-if="open" ref="panel" class="ask" :class="{ over: floats, working: streaming }" aria-label="Ask" @keydown.esc.stop="open = false">
       <header class="head">
         <div class="title">
           <h2>Ask</h2><span class="kbd" aria-hidden="true">{{ keys }}</span>
@@ -110,12 +116,14 @@ function point(id: string) {
         <button type="button" class="btn btn-quiet btn-icon btn-sm close" aria-label="Close Ask" :title="`Close (Esc or ${keys})`" @click="open = false">
           <Icon name="x" :size="16" />
         </button>
-        <p v-if="canAsk" class="looking">
-          <Icon v-if="ctx?.scope === 'task'" name="lock" :size="14" class="lock" />
-          <span v-else-if="ctx?.initials" class="avatar" aria-hidden="true">{{ ctx.initials }}</span>
-          <span v-if="ctxLoading && !ctx" class="txt">Reading this page…</span>
-          <span v-else class="txt">Looking at <b>{{ subject.head }}</b><template v-if="subject.rest"> · {{ subject.rest }}</template></span>
-        </p>
+        <Transition v-if="canAsk" name="turn" mode="out-in">
+          <p v-if="reading" key="reading" class="looking"><span class="dot" aria-hidden="true" /><span class="txt">Reading this page…</span></p>
+          <p v-else :key="ctx?.label ?? ''" class="looking">
+            <Icon v-if="ctx?.scope === 'task'" name="lock" :size="14" class="lock" />
+            <span v-else-if="ctx?.initials" class="avatar" aria-hidden="true">{{ ctx.initials }}</span>
+            <span class="txt">Looking at <b>{{ subject.head }}</b><template v-if="subject.rest"> · {{ subject.rest }}</template></span>
+          </p>
+        </Transition>
       </header>
 
       <!-- AI is off or not set up: only admins get here -->
@@ -129,28 +137,35 @@ function point(id: string) {
       <template v-else>
         <div ref="scroller" class="thread">
           <div v-if="!thread.length" class="empty-ask">
-            <h3>{{ ctx?.placeholder ?? 'Ask about this page' }}</h3>
-            <div v-if="ctxLoading && !ctx" class="sugg-wait" aria-hidden="true"><span class="skeleton" /><span class="skeleton" /><span class="skeleton" /></div>
-            <ul v-if="ctx?.suggestions.length" class="sugg" aria-label="Suggested questions">
-              <li v-for="s in ctx.suggestions" :key="s">
+            <h3>{{ placeholder }}</h3>
+            <!-- the shape of the suggestions that are coming, not grey blocks -->
+            <ul v-if="reading" class="sugg wait" aria-hidden="true">
+              <li v-for="w in [64, 78, 52]" :key="w"><span class="row"><span class="skeleton" :style="{ width: `${w}%` }" /></span></li>
+            </ul>
+            <TransitionGroup v-else-if="ctx?.suggestions.length" tag="ul" name="turn" appear class="sugg" aria-label="Suggested questions">
+              <li v-for="(s, n) in ctx.suggestions" :key="s" :style="{ transitionDelay: `${n * 50}ms` }">
                 <button type="button" @click="ask(s)">{{ s }}<Icon name="arrow-right" :size="16" /></button>
               </li>
-            </ul>
+            </TransitionGroup>
           </div>
 
+          <TransitionGroup tag="div" name="turn" class="turns">
           <template v-for="(t, i) in thread" :key="i">
             <p v-if="t.role === 'divider'" class="divider">{{ t.text }}</p>
             <p v-else-if="t.role === 'user'" class="q">{{ t.text }}</p>
             <div v-else class="a">
               <p v-for="(p, n) in views[i]!.paras" :key="n">{{ p }}<span v-if="!t.done && n === views[i]!.paras.length - 1" class="typing" aria-hidden="true" /></p>
               <p v-if="!views[i]!.paras.length"><span class="typing" aria-hidden="true" /><span class="sr-only">Writing</span></p>
-              <ul v-if="t.done && views[i]!.cites.length" class="srcs" aria-label="Sources">
-                <li v-for="c in views[i]!.cites" :key="c.id">
-                  <button type="button" class="src" @click="point(c.id)">{{ c.label }}</button>
-                </li>
-              </ul>
+              <Transition name="turn">
+                <ul v-if="t.done && views[i]!.cites.length" class="srcs" aria-label="Sources">
+                  <li v-for="c in views[i]!.cites" :key="c.id">
+                    <button type="button" class="src" @click="point(c.id)">{{ c.label }}</button>
+                  </li>
+                </ul>
+              </Transition>
             </div>
           </template>
+          </TransitionGroup>
 
           <div v-if="error" class="err" role="alert">
             <p>{{ error }} Your question is still in the box.</p>
@@ -164,7 +179,7 @@ function point(id: string) {
           <div class="box">
             <label for="ask-q" class="sr-only">Your question</label>
             <textarea
-              id="ask-q" v-model="draft" rows="1" :maxlength="MAX" :placeholder="ctx?.placeholder ?? 'Ask about this page'"
+              id="ask-q" v-model="draft" rows="1" :maxlength="MAX" :placeholder="placeholder"
               @keydown.enter="onEnter"
             />
             <button v-if="streaming" type="button" class="send stop" aria-label="Stop the answer" @click="stop">
@@ -198,8 +213,25 @@ function point(id: string) {
 @media (min-width: 1280px) {
   .ask:not(.over) { position: sticky; bottom: auto; align-self: start; height: 100dvh; width: auto; box-shadow: -16px 0 32px -24px oklch(0.3 0.04 330 / 0.25); }
 }
+/* opens from the corner button's side; closing is instant, the person is done with it */
+.ask { animation: ask-in var(--t-move) var(--ease); }
+@keyframes ask-in { from { opacity: 0; translate: 16px 0; } }
 /* the badge slot: ink, because the system answers */
 .ask::before { content: ""; position: absolute; top: 9px; left: 50%; translate: -50% 0; width: 30px; height: 5px; border-radius: 9px; background: var(--machine); }
+/* while the system writes, the reader light of the boot check-in runs along its slot */
+.ask.working::before {
+  background: linear-gradient(90deg, var(--machine) 0 35%, oklch(0.7 0.02 330) 50%, var(--machine) 65% 100%) 0 0 / 300% 100%;
+  animation: sweep 1.2s cubic-bezier(.45, 0, .25, 1) infinite;
+}
+@keyframes sweep { from { background-position: 100% 0; } to { background-position: 0 0; } }
+
+/* new things arrive from just below: the chip, suggestions, each turn, the sources */
+.turn-enter-active { transition: opacity var(--t-move) var(--ease), translate var(--t-move) var(--ease); }
+.turn-leave-active { transition: opacity var(--t-micro) ease-in; }
+.turn-enter-from { opacity: 0; translate: 0 6px; }
+.turn-leave-to { opacity: 0; }
+.turns { display: grid; gap: 16px; }
+.turns:empty { display: none; }
 
 .head { padding: 24px 18px 14px; display: grid; gap: 10px; border-bottom: 1px solid var(--line); }
 .title { display: flex; align-items: center; gap: 8px; min-height: 30px; padding-right: 40px; }
@@ -211,12 +243,15 @@ function point(id: string) {
 .looking .lock { margin-left: 4px; color: var(--ink-2); }
 .looking .txt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .looking b { font-weight: 600; }
+.dot { display: grid; place-items: center; width: 22px; height: 22px; flex: none; }
+.dot::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--machine); animation: breathe 1.2s ease-in-out infinite; }
+@keyframes breathe { 50% { opacity: 0.35; } }
+/* reduced motion keeps the breathing, slower, so reading never looks idle */
+@media (prefers-reduced-motion: reduce) { .dot::before { animation: breathe 1.6s ease-in-out infinite !important; } }
 
 .thread { overflow-y: auto; overscroll-behavior: contain; padding: 18px; display: grid; align-content: start; gap: 16px; }
 .empty-ask { display: grid; gap: 14px; padding-top: 6px; }
 .empty-ask h3 { font-size: var(--t-xl); letter-spacing: -0.01em; }
-.sugg-wait { display: grid; gap: 8px; }
-.sugg-wait span { height: 42px; border-radius: 14px; }
 .sugg { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .sugg button {
   display: flex; align-items: center; gap: 10px; width: 100%; padding: 11px 14px; border: 0; border-radius: var(--r-panel);
@@ -225,6 +260,8 @@ function point(id: string) {
 }
 .sugg button:hover { background: var(--hover); }
 .sugg svg { margin-left: auto; color: var(--ink-3); }
+.wait .row { display: flex; align-items: center; height: 44px; padding: 0 14px; border-radius: var(--r-panel); box-shadow: inset 0 0 0 1px var(--line); }
+.wait .skeleton { height: 12px; border-radius: 6px; }
 
 .q { justify-self: end; max-width: 86%; padding: 9px 14px; border-radius: 16px 16px 4px 16px; background: var(--ink); color: #fff; font-weight: 500; white-space: pre-line; overflow-wrap: anywhere; }
 .a { display: grid; gap: 10px; }

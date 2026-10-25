@@ -81,14 +81,14 @@ watch(selected, async (id) => {
 
 <template>
   <div class="inbox">
-    <aside ref="list" class="list" aria-label="Tasks">
+    <aside ref="list" class="list" aria-label="Tasks" data-tour="tasks">
       <header class="list-head">
         <div class="title-row">
           <h1>Inbox</h1>
-          <NuxtLink to="/inbox/hours" class="btn btn-sm btn-quiet hours-link" :aria-current="route.path === '/inbox/hours' ? 'page' : undefined"><Icon name="calendar" />Your interview hours</NuxtLink>
+          <NuxtLink to="/inbox/hours" class="btn btn-sm btn-quiet hours-link" data-tour="hours" :aria-current="route.path === '/inbox/hours' ? 'page' : undefined"><Icon name="calendar" />Your interview hours</NuxtLink>
         </div>
-        <div v-if="isManager && inbox" class="seg" role="radiogroup" aria-label="Show">
-          <label><input type="radio" name="list" :checked="view === 'mine'" @change="setView('mine')"><span>Yours <b class="n">{{ mine.length }}</b></span></label>
+        <div v-if="isManager && (inbox || loading)" class="seg" role="radiogroup" aria-label="Show">
+          <label><input type="radio" name="list" :checked="view === 'mine'" @change="setView('mine')"><span>Yours <b v-if="inbox" class="n">{{ mine.length }}</b></span></label>
           <label><input type="radio" name="list" :checked="view === 'attention'" @change="setView('attention')"><span>Needs attention <b v-if="attentionCount" class="n n-bad">{{ attentionCount }}</b></span></label>
         </div>
       </header>
@@ -151,7 +151,7 @@ watch(selected, async (id) => {
       </footer>
     </aside>
 
-    <section class="detail">
+    <section class="detail" data-tour="task">
       <p class="said" aria-live="polite"><template v-if="flash && flash.at === route.path">
         <Icon name="check" :size="16" /><span>{{ flash.text }}</span>
         <NuxtLink v-if="flash.next" :to="flash.next.to" class="next">Next: {{ flash.next.title }}<Icon name="arrow-right" :size="14" /></NuxtLink>

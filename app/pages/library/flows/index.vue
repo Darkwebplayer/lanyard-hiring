@@ -324,7 +324,7 @@ async function confirmDelete() {
 .block { padding: 14px 20px 16px; border-top: 1px solid var(--line); display: grid; gap: 10px; }
 /* the steps read as a sequence: wrapped tokens, a person's steps in the accent as on the canvas */
 .steps { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 6px; }
-.steps li { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px 0 8px; border-radius: var(--r-pill); background: var(--sunk); font-size: var(--t-sm); font-weight: 500; }
+.steps li { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px 0 8px; border-radius: var(--r-pill); background: var(--sunk); font-size: var(--t-sm); font-weight: 500; color: var(--ink); }
 .steps li svg { flex: none; color: var(--ink-2); }
 .steps li[data-kind="accent"] { background: var(--accent-tint); }
 .steps li[data-kind="accent"] svg { color: var(--accent-ink); }

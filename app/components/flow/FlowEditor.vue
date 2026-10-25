@@ -36,7 +36,10 @@ const ms = (n: number) => (reduced ? 0 : n)
 
 // ---------- describe your flow: state (the steps are under "problems") ----------
 const { canAsk: aiOn } = useMe()
-const description = ref('')
+// the New job wizard hands over what was written there, once
+const seed = useState<string>('describe-seed', () => '')
+const description = ref(seed.value)
+seed.value = ''
 // the draft the server sent back, shown unsaved; `before` is the graph to put back on Discard
 const aiDraft = ref<{ summary: string, before: Graph } | null>(null)
 const startedEmpty = ref(false) // "Start empty" puts the card away for this visit

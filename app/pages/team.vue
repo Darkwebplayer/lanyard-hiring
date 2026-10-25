@@ -155,13 +155,8 @@ async function addRole() {
       <button class="btn" @click="load"><Icon name="retry" />Try again</button>
     </div>
 
-    <template v-else-if="!users">
-      <div class="skeleton" style="height: 112px; border-radius: var(--r-panel)" />
-      <div class="skeleton" style="height: 380px; margin-top: 16px; border-radius: var(--r-panel)" />
-    </template>
-
     <template v-else>
-      <section class="block" aria-labelledby="people">
+      <section class="block" aria-labelledby="people" :aria-busy="!users" :inert="!users">
         <h2 id="people">People</h2>
 
         <form class="panel invite" @submit.prevent="sendInvite">
@@ -189,6 +184,9 @@ async function addRole() {
           <table class="table">
             <thead><tr><th>Name</th><th>Role</th><th>Access</th><th>Joined</th></tr></thead>
             <tbody>
+              <template v-if="!users">
+                <tr v-for="i in 3" :key="i"><td v-for="(w, k) in [60, 50, 40, 30]" :key="k"><span class="skeleton sk" :style="{ width: `${w}%` }" /></td></tr>
+              </template>
               <tr v-for="u in sortedUsers" :key="u.id" :class="{ off: !u.active }">
                 <td>
                   <div class="who">
@@ -247,7 +245,7 @@ async function addRole() {
 
       </section>
 
-      <section class="block" aria-labelledby="roles-h">
+      <section class="block" aria-labelledby="roles-h" :aria-busy="!users" :inert="!users">
         <div>
           <h2 id="roles-h">Roles</h2>
           <p class="muted sub">The name is yours to choose; the level decides what people can see.</p>
@@ -256,6 +254,9 @@ async function addRole() {
           <table class="table roles">
             <thead><tr><th>Name</th><th>Level</th><th class="num">People</th></tr></thead>
             <tbody>
+              <template v-if="!users">
+                <tr v-for="i in 3" :key="i"><td v-for="(w, k) in [50, 40, 20]" :key="k"><span class="skeleton sk" :style="{ width: `${w}%` }" /></td></tr>
+              </template>
               <tr v-for="r in sortedRoles" :key="r.id">
                 <td>
                   <input
@@ -271,7 +272,7 @@ async function addRole() {
                 </td>
                 <td class="num faint">{{ people(r) }}</td>
               </tr>
-              <tr v-if="!roles.length"><td colspan="3" class="faint">No roles yet. Add one below before you invite anyone.</td></tr>
+              <tr v-if="users && !roles.length"><td colspan="3" class="faint">No roles yet. Add one below before you invite anyone.</td></tr>
             </tbody>
           </table>
           <form class="add-role" @submit.prevent="addRole">
@@ -322,6 +323,7 @@ async function addRole() {
 tr.off .who b { color: var(--ink-2); font-weight: 500; }
 tr.off .who .avatar { background: var(--sunk); color: var(--ink-2); }
 .nowrap { white-space: nowrap; }
+.sk { display: block; height: 14px; margin: 9px 0; }
 .email-cell { overflow-wrap: anywhere; }
 
 /* switch: a checkbox drawn as a track and knob */

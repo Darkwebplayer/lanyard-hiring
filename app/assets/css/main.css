@@ -246,6 +246,15 @@
   .crumb:hover { color: var(--ink); }
 
   /* ---- empty, loading ---- */
+  /* steps: done is ok green, current is ink, later is quiet; shared by import and the wizards */
+  .steps { list-style: none; margin: 0; padding: 0; display: flex; gap: 8px 24px; flex-wrap: wrap; }
+  .steps li { display: flex; align-items: center; gap: 8px; font-size: var(--t-sm); font-weight: 600; color: var(--ink-3); }
+  .steps i { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-size: var(--t-xs); background: var(--sunk); }
+  .steps .done { color: var(--ok); }
+  .steps .done i { background: var(--ok); color: #fff; }
+  .steps .on { color: var(--ink); }
+  .steps .on i { background: var(--ink); color: #fff; }
+
   .empty { display: grid; justify-items: center; text-align: center; gap: 10px; padding: 48px 24px; color: var(--ink-2); }
   .empty h2, .empty h3 { color: var(--ink); }
   .empty p { max-width: 44ch; }
@@ -255,6 +264,13 @@
     animation: spin 0.7s linear infinite;
   }
   .skeleton { background: linear-gradient(90deg, var(--sunk) 0 40%, var(--hover) 50%, var(--sunk) 60% 100%) 0 0 / 300% 100%; border-radius: 8px; animation: shimmer 1.4s ease-in-out infinite; }
+  /* a form waiting for its values: headings and labels show, only the fields shimmer (pair with inert) */
+  [aria-busy="true"] :is(input, select, textarea) {
+    color: transparent; border-color: transparent; box-shadow: none;
+    background: linear-gradient(90deg, var(--sunk) 0 40%, var(--hover) 50%, var(--sunk) 60% 100%) 0 0 / 300% 100%; animation: shimmer 1.4s ease-in-out infinite;
+  }
+  [aria-busy="true"] :is(input, textarea)::placeholder { color: transparent; }
+  [aria-busy="true"] :is(input, select, textarea)::before { visibility: hidden; }
   @keyframes spin { to { rotate: 1turn; } }
   @keyframes shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
   @media (prefers-reduced-motion: reduce) { .spinner { animation: pulse 1.6s ease-in-out infinite !important; animation-duration: 1.6s !important; animation-iteration-count: infinite !important; } }

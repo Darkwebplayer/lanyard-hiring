@@ -40,6 +40,9 @@ function personLine(st: StageStep) {
 const autoText = (st: StageStep) => st.effects[0]?.text ?? name(st.key)
 const autoSub = (st: StageStep) => { const n = node(st.key); return n ? summaryOf(n, props.form, props.roles) : '' }
 const removable = (k: string) => !props.readOnly && !!removeStep(props.graph, k)
+// "What's this?" beside the two places people misread: person steps (only some reach them) and a stage with two emails (only one is sent)
+const { show: showHelp } = useHelp()
+const twoEmails = (s: StageInfo) => s.auto.filter(st => st.type === 'send_email').length > 1
 
 // ---------- exits: in words, without the moves that stay inside the stage ----------
 const exitsOf = (s: StageInfo) => s.exits.filter(x => 'closed' in x.to || x.to.stage !== s.id)
@@ -171,7 +174,10 @@ function closedLine(c: StageView['closed'][number]) {
           <p v-if="!s.auto.length && !s.people.length" class="empty-stage">Nobody stops here yet. Add a step, or delete the stage.</p>
 
           <div v-if="s.auto.length" class="blk">
-            <h4 class="lbl">When someone arrives</h4>
+            <div class="lbl-row">
+              <h4 class="lbl">When someone arrives</h4>
+              <button v-if="twoEmails(s)" type="button" class="what" aria-label="What’s this? Why only one of these emails is sent" @click="showHelp('stages')">What’s this?</button>
+            </div>
             <div v-for="st in s.auto" :key="st.key" class="row-wrap">
               <div class="act" :class="{ sel: st.key === selectedKey, bad: issuesBy.has(st.key) }">
                 <button type="button" class="act-main" :data-step="st.key" @click="emit('select', st.key)">
@@ -189,7 +195,10 @@ function closedLine(c: StageView['closed'][number]) {
           </div>
 
           <div v-if="s.people.length" class="blk">
-            <h4 class="lbl">Who works here</h4>
+            <div class="lbl-row">
+              <h4 class="lbl">Who works here</h4>
+              <button type="button" class="what" aria-label="What’s this? Who reaches the person steps" @click="showHelp('stages')">What’s this?</button>
+            </div>
             <div v-for="st in s.people" :key="st.key" class="row-wrap">
               <div class="act" :class="{ sel: st.key === selectedKey, bad: issuesBy.has(st.key) }">
                 <button type="button" class="act-main" :data-step="st.key" @click="emit('select', st.key)">
@@ -306,6 +315,9 @@ function closedLine(c: StageView['closed'][number]) {
 
 .blk { display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: var(--r-panel); background: var(--sunk); }
 .lbl { font-size: var(--t-xs); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-2); }
+.lbl-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.what { padding: 0; border: 0; background: none; font: 500 var(--t-xs) var(--font); color: var(--accent-ink); text-decoration: underline; text-underline-offset: 0.18em; cursor: pointer; }
+.what:hover { color: var(--ink); }
 .row-wrap { display: grid; gap: 4px; }
 .act { display: flex; align-items: center; gap: 2px; border-radius: var(--r-field); background: var(--surface); transition: box-shadow var(--t-micro) var(--ease); }
 .act.sel { box-shadow: inset 0 0 0 1.5px var(--accent); }

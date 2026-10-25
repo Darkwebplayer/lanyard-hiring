@@ -111,12 +111,7 @@ async function save() {
       <button class="btn" @click="load"><Icon name="retry" />Try again</button>
     </div>
 
-    <div v-else-if="!loaded" class="layout">
-      <div class="skeleton" style="height: 420px; border-radius: var(--r-panel)" />
-      <div class="skeleton" style="height: 260px; border-radius: var(--r-panel)" />
-    </div>
-
-    <form v-else class="layout" @submit.prevent="save">
+    <form v-else class="layout" :aria-busy="!loaded" :inert="!loaded" @submit.prevent="save">
       <div class="col">
         <section class="panel fields" aria-labelledby="h-apply">
           <h2 id="h-apply" class="sect-h">Company and apply form</h2>
@@ -174,6 +169,7 @@ async function save() {
             <p class="hint">Whoever rejects someone picks one of these. Renaming or removing a reason never changes past decisions: they keep the words they were made with.</p>
           </div>
           <ol ref="reasonList" class="reasons">
+            <template v-if="!loaded"><li v-for="i in 3" :key="i" class="skeleton" style="height: var(--h-md)" /></template>
             <li v-for="(r, i) in reasons" :key="r.id" :data-r="r.id" class="reason" :class="{ bad: dupes.has(r.id) || !r.text.trim() }">
               <span class="n faint" aria-hidden="true">{{ i + 1 }}</span>
               <input v-model="r.text" maxlength="60" :aria-label="`Reason ${i + 1}`" :aria-invalid="dupes.has(r.id) || !r.text.trim() || undefined">
@@ -187,7 +183,7 @@ async function save() {
             <button type="button" class="btn btn-sm" :disabled="!newReason.trim()" @click="addReason"><Icon name="plus" />Add reason</button>
           </div>
           <p v-else class="hint">That’s 20, the most the list holds. Remove one to add another.</p>
-          <p v-if="reasonProblem" class="field-error" role="alert"><Icon name="alert" :size="14" />{{ reasonProblem }}</p>
+          <p v-if="loaded && reasonProblem" class="field-error" role="alert"><Icon name="alert" :size="14" />{{ reasonProblem }}</p>
         </section>
 
         <div class="foot">
@@ -203,7 +199,7 @@ async function save() {
         <h2 id="pv" class="eyebrow">Preview · bottom of the apply form</h2>
         <div class="sheet" aria-hidden="true">
           <ApplyNotices :consent-text="orNull(form.consentText)" :ai-notice-text="orNull(form.aiNoticeText)" preview />
-          <p v-if="!orNull(form.consentText) && !orNull(form.aiNoticeText)" class="faint none">Nothing extra shows above the button.</p>
+          <p v-if="loaded && !orNull(form.consentText) && !orNull(form.aiNoticeText)" class="faint none">Nothing extra shows above the button.</p>
           <span class="fake-send">Send application</span>
         </div>
         <p class="faint aside-note">Your own interview hours are in your <NuxtLink to="/inbox/hours">Inbox</NuxtLink>.</p>

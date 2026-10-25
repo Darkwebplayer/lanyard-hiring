@@ -11,6 +11,8 @@ export default defineNuxtConfig({
     '/apply/**': { ssr: true },
     '/careers': { ssr: true },
   },
+  // the app shell shows while the client-only pages boot (resolved from srcDir: app/spa-loading-template.html)
+  spaLoadingTemplate: 'spa-loading-template.html',
   // the dev key always passes; set NUXT_PUBLIC_TURNSTILE_SITE_KEY in production
   runtimeConfig: { public: { turnstileSiteKey: '1x00000000000000000000AA' } },
   css: ['@vue-flow/core/dist/style.css', '~/assets/css/main.css'],

@@ -34,10 +34,12 @@ const isFlow = computed(() => route.path === base)
       <header class="page-head">
         <div class="head">
           <span class="skeleton" style="display:block;width:320px;height:30px" />
-          <span class="skeleton" style="display:block;width:420px;height:16px;margin-top:10px" />
+          <p class="sub">Flow preset · Jobs that already started from it keep their own copy.</p>
         </div>
       </header>
-      <div class="tabs-sk"><span class="skeleton" /><span class="skeleton" /></div>
+      <nav class="tabs" aria-label="Flow preset">
+        <NuxtLink v-for="t in tabs" :key="t.to" :to="t.to" :aria-current="route.path === t.to ? 'page' : undefined">{{ t.label }}</NuxtLink>
+      </nav>
       <div v-if="isFlow" class="loading">
         <div class="skeleton pal" />
         <div class="cards"><div v-for="i in 4" :key="i" class="skeleton card-sk" /></div>
@@ -81,8 +83,6 @@ const isFlow = computed(() => route.path === base)
 .head { min-width: 0; flex: 1 1 420px; }
 .head h1 { overflow-wrap: anywhere; }
 .tab-body { padding-top: 20px; }
-.tabs-sk { display: flex; gap: 24px; padding: 14px 14px 18px; border-bottom: 1px solid var(--line); }
-.tabs-sk .skeleton { width: 48px; height: 16px; }
 .loading { display: grid; grid-template-columns: 220px 1fr; height: max(560px, calc(100dvh - 200px)); margin-top: 20px; border-top: 1px solid var(--line); }
 .pal { border-radius: 0; }
 .cards { display: grid; justify-items: center; align-content: start; gap: 64px; padding-top: 56px; background: var(--bg); }

@@ -50,7 +50,16 @@ const applications = computed(() => (report.value?.jobs ?? []).reduce((s, j) => 
         <div class="skeleton" style="height: 132px; border-radius: var(--r-panel)" />
         <div class="skeleton" style="height: 132px; border-radius: var(--r-panel)" />
       </div>
-      <div class="skeleton" style="height: 320px; margin-top: 24px; border-radius: var(--r-panel)" />
+      <div class="panel table-wrap" aria-busy="true" aria-label="Loading the report">
+        <table class="table">
+          <thead>
+            <tr><th>Job</th><th>Status</th><th class="num">Applications</th><th>Seats</th><th class="num">Fill rate</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="i in 5" :key="i"><td v-for="(w, k) in [70, 40, 30, 50, 30]" :key="k" :class="{ num: k === 2 || k === 4 }"><span class="skeleton sk" :style="{ width: `${w}%` }" /></td></tr>
+          </tbody>
+        </table>
+      </div>
     </template>
 
     <div v-else-if="!report.jobs.length" class="empty">
@@ -131,6 +140,8 @@ const applications = computed(() => (report.value?.jobs ?? []).reduce((s, j) => 
 </template>
 
 <style scoped>
+.sk { display: block; height: 14px; margin: 4px 0; }
+.num .sk { margin-left: auto; }
 .stats { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); gap: 16px; margin-bottom: 24px; align-items: stretch; }
 .headline { padding: 32px 28px 24px; display: grid; gap: 6px; align-content: end; }
 .big { font-size: var(--t-xl); font-weight: 500; color: var(--ink-2); font-variant-numeric: tabular-nums; }

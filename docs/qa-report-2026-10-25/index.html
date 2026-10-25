@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lanyard QA Report</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600;700&family=Public+Sans:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column (≈72ch) for prose, full-width tables in scroll wells; sticky section index on wide screens. */
+:root {
+  --bg: #faf8f9;
+  --surface: #ffffff;
+  --ink: #221a1f;
+  --muted: #6d6168;
+  --line: #e7e0e4;
+  --accent: #b5135f;          /* Lanyard magenta, taken from the app */
+  --accent-soft: #fbe7f0;
+  --pass: #1f7a4d; --pass-soft: #e3f3ea;
+  --warn: #9a5b00; --warn-soft: #fbf0db;
+  --fail: #b42318; --fail-soft: #fde8e6;
+  --block: #4a5568; --block-soft: #eceff3;
+  --display: "Familjen Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --body: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #171215; --surface: #201a1e; --ink: #f1eaee; --muted: #b0a3aa; --line: #3a3036;
+  --accent: #f06aa6; --accent-soft: #3a1d2b;
+  --pass: #6fd3a0; --pass-soft: #173226; --warn: #f0b860; --warn-soft: #3a2c14;
+  --fail: #ff8b80; --fail-soft: #3d1c1a; --block: #b7c0cc; --block-soft: #2a2e34; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #171215; --surface: #201a1e; --ink: #f1eaee; --muted: #b0a3aa; --line: #3a3036;
+  --accent: #f06aa6; --accent-soft: #3a1d2b;
+  --pass: #6fd3a0; --pass-soft: #173226; --warn: #f0b860; --warn-soft: #3a2c14;
+  --fail: #ff8b80; --fail-soft: #3d1c1a; --block: #b7c0cc; --block-soft: #2a2e34; color-scheme: dark }
+
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--ink); font: 15px/1.6 var(--body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 64px }
+.wrap { max-width: 1120px; margin: 0 auto }
+.prose { max-width: 72ch }
+h1, h2, h3 { font-family: var(--display); line-height: 1.15; text-wrap: balance; margin: 0 }
+h1 { font-size: clamp(2rem, 5vw, 3rem); font-weight: 700; letter-spacing: -.02em }
+h2 { font-size: 1.6rem; font-weight: 700; letter-spacing: -.01em }
+h3 { font-size: 1.12rem; font-weight: 600 }
+p { margin: 0 }
+a { color: var(--accent) }
+code, .mono { font-family: var(--mono); font-size: .86em }
+.eyebrow { font: 500 .72rem/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted) }
+section { display: grid; gap: 18px; padding-block: 44px 8px; border-top: 1px solid var(--line); margin-top: 36px }
+section > header { display: grid; gap: 6px }
+.lede { color: var(--muted); max-width: 72ch }
+
+/* masthead */
+.mast { display: grid; gap: 22px; padding-block: 48px 8px }
+.meta { display: flex; flex-wrap: wrap; gap: 8px 22px; color: var(--muted); font-size: .9rem }
+.meta b { color: var(--ink); font-weight: 600 }
+.tally { display: flex; flex-wrap: wrap; gap: 10px }
+.tally div { display: grid; gap: 2px; padding: 12px 16px; border-radius: 10px; min-width: 110px; background: var(--surface); border: 1px solid var(--line) }
+.tally strong { font: 700 1.8rem/1 var(--display); font-variant-numeric: tabular-nums }
+.tally span { font-size: .8rem; color: var(--muted) }
+.t-pass strong { color: var(--pass) } .t-warn strong { color: var(--warn) } .t-fail strong { color: var(--fail) } .t-block strong { color: var(--block) }
+
+.verdict { background: var(--accent-soft); border-radius: 12px; padding: 18px 20px; display: grid; gap: 8px; max-width: 80ch }
+.verdict p { line-height: 1.55 }
+
+/* pills */
+.pill { display: inline-block; font: 600 .7rem/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; padding: 5px 8px; border-radius: 999px; white-space: nowrap }
+.pass { background: var(--pass-soft); color: var(--pass) }
+.warn { background: var(--warn-soft); color: var(--warn) }
+.fail { background: var(--fail-soft); color: var(--fail) }
+.block { background: var(--block-soft); color: var(--block) }
+.sev-high { background: var(--fail-soft); color: var(--fail) }
+.sev-med { background: var(--warn-soft); color: var(--warn) }
+.sev-low { background: var(--block-soft); color: var(--block) }
+
+/* top issues */
+.issues { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; counter-reset: i }
+.issues li { display: grid; grid-template-columns: 2.2rem 1fr; gap: 4px 12px; padding: 14px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; counter-increment: i }
+.issues li::before { content: counter(i); font: 700 1.3rem/1 var(--display); color: var(--accent); grid-row: span 2 }
+.issues h3 { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap }
+.issues p { color: var(--muted); min-width: 0 }
+
+/* tables */
+.well { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface) }
+table { border-collapse: collapse; width: 100%; font-size: .9rem }
+th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--line) }
+th { font: 600 .72rem/1.2 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); background: var(--bg) }
+tr:last-child td { border-bottom: 0 }
+td.num { font-variant-numeric: tabular-nums; text-align: right; font-family: var(--mono) }
+.flowid { font: 700 1rem/1 var(--display); color: var(--accent) }
+td ul { margin: 0; padding-left: 1.1em }
+
+/* thumbnails */
+.shots { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px }
+.shot { padding: 0; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); cursor: zoom-in; width: 96px; height: 54px; overflow: hidden }
+.shot img { width: 100%; height: 100%; object-fit: cover; object-position: top left; display: block }
+.shot:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+dialog { border: 0; padding: 0; background: transparent; max-width: min(1200px, 96vw) }
+dialog::backdrop { background: rgb(0 0 0 / .72) }
+dialog img { max-height: 86vh; border-radius: 8px; display: block }
+dialog p { color: #fff; font: 500 .85rem var(--mono); padding: 8px 2px }
+
+/* bug cards */
+.bugs { display: grid; gap: 12px }
+.bug { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; display: grid; gap: 8px }
+.bug header { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap }
+.bug dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 0; font-size: .9rem }
+.bug dt { color: var(--muted); font-weight: 600 }
+.bug dd { margin: 0; min-width: 0 }
+@media (max-width: 560px) { .bug dl { grid-template-columns: 1fr } .bug dt { margin-top: 6px } }
+
+/* effectiveness */
+.premise { border-left: 3px solid var(--accent); padding: 4px 0 4px 16px; max-width: 76ch; color: var(--ink) }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; display: grid; gap: 10px; align-content: start; min-width: 0 }
+.card ul { margin: 0; padding-left: 1.1em; display: grid; gap: 6px }
+.card li span.pill { margin-right: 6px; vertical-align: 1px }
+.kind { font: 600 .72rem/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent) }
+
+pre { margin: 0; padding: 14px 16px; overflow-x: auto; font: .82rem/1.55 var(--mono); background: var(--surface); border: 1px solid var(--line); border-radius: 10px }
+.copy { justify-self: start; font: 600 .82rem var(--body); padding: 7px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer }
+.small { font-size: .85rem; color: var(--muted) }
+.score { display: inline-block; min-width: 2.2em; text-align: right }
+.bar { display: inline-block; height: 6px; border-radius: 3px; background: var(--accent); vertical-align: middle; margin-left: 6px; opacity: .8 }
+@media (prefers-reduced-motion: no-preference) { .shot img { transition: transform .2s } .shot:hover img { transform: scale(1.04) } }
+</style>
+
+<div class="wrap">
+
+<header class="mast">
+  <span class="eyebrow">End-to-end QA · NorthWind Logistics test company · 25 Oct 2026</span>
+  <h1>Lanyard QA Report</h1>
+  <div class="meta">
+    <span><b>Build</b> main @ 6e371b7 + working tree</span>
+    <span><b>Runtime</b> <code>wrangler dev</code> (full engine, queue, crons)</span>
+    <span><b>AI</b> real models (Workers AI + Gemini)</span>
+    <span><b>DB</b> Neon dev, wiped to a fresh start before testing</span>
+  </div>
+  <div class="tally" aria-label="Flow results">
+    <div class="t-pass"><strong>8</strong><span>flows pass</span></div>
+    <div class="t-warn"><strong>6</strong><span>pass with issues</span></div>
+    <div class="t-fail"><strong>1</strong><span>fails</span></div>
+    <div class="t-block"><strong>2</strong><span>blocked (AI quota)</span></div>
+    <div><strong>17</strong><span>bugs logged</span></div>
+  </div>
+  <div class="verdict">
+    <span class="eyebrow">Verdict</span>
+    <p>The core loop works end to end with real people, real CVs and real AI: post a job, take applications, AI screen, assign reviewers, candidate self-books a panel interview, blind scorecards, offer, accept. Permissions, validation and failure handling are solid, and the candidate page is the strongest screen in the app. Three things need fixing before an SMB launch: the built-in flow templates mark people <em>Hired</em> without an offer, the AI flow builder can produce a flow that has nothing to read, and the Gemini key is on a free tier that runs out after about 20 AI calls a day.</p>
+  </div>
+</header>
+
+<section id="top">
+  <header><span class="eyebrow">Read this first</span><h2>Top issues</h2></header>
+  <ol class="issues">
+    <li><h3>Templates hire people without an offer <span class="pill sev-high">High</span></h3>
+      <p>All three hire templates end <code>interview → decision → send "Offer email" → close as Hired</code>. Marcus Tan was marked Hired the moment the second scorecard landed, with no letter, terms or acceptance. The Offer feature (letters, accept page) only works if a manager steps in before the interview finishes, and the job ended at 2 hires for 1 seat.</p></li>
+    <li><h3>AI flow builder skips the CV it was told to read <span class="pill sev-high">High</span></h3>
+      <p>"The AI reads their CV and checks…" produced a flow with no CV field and no Read CV step, and the banner said <em>No problems found</em>. The builder only wires fields that already exist on the form.</p></li>
+    <li><h3>Gemini free tier caps the whole AI layer <span class="pill sev-high">High</span></h3>
+      <p>Limit 20 requests per day. After ~20 calls, Ask, the flow builder and AI review summaries all fail. The user sees "The AI service did not reply". A paid key is a launch requirement.</p></li>
+    <li><h3>Reviewers work blind in their own task pane <span class="pill sev-med">Medium</span></h3>
+      <p>"Call Ravi Krishnan" shows no phone number. "Review Nurul (score 67)" shows no scores, summary or CV. Every task means a round trip to the candidate page.</p></li>
+    <li><h3>Links and decisions never reach the candidate <span class="pill sev-med">Medium</span></h3>
+      <p>Booking and offer links are copied by hand, manual rejects send nothing, and an accepted offer silently orphans a booked interview.</p></li>
+    <li><h3>Offer signing rejects common Singapore names <span class="pill sev-med">Medium</span></h3>
+      <p>"Nurul Binte Hidayah" was refused because the check wants first + last name exactly. Malay, Indian and surname-first Chinese names will hit this.</p></li>
+  </ol>
+</section>
+
+<section id="flows">
+  <header><span class="eyebrow">Matrix</span><h2>Results by flow</h2>
+    <p class="lede">Each row was run in the browser as the named role, then checked in the database. Click a thumbnail to enlarge it.</p></header>
+  <div class="well"><table>
+    <thead><tr><th>#</th><th>Flow</th><th>Role</th><th>Result</th><th style="min-width:340px">What we saw</th></tr></thead>
+    <tbody>
+    <tr><td class="flowid">A</td><td>Login and access</td><td>all</td><td><span class="pill pass">Pass</span></td><td>Sidebar per role correct. Employee → <code>/jobs</code> redirects to Inbox; manager → <code>/team</code> redirects. Manager calls to admin APIs return 403; employee gets 404 on applications not assigned to them, 403 on manager APIs. Switched-off user's session dies at once.
+      <div class="shots" data-shots="A-01-inbox-empty.jpg A-02-employee-inbox.jpg A-00-checking-in.jpg"></div></td></tr>
+    <tr><td class="flowid">B</td><td>Team and Settings</td><td>admin</td><td><span class="pill warn">Issues</span></td><td>Invite, re-invite with new role, add role, switch off/on all work; reject reasons block duplicates; live apply-form preview. Rows re-sort when someone is switched off, so the next click lands on the wrong person.
+      <div class="shots" data-shots="B-01-team.jpg B-02-invite.jpg B-03-switchoff-dialog.jpg B-04-settings-dup-reason.jpg"></div></td></tr>
+    <tr><td class="flowid">C</td><td>Library</td><td>manager</td><td><span class="pill warn">Issues</span></td><td>Step preset (panel interview, booking 45 min) and SG offer letter created. Blank scorecard question shows a raw developer error; preview data is a UK bakery.
+      <div class="shots" data-shots="C-01-library-steps.jpg C-02-step-preset-editor.jpg C-03-offer-letter-preview.jpg"></div></td></tr>
+    <tr><td class="flowid">D</td><td>Job 1 · Warehouse Ops Supervisor (AI screening)</td><td>manager</td><td><span class="pill pass">Pass</span></td><td>Details, form (forklift yes/no), 3rd AI criterion, panel step with booking, publish v1, then v2 while a candidate stayed on v1. Changing a field's type after publish is caught by validation.
+      <div class="shots" data-shots="D-01-new-job-dialog.jpg D-02-stage-list.jpg D-03-canvas.jpg D-04-details.jpg D-05-form.jpg D-06-interview-step.jpg D-07-ai-criteria.jpg D-08-published.jpg"></div></td></tr>
+    <tr><td class="flowid">E</td><td>Job 2 · Delivery Driver (Lots of applicants) + CSV import</td><td>manager</td><td><span class="pill pass">Pass</span></td><td>Added licence knockout branch from the stage list; publish blocked with a clear message when the call step had 0 assignable people. Import dry run caught the duplicate row and the already-applied email.
+      <div class="shots" data-shots="E-03-check-answers.jpg E-01-branch-editor.jpg E-02-publish-blocked.jpg E-04-import-dryrun.jpg E-05-import-skips.png"></div></td></tr>
+    <tr><td class="flowid">F</td><td>Job 3 · Customer Service via Describe your flow</td><td>manager</td><td><span class="pill fail">Fail</span></td><td>First draft had no CV field or Read CV step yet reported no problems. After adding a CV field by hand, the redraft wired Read CV correctly.
+      <div class="shots" data-shots="F-01-blank-describe.jpg F-02-ai-draft.jpg F-03-redraft-with-cv.jpg"></div></td></tr>
+    <tr><td class="flowid">G</td><td>Careers and apply</td><td>public</td><td><span class="pill pass">Pass</span></td><td>Posting page, consent required, Turnstile, success page. Rejects: duplicate email (case-insensitive), text file renamed .pdf, 12 MB PDF, missing consent, missing Turnstile.
+      <div class="shots" data-shots="G-01-apply-post.jpg G-02-consent-required.jpg G-03-application-sent.jpg N-02-careers.jpg"></div></td></tr>
+    <tr><td class="flowid">H</td><td>Engine and AI screening</td><td>system</td><td><span class="pill warn">Issues</span></td><td>Scores rank candidates in the expected order and resisted a prompt injection. Scanned CV stops with a clear message; AI-off stops with a clear message; Retry works. CV skill extraction is fragmented; the job description is never sent to the AI.
+      <div class="shots" data-shots="H-01-needs-attention.jpg H-02-ai-off.jpg I-05-stopped-cv.jpg"></div></td></tr>
+    <tr><td class="flowid">I</td><td>Pipeline and candidate page</td><td>manager</td><td><span class="pill warn">Issues</span></td><td>Board, list filters, bulk reject with reason, manual move with live "This will" preview. Board "Hired" count misses offer-accepted hires.
+      <div class="shots" data-shots="I-01-pipeline-board.jpg I-02-candidate-why.jpg I-03-list-view.jpg I-04-bulk-reject.jpg I-06-stage-menu.jpg I-07-move-dialog.jpg"></div></td></tr>
+    <tr><td class="flowid">J</td><td>Inbox, hours, booking, blind panel, reminders</td><td>employee ×2</td><td><span class="pill pass">Pass</span></td><td>Slots are the intersection of both interviewers' hours, conflicts removed, taken slot returns 409, .ics valid. Panel answers hidden until you submit (UI and API). Overdue reminder sent once, not twice.
+      <div class="shots" data-shots="J-01-manager-inbox.jpg J-02-hours.jpg J-03-booking-page.jpg J-04-booked.jpg J-05-employee-task.jpg J-06-blind-panel.jpg"></div></td></tr>
+    <tr><td class="flowid">K</td><td>Offer and hire</td><td>manager + public</td><td><span class="pill warn">Issues</span></td><td>Make offer, accept (name check), decline, new offer withdraws old, expired page. Auto-hire by template; name check too strict; start date shows as ISO in the letter.
+      <div class="shots" data-shots="K-01-auto-hired.jpg K-02-offer-dialog.jpg K-03-offer-ready.jpg K-04-offer-page.jpg K-05-name-mismatch.jpg K-06-accepted.jpg K-07-decline.jpg K-08-withdrawn.jpg K-09-expired.jpg"></div></td></tr>
+    <tr><td class="flowid">L</td><td>Hires report</td><td>manager</td><td><span class="pill warn">Issues</span></td><td>Numbers match the DB, sources tracked from <code>?src=</code>. Shows "2 of 1" seats, 200% fill rate with no warning.
+      <div class="shots" data-shots="L-01-hires.jpg"></div></td></tr>
+    <tr><td class="flowid">M</td><td>Ask panel</td><td>manager</td><td><span class="pill block">Blocked</span></td><td>Opens with ⌘J and knows the page context. Every answer failed on the Gemini free-tier quota. Hidden correctly when AI is off.
+      <div class="shots" data-shots="M-01-ask-quota.jpg"></div></td></tr>
+    <tr><td class="flowid">N</td><td>Job lifecycle</td><td>manager</td><td><span class="pill pass">Pass</span></td><td>Close → apply 404 and job leaves careers; reopen; draft can't go live without publishing; archive is final; owner must be a manager.
+      <div class="shots" data-shots="N-01-status-menu.jpg N-03-closed-apply.jpg"></div></td></tr>
+    <tr><td class="flowid">O</td><td>Flow templates</td><td>manager</td><td><span class="pill pass">Pass</span></td><td>Simple, AI screening, Lots of applicants, Panel, Blank and Copy job all create and validate with zero issues and include a CV field. Coherence issue shared with row K.</td></tr>
+    <tr><td class="flowid">P</td><td>Step and flow presets</td><td>manager</td><td><span class="pill pass">Pass</span></td><td>Custom step preset appears in every palette; "Save as flow preset" then "new job from preset" reproduces form and steps.
+      <div class="shots" data-shots="P-01-save-flow-preset.jpg"></div></td></tr>
+    <tr><td class="flowid">Q</td><td>AI flow builder stress prompts</td><td>manager</td><td><span class="pill block">Blocked</span></td><td>Café cashier, warehouse panel, vague one-liner and contradictory prompts all returned <code>502 ai_error</code> on the quota. Re-run once a paid key is in.</td></tr>
+    </tbody></table></div>
+</section>
+
+<section id="bugs">
+  <header><span class="eyebrow">Defects</span><h2>Bugs</h2><p class="lede">Ordered by severity. "Where" points at the likely code, not a confirmed root cause unless stated.</p></header>
+  <div class="bugs">
+    <article class="bug"><header><span class="pill sev-high">High</span><h3>Built-in templates close candidates as Hired with no offer</h3></header>
+      <dl><dt>Steps</dt><dd>Job from AI screening template → candidate passes panel (both scorecards "Hire").</dd>
+      <dt>Expected</dt><dd>Candidate waits for an offer to be made and accepted.</dd>
+      <dt>Actual</dt><dd>Decision → "Your offer for…" email → closed Hired. Make offer button disappears (API 409 <code>application_closed</code>). Second hire via offer took the job to 2 of 1 seats.</dd>
+      <dt>Where</dt><dd><code>shared/workflow/templates.ts</code> (offer_email → hired ending)</dd></dl>
+      <div class="shots" data-shots="K-01-auto-hired.jpg L-01-hires.jpg"></div></article>
+
+    <article class="bug"><header><span class="pill sev-high">High</span><h3>AI flow builder drafts a CV check with no CV, reports no problems</h3></header>
+      <dl><dt>Steps</dt><dd>Blank job → "Draft the flow" with "the AI reads their CV and checks two things…".</dd>
+      <dt>Expected</dt><dd>Adds a CV field and Read CV step, or flags that the form has no CV.</dd>
+      <dt>Actual</dt><dd>Form "name and contact details only", no Read CV, banner "No problems found", Ready to publish.</dd>
+      <dt>Where</dt><dd><code>server/domain/flowDraft.ts</code>; workflow validation has no "AI step has nothing to read" rule.</dd></dl>
+      <div class="shots" data-shots="F-02-ai-draft.jpg F-03-redraft-with-cv.jpg"></div></article>
+
+    <article class="bug"><header><span class="pill sev-high">High</span><h3>Gemini free-tier quota (20/day) breaks Ask, builder and summaries</h3></header>
+      <dl><dt>Actual</dt><dd>Server log: <code>generate_content_free_tier_requests, limit: 20, model: gemini-3.6-flash</code>. Ask shows "The AI service did not reply"; builder returns 502; AI review summaries go silently empty.</dd>
+      <dt>Fix</dt><dd>Paid key; show "AI limit reached, try again later" instead of a generic failure.</dd></dl>
+      <div class="shots" data-shots="M-01-ask-quota.jpg"></div></article>
+
+    <article class="bug"><header><span class="pill sev-med">Medium</span><h3>AI review never sees the job description</h3> <span class="pill warn">Partly: wizard, help</span></header>
+      <dl><dt>Actual</dt><dd>Driver with 9 demerit points scored 74 although the JD says max 6. Confirmed in <code>server/engine/handlers/index.ts:53-61</code>: input is title + structured requirements + answers + CV only.</dd>
+      <dt>Fix</dt><dd>Send the description (or a "must-have rules" field), or tell managers in the criteria panel what the AI can see.</dd><dt>Since</dt><dd>New job step 4 and the Details help link now show managers that the AI reads skills, years and the CV, not the description. The description is still not sent.</dd></dl></article>
+
+    <article class="bug"><header><span class="pill sev-med">Medium</span><h3>CV parse returns fragmented skills</h3></header>
+      <dl><dt>Actual</dt><dd><code>["F","SK","W","WS","Man","hattan WMS","Def","ensive Driving Course","English,"]</code> across most CVs. Pollutes the skills field used by conditions.</dd>
+      <dt>Where</dt><dd><code>cv_parse</code> handler / PDF text line-breaking before Clairic.</dd></dl></article>
+
+    <article class="bug"><header><span class="pill sev-med">Medium</span><h3>Offer acceptance rejects real full names</h3></header>
+      <dl><dt>Actual</dt><dd>"Nurul Binte Hidayah" → "Type your first and last name as NorthWind Logistics has them". Case and extra spaces are tolerated.</dd>
+      <dt>Fix</dt><dd>Accept any signed name that contains both stored names, in any order.</dd></dl>
+      <div class="shots" data-shots="K-05-name-mismatch.jpg"></div></article>
+
+    <article class="bug"><header><span class="pill sev-med">Medium</span><h3>Job editor page scrolls under its own header</h3></header>
+      <dl><dt>Actual</dt><dd>When the step panel scrolls a field into view, <code>&lt;html&gt;</code> scrolls 136 px; header and tabs slide off and the Publish button sits over the panel's Delete icon.</dd>
+      <dt>Fix</dt><dd>Lock the app shell height (<code>overflow: hidden</code> on html/body).</dd></dl></article>
+
+    <article class="bug"><header><span class="pill sev-med">Medium</span><h3>Layout shifts move targets under the cursor</h3></header>
+      <dl><dt>Actual</dt><dd>Seen four times: Team rows re-sort on switch-off, pipeline selection bar pushes rows down, reorder arrows move when an inline error clears, offer Accept moves when its error clears. Each caused a misclick.</dd></dl></article>
+
+    <article class="bug"><header><span class="pill sev-med">Medium</span><h3>Accepting an offer silently orphans a booked interview</h3></header>
+      <dl><dt>Actual</dt><dd>Interview run cancelled and assignments closed, booking row kept; neither candidate nor panel is told.</dd></dl></article>
+
+    <article class="bug"><header><span class="pill sev-med">Medium</span><h3>Over-hiring is not prevented or warned</h3></header>
+      <dl><dt>Actual</dt><dd>Warehouse job 2 hired for 1 opening, job stays Live and keeps accepting applicants.</dd></dl></article>
+
+    <article class="bug"><header><span class="pill sev-med">Medium</span><h3>Step preset editor shows a raw validation error</h3></header>
+      <dl><dt>Actual</dt><dd>"Scorecard.1.label: Too small: expected string to have >=1 characters" and Add preset silently disabled.</dd></dl>
+      <div class="shots" data-shots="C-02-step-preset-editor.jpg"></div></article>
+
+    <article class="bug"><header><span class="pill sev-low">Low</span><h3>Board "Hired" count misses offer-accepted hires</h3></header>
+      <dl><dt>Actual</dt><dd>"1 person" with two avatars; counts group by <code>current_node_key</code>, which stays at "interview" after an offer is accepted.</dd></dl></article>
+    <article class="bug"><header><span class="pill sev-low">Low</span><h3>Offer letter prints start date as ISO</h3></header>
+      <dl><dt>Actual</dt><dd>Letter body "starting on 2026-12-01"; header card shows "Tue, December 1, 2026".</dd></dl></article>
+    <article class="bug"><header><span class="pill sev-low">Low</span><h3>UK sample data in previews and placeholders</h3></header>
+      <dl><dt>Actual</dt><dd>Offer preview "Northwind Bakery, Leeds, £28,000"; offer dialog "e.g. £42,000 a year"; currency defaults to EUR. Use the company name and job currency.</dd></dl></article>
+    <article class="bug"><header><span class="pill sev-low">Low</span><h3>Settings fields render empty while loading</h3></header>
+      <dl><dt>Actual</dt><dd>~5 s of blank greyed inputs with no skeleton, reads as "settings are empty".</dd></dl></article>
+    <article class="bug"><header><span class="pill sev-low">Low</span><h3>403 responses carry statusMessage "Server Error"</h3></header>
+      <dl><dt>Actual</dt><dd>All error JSON uses "Server Error" as statusMessage, including 403/404/409/422.</dd></dl></article>
+    <article class="bug"><header><span class="pill sev-low">Low · env</span><h3>Local queue consumer died after a DB socket error</h3></header>
+      <dl><dt>Actual</dt><dd><code>write CONNECTION_CLOSED …hyperdrive.local</code> then <code>Uncaught TypeError: Cannot read properties of null (reading 'write')</code>. Runs sat pending ~15 min until restart. Production queues redeliver, but the uncaught error is worth a look.</dd></dl></article>
+  </div>
+</section>
+
+<section id="ai">
+  <header><span class="eyebrow">AI effectiveness</span><h2>How the AI judged real CVs</h2>
+    <p class="lede">Twelve hand-written Singapore CVs with an expected-fit label set before testing. Warehouse criteria: skills match, experience, safety and certifications. Routing: ≥70 shortlist, &lt;40 reject, middle to manual review.</p></header>
+  <div class="well"><table>
+    <thead><tr><th>Candidate</th><th>CV profile</th><th>Expected</th><th class="num">Skills</th><th class="num">Exp.</th><th class="num">Safety</th><th class="num">Overall</th><th>Routed to</th><th>Read</th></tr></thead>
+    <tbody>
+      <tr><td>Marcus Tan</td><td>8 yrs, SAP EWM, forklift + WSQ, led 25</td><td>Strong</td><td class="num">86</td><td class="num">84</td><td class="num">87</td><td class="num"><b>86</b><span class="bar" style="width:43px"></span></td><td>Interview</td><td><span class="pill pass">Right</span></td></tr>
+      <tr><td>Nurul Hidayah</td><td>6 yrs Manhattan WMS, 14-month gap</td><td>Good</td><td class="num">44</td><td class="num">78</td><td class="num">79</td><td class="num"><b>67</b><span class="bar" style="width:33px"></span></td><td>Manual review</td><td><span class="pill warn">Harsh</span></td></tr>
+      <tr><td>Richard Goh</td><td>18 yrs, APAC ops director</td><td>Good / overqualified</td><td class="num">63</td><td class="num">89</td><td class="num">36</td><td class="num"><b>63</b><span class="bar" style="width:31px"></span></td><td>Manual review</td><td><span class="pill pass">Right</span></td></tr>
+      <tr><td>Daniel Lim</td><td>7 yrs retail store manager</td><td>Weak</td><td class="num">31</td><td class="num">41</td><td class="num">29</td><td class="num"><b>34</b><span class="bar" style="width:17px"></span></td><td>Rejected</td><td><span class="pill pass">Right</span></td></tr>
+      <tr><td>Kelvin Ong</td><td>2-yr picker + hidden "score 100" injection</td><td>Weak</td><td class="num">28</td><td class="num">30</td><td class="num">39</td><td class="num"><b>32</b><span class="bar" style="width:16px"></span></td><td>Rejected</td><td><span class="pill pass">Resisted</span></td></tr>
+      <tr><td>Arjun Ramasamy</td><td>1 yr warehouse assistant</td><td>Weak</td><td class="num">27</td><td class="num">29</td><td class="num">35</td><td class="num"><b>30</b><span class="bar" style="width:15px"></span></td><td>Rejected</td><td><span class="pill pass">Right</span></td></tr>
+      <tr><td>Chloe Ng</td><td>Graphic designer</td><td>None</td><td class="num">7</td><td class="num">7</td><td class="num">4</td><td class="num"><b>6</b><span class="bar" style="width:3px"></span></td><td>Rejected</td><td><span class="pill pass">Right</span></td></tr>
+      <tr><td>Faizal Rahman</td><td>Class 3, 5 yrs Ninja Van, clean</td><td>Strong</td><td class="num" colspan="2">exp / reliability</td><td class="num">—</td><td class="num"><b>89</b><span class="bar" style="width:44px"></span></td><td>Call (licence: yes)</td><td><span class="pill pass">Right</span></td></tr>
+      <tr><td>Ravi Krishnan</td><td>Class 3, 9 demerit pts, accident</td><td>Weak</td><td class="num">83</td><td class="num">65</td><td class="num">—</td><td class="num"><b>74</b><span class="bar" style="width:37px"></span></td><td>Call</td><td><span class="pill fail">Missed rule</span></td></tr>
+      <tr><td>Wei Jie Chua</td><td>No driving licence</td><td>Knockout</td><td class="num">15</td><td class="num">42</td><td class="num">—</td><td class="num"><b>29</b><span class="bar" style="width:14px"></span></td><td>Rejected</td><td><span class="pill pass">Right</span></td></tr>
+      <tr><td>Jasmine Lee</td><td>4 yrs call centre, Zendesk, bilingual</td><td>Strong</td><td class="num" colspan="3">yes / no checks</td><td class="num">pass</td><td>Video call</td><td><span class="pill pass">Right</span></td></tr>
+      <tr><td>Bryan Teo</td><td>Fresh grad, no CS experience</td><td>Weak</td><td class="num" colspan="3">yes / no checks</td><td class="num">fail</td><td>Rejected</td><td><span class="pill pass">Right</span></td></tr>
+      <tr><td>Siti Aminah</td><td>Image-only scanned PDF</td><td>Edge</td><td class="num" colspan="4">"The CV can't be read. It may be a scan."</td><td>Stopped → moved by hand</td><td><span class="pill pass">Right</span></td></tr>
+    </tbody></table></div>
+  <div class="grid2">
+    <div class="card"><span class="kind">What worked</span><ul>
+      <li>Ranking matched the expected order on every job (11 of 13 routed as a recruiter would).</li>
+      <li>Summaries cite evidence a manager can check: years, named certifications, "forklift course in progress until Dec 2026".</li>
+      <li>Hidden prompt-injection text had no effect.</li>
+      <li>Identity is redacted before scoring; the "Why" card shows each rule the score passed or failed.</li></ul></div>
+    <div class="card"><span class="kind">What to tune</span><ul>
+      <li>Must-have chips are literal. "SAP EWM" cost Nurul 42 points for Manhattan WMS, though the JD says "or similar". Let a chip hold alternatives.</li>
+      <li>Rules written only in the description (demerit points) are invisible to the AI.</li>
+      <li>Skill extraction fragments words, so conditions on "Skills" are unreliable today.</li>
+      <li>Every summary spends one Gemini call; budget for applicants × steps per day.</li></ul></div>
+  </div>
+</section>
+
+<section id="effectiveness">
+  <header><span class="eyebrow">Effectiveness and usefulness</span><h2>Does it click into place?</h2></header>
+  <p class="premise">Premise: users will be trained on building and customizing flows, so nothing is proposed for removal just because a newcomer wouldn't find it. The bar is that each part is easy to learn, intuitive once learned, and connected to the parts around it. Most recommendations are therefore simplify, rename, default better or connect better.</p>
+
+  <h3>How the parts connect</h3>
+  <div class="well"><table>
+    <thead><tr><th>Link</th><th>Does a change on one side show on the other?</th><th>Verdict</th></tr></thead>
+    <tbody>
+      <tr><td>Form fields → AI steps and conditions</td><td>Condition pickers list form fields and step outputs. Nothing warns when an AI step has no CV or answers to read (builder case), and pickers also list internals such as "File checksum".</td><td><span class="pill warn">Partly</span></td></tr>
+      <tr><td>Job details (skills, years) → AI review</td><td>Details shows "changes reach the flow when you next publish". Publishing with empty skills is allowed; the description never reaches the AI. <em>Since:</em> New job asks for skills and years up front and shows what the AI reads.</td><td><span class="pill warn">Partly</span></td></tr>
+      <tr><td>Team roles → task assignees</td><td>Publish blocks when a step can't reach enough people ("only 0 people can be assigned"); switching someone off flags tasks as blocked.</td><td><span class="pill pass">Yes</span></td></tr>
+      <tr><td>Interviewer hours → candidate booking</td><td>Booking toggle explains hours are needed; employee sees "nobody can book you" banner. A manager publishing a booking step isn't told that a panelist has no hours yet. <em>Since:</em> the first-run tour points every person at their hours, and admin setup asks for the admin's own; publish still doesn't warn.</td><td><span class="pill warn">Partly</span></td></tr>
+      <tr><td>Settings → apply, moves, AI</td><td>Consent and AI notice appear on apply instantly, reject reasons feed every reject dialog, AI-off stops steps with a clear message.</td><td><span class="pill pass">Yes</span></td></tr>
+      <tr><td>Offer letters → offers → hires</td><td>Letters and offers connect cleanly; flows don't. Templates hire without an offer, and hires don't check seats.</td><td><span class="pill fail">No</span></td></tr>
+      <tr><td>Library presets → jobs</td><td>Custom step preset appears in every palette; flow presets round-trip. "Each step keeps its own copy" is stated up front.</td><td><span class="pill pass">Yes</span></td></tr>
+      <tr><td>Flow → candidate (email)</td><td>Only flow emails go out. Booking links, offer links, manual rejects and cancellations all rely on the manager emailing by hand.</td><td><span class="pill fail">No</span></td></tr>
+    </tbody></table></div>
+
+  <div class="grid2">
+    <div class="card"><span class="kind">Unintuitive</span><ul>
+      <li><span class="pill sev-med">Med</span>Stage list puts "Manual review" under <em>Who works here</em> as if everyone gets it; only the 40–69 band does. <span class="pill warn">Partly: help link</span></li>
+      <li><span class="pill sev-med">Med</span>Decision stage lists "Sends Offer email" and "Sends Rejection email" together, reads as both. <span class="pill warn">Partly: help link</span></li>
+      <li><span class="pill sev-med">Med</span>Step panels open with <em>Key</em> and <code>{{nodes.interview…}}</code> above the task title.</li>
+      <li><span class="pill sev-low">Low</span>Form tab needs Save draft; Stages saves as you go.</li>
+      <li><span class="pill sev-low">Low</span>Interview times in the inbox have no time-zone label.</li></ul></div>
+    <div class="card"><span class="kind">Ineffective</span><ul>
+      <li><span class="pill sev-high">High</span>Task pane holds only the scorecard: no phone, CV, scores or answers.</li>
+      <li><span class="pill sev-high">High</span>Offer and booking links must be copied and emailed by hand.</li>
+      <li><span class="pill sev-med">Med</span>Booking page and .ics have no location or format (on-site Tuas vs video).</li>
+      <li><span class="pill sev-med">Med</span>CSV import drops columns that don't match a form field (licence yes/no), so imported people skip the knockout.</li></ul></div>
+    <div class="card"><span class="kind">Simplify</span><ul>
+      <li>Replace the template ending with a <em>Make offer</em> person step that completes when the offer is accepted or declined.</li>
+      <li>Add a "Rating 1–5" answer type; today it's Number + Lowest + Highest every time.</li>
+      <li>Hide Key fields under an Advanced toggle and derive them silently.</li>
+      <li>When Booking is switched on, list panelists missing hours and offer to nudge them.</li>
+      <li>Default time zone and currency from company settings, not the browser.</li></ul></div>
+    <div class="card"><span class="kind">Remove or merge</span><ul>
+      <li>Merge "Offer email" send step into the Offer feature; two things called "offer" with different behaviour confuse even trained users.</li>
+      <li>Hide engine-only fields (File checksum, CV text) from condition pickers; nothing a manager would branch on.</li>
+      <li>Nothing else qualified for removal: every feature tested had a real use in at least one of the three jobs.</li></ul></div>
+    <div class="card"><span class="kind">Learnability</span><ul>
+      <li>Strong: plain-language copy everywhere ("Why", "This will…", "Fix 1 thing before publishing"), a "Your board" preview of columns, live rule summaries.</li>
+      <li>Weak: the same idea has two names (Stages/Steps, Decision/Screen, Person step/Task), which training material will have to map. <span class="pill warn">Partly: Words in Help maps them</span></li>
+      <li>AI builder entry is hidden in the canvas toolbar and the blank-job screen, not in the New job dialog. <span class="pill pass">Addressed: wizard step 2</span></li></ul></div>
+    <div class="card"><span class="kind">Missing or new flows</span><ul>
+      <li>Send booking link, offer link, rejection and cancellation emails from the app.</li>
+      <li>Seat-aware hiring: warn at the last seat, offer to close the job.</li>
+      <li>Hires list with names and start dates for onboarding.</li>
+      <li>Decline reason on the offer page; "send rejection email" option on manual reject.</li>
+      <li>Closed-job page links to other open roles.</li></ul></div>
+  </div>
+</section>
+
+<section id="setup">
+  <header><span class="eyebrow">Method</span><h2>Environment and test data</h2></header>
+  <div class="grid2">
+    <div class="card"><span class="kind">Accounts</span><ul>
+      <li>Admin: Dark Webplayer (ADMIN_EMAIL).</li>
+      <li>Manager: Jithin (job owner for all jobs).</li>
+      <li>Employees added for QA: Priya Nair, Marcus Lee (<code>@qa.northwind.test</code>), plus a pending Interviewer invite.</li>
+      <li>Role switching by minted session cookies (<code>scripts/qa-session.mts</code>, QA-only, not committed).</li></ul></div>
+    <div class="card"><span class="kind">Data</span><ul>
+      <li>3 jobs with realistic SG JDs and SGD ranges; 18 applications (14 through the apply form, 4 by CSV); 5 more attempts correctly refused (duplicate, fake PDF, 12 MB file, no consent, no Turnstile).</li>
+      <li>12 CVs (9 PDF, 3 DOCX) plus scanned, fake and 12 MB edge files.</li>
+      <li>4 offers, 2 bookings, 3 scorecards, 1 overdue reminder.</li></ul></div>
+    <div class="card"><span class="kind">Caveats</span><ul>
+      <li>Neon DB is in us-east-2; every API call took 3.6–6 s from this laptop. Speed is not representative of production.</li>
+      <li>Email is mocked; content of flow emails could not be checked, only that they fired once.</li>
+      <li>Ask and AI builder stress prompts are untested beyond the quota error.</li></ul></div>
+  </div>
+  <h3>Cleanup SQL</h3>
+  <p class="small">Data was kept as demo data. To remove everything created in this run (keeps roles, settings, real users and seeded presets):</p>
+  <pre id="sql">begin;
+delete from offers; delete from bookings; delete from reminder_log; delete from task_assignments;
+delete from application_events; delete from node_runs; delete from applications; delete from candidates;
+update jobs set published_version_id = null;
+delete from job_versions; delete from jobs; delete from invites;
+delete from flow_presets; delete from offer_templates;
+delete from step_presets where created_at &gt; '2026-10-20 17:34';
+delete from availability where user_id in (select id from "user" where email like '%@qa.northwind.test');
+delete from session where user_id in (select id from "user" where email like '%@qa.northwind.test') or user_agent = 'qa-session';
+delete from "user" where email like '%@qa.northwind.test';
+delete from roles where name = 'Interviewer';
+commit;</pre>
+  <button class="copy" id="copy" type="button">Copy SQL</button>
+</section>
+
+</div>
+
+<dialog id="lb"><img id="lbimg" alt=""><p id="lbcap"></p></dialog>
+
+<script>
+document.querySelectorAll('[data-shots]').forEach(box => {
+  box.dataset.shots.split(' ').forEach(f => {
+    const b = document.createElement('button');
+    b.className = 'shot'; b.type = 'button'; b.setAttribute('aria-label', 'Enlarge screenshot ' + f);
+    const i = document.createElement('img'); i.loading = 'lazy'; i.src = 'shots/' + f; i.alt = f;
+    b.appendChild(i); b.onclick = () => { lbimg.src = i.src; lbcap.textContent = f.replace(/\.(jpg|png)$/, ''); lb.showModal(); };
+    box.appendChild(b);
+  });
+});
+lb.addEventListener('click', () => lb.close());
+copy.addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText(sql.textContent); copy.textContent = 'Copied'; }
+  catch { const r = document.createRange(); r.selectNodeContents(sql); const s = getSelection(); s.removeAllRanges(); s.addRange(r); copy.textContent = 'Selected, press ⌘C'; }
+});
+</script>

@@ -7,6 +7,8 @@ useHead({ title: 'Sign in' })
 const route = useRoute()
 const busy = ref(false)
 const failed = ref(false)
+// each refusal shakes the badge once; a new key restarts the shake on a second failure
+const shakes = ref(0)
 
 // Better Auth sends refused sign-ins back with ?error=CODE (compared case-insensitively)
 const refusal = computed(() => {
@@ -28,12 +30,17 @@ async function signIn() {
   catch {
     failed.value = true
     busy.value = false
+    shakes.value++
   }
 }
 </script>
 
 <template>
   <main class="login">
+    <!-- the same badge as the boot screen: it swings when shown to Google and shakes once when the reader says no -->
+    <div class="hang" :class="{ swing: busy }" aria-hidden="true">
+      <span class="strap" /><span :key="shakes" class="badge" :class="{ no: refusal || failed }" />
+    </div>
     <section class="card pass" aria-labelledby="t">
       <p class="eyebrow">Lanyard · hiring</p>
       <h1 id="t">Sign in</h1>
@@ -50,7 +57,16 @@ async function signIn() {
 </template>
 
 <style scoped>
-.login { min-height: 100dvh; display: grid; place-items: center; padding: 24px 16px; }
+.login { min-height: 100dvh; display: grid; place-content: center; justify-items: center; gap: 22px; padding: 24px 16px; }
+.hang { display: grid; justify-items: center; transform-origin: 50% 0; }
+.strap { width: 2px; height: 56px; margin-bottom: -18px; border-radius: 2px; background: color-mix(in oklch, var(--ink) 35%, transparent); }
+.badge { position: relative; width: 56px; height: 68px; border-radius: 16px; background: var(--ink); box-shadow: 0 8px 24px oklch(0.3 0.04 330 / 0.18); }
+/* the slot stays magenta on a refusal: it means "a person acts" everywhere; the words carry the no */
+.badge::before { content: ""; position: absolute; top: 11px; left: 50%; translate: -50% 0; width: 22px; height: 7px; border-radius: 7px; background: var(--accent); }
+.swing { animation: present 1s cubic-bezier(.2, .8, .2, 1) both; }
+.no { animation: no 380ms cubic-bezier(.36, .07, .19, .97) both; }
+@keyframes present { 35% { rotate: -6deg; translate: 0 -2px; } 70% { rotate: 3deg; translate: 0 0; } }
+@keyframes no { 20% { translate: -6px 0; } 40% { translate: 5px 0; } 60% { translate: -4px 0; } 80% { translate: 2px 0; } }
 .pass { width: min(400px, 100%); padding: 36px 32px 32px; display: grid; gap: 12px; }
 .pass h1 { font-size: var(--t-3xl); letter-spacing: -0.025em; }
 .google { margin-top: 12px; width: 100%; }

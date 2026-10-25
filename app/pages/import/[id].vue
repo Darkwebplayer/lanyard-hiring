@@ -421,14 +421,6 @@ const skipped = (s: Summary) => s.duplicates.length + s.invalid.length
 .head h1 { margin-top: 2px; }
 .sk { display: grid; gap: 16px; }
 
-/* steps: done is ok green, current is ink, later is quiet, as in the mock */
-.steps { list-style: none; margin: 0; padding: 0; display: flex; gap: 8px 24px; flex-wrap: wrap; }
-.steps li { display: flex; align-items: center; gap: 8px; font-size: var(--t-sm); font-weight: 600; color: var(--ink-3); }
-.steps i { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-size: var(--t-xs); background: var(--sunk); }
-.steps .done { color: var(--ok); }
-.steps .done i { background: var(--ok); color: #fff; }
-.steps .on { color: var(--ink); }
-.steps .on i { background: var(--ink); color: #fff; }
 .steps .file { font-weight: 400; color: var(--ink-2); }
 
 .upload { display: grid; gap: 12px; max-width: 640px; }

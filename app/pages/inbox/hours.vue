@@ -94,11 +94,7 @@ onBeforeRouteLeave(() => !dirty.value || firstTime.value || confirm('Leave witho
       <button type="button" class="btn" @click="load"><Icon name="retry" />Try again</button>
     </div>
 
-    <div v-else-if="!loaded" class="card sk" aria-busy="true" aria-label="Loading your hours">
-      <span v-for="i in 7" :key="i" class="skeleton" style="height: 36px" />
-    </div>
-
-    <form v-else class="card body" @submit.prevent="save">
+    <form v-else class="card body" :aria-busy="!loaded" :inert="!loaded" @submit.prevent="save">
       <p v-if="firstTime" class="first"><Icon name="calendar" :size="16" />You haven’t set hours yet, so nobody can book you. Here’s a working week to start from.</p>
 
       <div class="field tz">
@@ -123,7 +119,8 @@ onBeforeRouteLeave(() => !dirty.value || firstTime.value || confirm('Leave witho
             </div>
             <button v-if="days[d.key].ranges.length < 10" type="button" class="btn btn-sm btn-quiet add" @click="addRange(d.key)"><Icon name="plus" />Add hours</button>
           </div>
-          <span v-else class="faint unavail">Not available</span>
+          <span v-else-if="loaded" class="faint unavail">Not available</span>
+          <span v-else class="unavail"><span class="skeleton" style="height: 14px; width: 180px" /></span>
         </li>
       </ul>
 
@@ -143,7 +140,6 @@ onBeforeRouteLeave(() => !dirty.value || firstTime.value || confirm('Leave witho
 .hours { display: grid; gap: 16px; }
 .top { display: grid; gap: 4px; }
 .top h2 { font-size: var(--t-xl); }
-.sk { padding: 24px; display: grid; gap: 10px; }
 .body { padding: 24px 28px; display: grid; gap: 20px; }
 .first { display: flex; gap: 8px; align-items: center; padding: 10px 14px; border-radius: var(--r-panel); background: var(--accent-tint); color: var(--ink); font-weight: 500; }
 .first svg { color: var(--accent-ink); flex: none; }

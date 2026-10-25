@@ -40,6 +40,8 @@ export const useAsk = () => {
   const focus = useState<string | null>('ask-focus', () => null)
   const ctx = useState<AskContext | null>('ask-ctx', () => null)
   const ctxLoading = useState('ask-ctx-loading', () => false)
+  // the shown context belongs to another page: its name and suggestions would be wrong here, so the panel reads instead
+  const reading = useState('ask-reading', () => false)
   const router = useRouter()
   const { me } = useMe()
 
@@ -57,11 +59,13 @@ export const useAsk = () => {
     if (key === ctxKey && ctxLoad) return ctxLoad
     ctxKey = key
     ctxLoading.value = true
+    reading.value = !ctx.value || JSON.stringify(w) !== ctxPage
     ctxLoad = api<AskContext>('/api/ask/context', { query: { route: w.route, params: JSON.stringify(w.params), focus: focus.value ?? undefined } })
       .catch(() => null)
       .then((c) => {
         if (key !== ctxKey) return
         ctxLoading.value = false
+        reading.value = false
         const before = ctx.value?.label
         ctx.value = c
         const label = c?.label
@@ -142,5 +146,5 @@ export const useAsk = () => {
   const floats = computed(() => ['jobs-id-flow', 'library-flows-id'].includes(String(router.currentRoute.value.name)))
   const lastQuestion = computed(() => thread.value.findLast(t => t.role === 'user')?.text ?? null)
 
-  return { open, thread, streaming, error, draft, focus, ctx, ctxLoading, ask, stop, retry, loadContext, lastQuestion, floats }
+  return { open, thread, streaming, error, draft, focus, ctx, ctxLoading, reading, ask, stop, retry, loadContext, lastQuestion, floats }
 }

@@ -9,6 +9,7 @@ const rule = defineModel<Rule>({ required: true })
 
 const byPath = computed(() => new Map(props.fields.map(f => [f.path, f])))
 const groups = computed(() => groupFields(props.fields, props.graph))
+const { show: showHelp } = useHelp()
 
 const mode = computed<'one' | 'all' | 'any' | 'deep'>(() => {
   const r = rule.value
@@ -139,9 +140,13 @@ const inputType = (c: Comparison) => typeOf(c) === 'number' ? 'number' : typeOf(
           <input v-else :type="inputType(c)" :value="str(c.value)" aria-label="Value" @input="setValue(i, ($event.target as HTMLInputElement).value)">
         </div>
       </div>
-      <button v-if="!readOnly" type="button" class="btn btn-quiet btn-sm add" @click="add">
-        <Icon name="plus" />Add a condition
-      </button>
+      <div class="foot">
+        <button v-if="!readOnly" type="button" class="btn btn-quiet btn-sm add" @click="add">
+          <Icon name="plus" />Add a condition
+        </button>
+        <!-- the field list mixes everyday answers with step outputs such as CV text; Words says which ones matter -->
+        <button type="button" class="what" aria-label="What’s this? What a rule can check" @click="showHelp('words')">What’s this?</button>
+      </div>
     </template>
   </div>
 </template>
@@ -154,7 +159,10 @@ const inputType = (c: Comparison) => typeOf(c) === 'number' ? 'number' : typeOf(
 .cmp-row .op { flex: 0 1 auto; width: auto; min-width: 9.5rem; }
 .pair { flex: 1; display: flex; align-items: center; gap: 6px; min-width: 0; }
 .opts { flex: 1; display: flex; flex-wrap: wrap; gap: 6px 14px; }
-.add { justify-self: start; margin-left: -8px; }
+.foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.add { margin-left: -8px; }
+.what { margin-left: auto; padding: 0; border: 0; background: none; font: 500 var(--t-xs) var(--font); color: var(--accent-ink); text-decoration: underline; text-underline-offset: 0.18em; cursor: pointer; }
+.what:hover { color: var(--ink); }
 .json { margin: 0; padding: 10px 12px; border-radius: var(--r-field); background: var(--sunk); font: 12px/1.5 var(--mono); overflow-x: auto; }
 .hint { font-size: var(--t-sm); color: var(--ink-2); }
 </style>

@@ -143,12 +143,9 @@ async function confirmDelete() {
 
     <div v-else class="cols">
       <div class="list">
-        <template v-if="!presets">
-          <div v-for="i in 4" :key="i" class="panel sk"><span class="skeleton" style="height: 14px; width: 30%" /><span class="skeleton" style="height: 40px" /><span class="skeleton" style="height: 40px" /></div>
-        </template>
-        <section v-for="s in sections" v-else :key="s.key" class="panel sect" :aria-labelledby="`sec-${s.key}`">
+        <section v-for="s in sections" :key="s.key" class="panel sect" :aria-labelledby="`sec-${s.key}`">
           <header class="sect-head">
-            <h2 :id="`sec-${s.key}`">{{ s.label }} <span class="faint">{{ s.presets.length }}</span></h2>
+            <h2 :id="`sec-${s.key}`">{{ s.label }} <span v-if="presets" class="faint">{{ s.presets.length }}</span></h2>
             <button v-if="s.types.length === 1" type="button" class="btn btn-sm btn-quiet" @click="choose({ new: s.types[0] })"><Icon name="plus" />New preset</button>
             <template v-else>
               <button type="button" class="btn btn-sm btn-quiet" :popovertarget="`new-${s.key}`" :style="{ anchorName: `--new-${s.key}` }"><Icon name="plus" />New preset<Icon name="chevron-down" :size="14" /></button>
@@ -159,7 +156,8 @@ async function confirmDelete() {
               </div>
             </template>
           </header>
-          <ul v-if="s.presets.length" class="rows">
+          <div v-if="!presets" class="sk" aria-busy="true"><span class="skeleton" /><span class="skeleton" /></div>
+          <ul v-else-if="s.presets.length" class="rows">
             <li v-for="p in s.presets" :key="p.id" class="row" :class="{ current: p.id === selectedId, off: !p.inPalette }">
               <button type="button" class="pick" :aria-current="p.id === selectedId ? 'true' : undefined" @click="choose({ preset: p.id })">
                 <span class="ico"><Icon :name="nodeMeta(p.type).icon" :size="16" /></span>
@@ -226,7 +224,8 @@ async function confirmDelete() {
 .lede { color: var(--ink-2); margin-bottom: 20px; max-width: 75ch; }
 .cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(380px, 460px); gap: 24px; align-items: start; }
 .list { display: grid; gap: 16px; min-width: 0; }
-.sk { display: grid; gap: 10px; padding: 16px; }
+.sk { display: grid; gap: 8px; padding: 4px 6px 8px; }
+.sk .skeleton { height: 44px; }
 .sect { padding: 6px 6px 8px; }
 .sect-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 10px 8px 12px; }
 .sect-head h2 { font-size: var(--t-lg); }
