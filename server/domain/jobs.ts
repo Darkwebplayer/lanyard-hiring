@@ -8,7 +8,7 @@ import { STANDARD_HIRE, TEMPLATES, type TemplateId } from '../../shared/workflow
 import type { Requirements } from '../../shared/workflow/job'
 import type { FormField, Graph, Issue } from '../../shared/workflow/types'
 import type { Db, Tx } from '../db/client'
-import { flowPresets, jobs, jobVersions, roles, user } from '../db/schema'
+import { applications, flowPresets, jobs, jobVersions, nodeRuns, roles, user } from '../db/schema'
 import { accessLevel } from './access'
 import { DomainError } from './errors'
 
@@ -79,6 +79,21 @@ async function lockJob(tx: Tx, jobId: string) {
   if (!job) throw new DomainError(404, 'job_not_found')
   return job
 }
+
+// The jobs list: every job, drafts too, with its pipeline at a glance (active, stopped on a failed step, hired).
+export const listJobs = (db: Db) => db.select({
+  id: jobs.id, title: jobs.title, status: jobs.status, openings: jobs.openings, closesAt: jobs.closesAt,
+  ownerId: jobs.ownerId, ownerName: user.name, createdAt: jobs.createdAt,
+  publishedVersion: jobVersions.version,
+  hasDraft: sql<boolean>`exists (select 1 from ${jobVersions} d where d.job_id = ${jobs.id} and d.status = 'draft')`,
+  active: sql<number>`(select count(*) from ${applications} a where a.job_id = ${jobs.id} and a.status = 'active')`.mapWith(Number),
+  stopped: sql<number>`(select count(*) from ${applications} a where a.job_id = ${jobs.id} and a.status = 'active'
+    and (select r.status from ${nodeRuns} r where r.application_id = a.id order by r.seq desc limit 1) = 'failed')`.mapWith(Number),
+  hired: sql<number>`(select count(*) from ${applications} a where a.job_id = ${jobs.id} and a.outcome = 'hired')`.mapWith(Number),
+}).from(jobs)
+  .innerJoin(user, eq(user.id, jobs.ownerId))
+  .leftJoin(jobVersions, eq(jobVersions.id, jobs.publishedVersionId))
+  .orderBy(desc(jobs.createdAt))
 
 export async function getJob(db: Db, jobId: string) {
   // one snapshot, so a concurrent publish can't give a stale published version with no draft

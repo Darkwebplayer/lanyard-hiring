@@ -36,6 +36,8 @@ export default defineNuxtConfig({
   nitro: {
     preset: 'cloudflare_module',
     cloudflare: { nodeCompat: true },
+    // the Help topics, bundled so Ask can read them as its guide to the app (relative to server/)
+    serverAssets: [{ baseName: 'help', dir: '../app/components/help' }],
   },
   // the custom Worker entry (queue + cron) is for the built Worker; `nuxt dev` needs Nitro's own dev entry
   $production: { nitro: { entry: './entry.ts' } },

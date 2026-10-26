@@ -103,10 +103,5 @@ export function boltLine(graph: Graph | null, stageId: string, nameOf: Names) {
   return [...new Set(parts)].join(' · ') // Make offer and Documents both assign the owner: say it once
 }
 
-// The list's AI score filter, as presets a person picks without typing numbers.
-export const SCORE_BANDS = [
-  { value: '', label: 'Any AI score' },
-  { value: '70', label: 'AI score 70+', min: 70 },
-  { value: '40', label: 'AI score 40–69', min: 40, max: 69.999 },
-  { value: '0', label: 'AI score under 40', max: 39.999 },
-] as const
+// lives in utils so the server (Ask) can read the same bands without this file's page types
+export { SCORE_BANDS } from '../utils/format'

@@ -67,3 +67,11 @@ export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n ==
 
 // A ListInput's items as sent: trimmed, blanks dropped.
 export const listItems = (v: unknown) => Array.isArray(v) ? v.map(x => String(x).trim()).filter(Boolean) : []
+
+// The list's AI score filter, as presets a person picks without typing numbers.
+export const SCORE_BANDS = [
+  { value: '', label: 'Any AI score' },
+  { value: '70', label: 'AI score 70+', min: 70 },
+  { value: '40', label: 'AI score 40–69', min: 40, max: 69.999 },
+  { value: '0', label: 'AI score under 40', max: 39.999 },
+] as const

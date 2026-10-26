@@ -10,7 +10,7 @@ const route = useRoute()
 
 const TITLES = {
   inbox: 'Inbox', hours: 'Interview availability', jobs: 'Jobs', pipeline: 'Pipeline', stages: 'Workflow', form: 'Application form', details: 'Job details',
-  candidate: 'Candidate', library: 'Templates', team: 'Team', settings: 'Settings', hires: 'Reports', import: 'Import', ai: 'AI', updates: 'Updates', words: 'Glossary',
+  candidate: 'Candidate', library: 'Templates', team: 'Team', settings: 'Settings', hires: 'Reports', import: 'Import', applicants: 'What candidates see', ai: 'AI', updates: 'Updates', words: 'Glossary',
 } as const
 type Topic = keyof typeof TITLES
 
@@ -23,8 +23,8 @@ const PAGE: Record<string, Topic> = {
 }
 const RELATED: Record<Topic, Topic[]> = {
   inbox: ['hours', 'updates'], hours: ['inbox'], updates: ['inbox', 'candidate'], jobs: ['pipeline', 'stages'], pipeline: ['stages', 'candidate'], stages: ['ai'], form: ['stages'],
-  details: ['ai'], candidate: ['pipeline', 'ai'], library: ['stages'], team: ['hours'], settings: ['ai'], hires: ['jobs'],
-  import: ['pipeline'], ai: ['details', 'stages'], words: [],
+  details: ['ai'], candidate: ['pipeline', 'ai', 'applicants'], library: ['stages'], team: ['hours'], settings: ['ai', 'applicants'], hires: ['jobs'],
+  import: ['pipeline'], applicants: ['candidate', 'settings'], ai: ['details', 'stages'], words: [],
 }
 
 const page = computed<Topic>(() => {
@@ -145,7 +145,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .body :deep(h3) { font-size: var(--t-lg); color: var(--ink); line-height: 1.3; }
 .body :deep(h4) { font-size: var(--t-md); color: var(--ink); margin-top: 6px; line-height: 1.3; }
 .body :deep(b) { color: var(--ink); font-weight: 600; }
-.body :deep(ul) { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; }
+.body :deep(ul), .body :deep(ol) { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; }
 .body :deep(li::marker) { color: var(--ink-3); }
 .body :deep(.dia) { position: relative; display: grid; gap: 6px; padding: 14px; border-radius: var(--r-panel); background: var(--sunk); font-size: var(--t-xs); font-weight: 600; color: var(--ink-2); line-height: 1.35; }
 .body :deep(.dia-item) { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border-radius: var(--r-field); background: var(--surface); }

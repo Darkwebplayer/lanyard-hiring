@@ -2,13 +2,12 @@ import { z } from 'zod'
 import { askWhere, assertAiOn, contextFor } from '../../domain/ask'
 
 // What the Ask panel shows before a question: the header chip, placeholder and suggested questions.
-// params arrive as a JSON string (route params of the page).
-const query = askWhere.extend({
-  params: z.string().max(2000).default('{}').transform((s, ctx) => {
-    try { return askWhere.shape.params.parse(JSON.parse(s)) }
-    catch { ctx.addIssue({ code: 'custom', message: 'params must be a JSON object of strings' }); return z.NEVER }
-  }),
+// params and query arrive as JSON strings (the page's route params and URL query).
+const json = z.string().max(2000).default('{}').transform((s, ctx) => {
+  try { return askWhere.shape.params.parse(JSON.parse(s)) }
+  catch { ctx.addIssue({ code: 'custom', message: 'must be a JSON object of strings' }); return z.NEVER }
 })
+const query = askWhere.extend({ params: json, query: json })
 
 export default defineEventHandler(async (event) => {
   const actor = await requireUser(event)

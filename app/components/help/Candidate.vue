@@ -18,6 +18,8 @@
       <li><b>Close as rejected</b> asks a reason from your list and sends no email.</li>
       <li><b>Make offer</b> sends a letter from your Templates. When they accept on the link, they’re hired.</li>
     </ul>
+    <h4>What the candidate sees</h4>
+    <p>Every email to a candidate ends with a private link to their <b>status page</b>. It shows each job they applied to, the stage they’re at (by its “Candidates see” name), and anything waiting on them: booking an interview, sending documents or answering an offer. It moves only when an email goes out. Lost the link? They can ask for it again by email.</p>
   </div>
 </template>
 

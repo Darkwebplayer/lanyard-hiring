@@ -4,7 +4,8 @@ import { STANDARD_HIRE } from '../shared/workflow/templates'
 import type { Db } from '../server/db/client'
 import * as s from '../server/db/schema'
 import type { Viewer } from '../server/domain/applications'
-import { aiState, askStream, assertAiOn, contextFor, fit } from '../server/domain/ask'
+import { readFileSync, readdirSync } from 'node:fs'
+import { aiState, askStream, assertAiOn, contextFor, fit, helpText } from '../server/domain/ask'
 import { DomainError } from '../server/domain/errors'
 import { createJob, publish, saveDraft } from '../server/domain/jobs'
 import { type AutoHandler, type EngineDeps, type Enqueued, executeAutoRun, startApplication, submitTask } from '../server/engine/engine'
@@ -26,8 +27,8 @@ const handlers: Record<string, AutoHandler> = {
 const deps = (): EngineDeps => ({ db, handlers, adminEmail: ADMIN, now: () => t, enqueue: async (i) => { queue.push(...i) } })
 const owner: Viewer = { userId: 'owner', level: 'manager' }
 const emp = (userId: string): Viewer => ({ userId, level: 'employee' })
-const ctx = (viewer: Viewer, route: string, params: Record<string, string>, focus?: string) =>
-  contextFor(db, viewer, { route, params, focus }, ADMIN, t)
+const ctx = (viewer: Viewer, route: string, params: Record<string, string>, focus?: string, query: Record<string, string> = {}) =>
+  contextFor(db, viewer, { route, params, query, focus }, ADMIN, t)
 const rejects = async (p: Promise<unknown>, status: number, message: string) => {
   const e = await p.then(() => null, (err: unknown) => err)
   expect(e).toBeInstanceOf(DomainError)
@@ -85,10 +86,10 @@ describe('access (security)', () => {
       expect(c.scope).toBe('task')
       expect(c.label).toBe('Ben Okafor · Barista')
     }
-    // the manager sees both
+    // the manager's AI gets every scorecard, but protected answers stay out for everyone
     const json = JSON.stringify((await ctx(owner, 'candidates-id', { id: appId })).data)
     expect(json).toContain('I1-SECRET-NOTE')
-    expect(json).toContain('PROTECTED')
+    expect(json).not.toContain('nonbinary-PROTECTED')
   })
 
   it('anyone without a task, and employees on manager pages, get 404 not_found', async () => {
@@ -138,6 +139,35 @@ describe('context', () => {
     expect(task.suggestions[0]).toBe('What should I ask Ben?')
     const other = await ctx(emp('i2'), 'settings', {})
     expect(other).toMatchObject({ label: 'Settings', data: null, anchors: [], suggestions: [] })
+  })
+
+  it('pipeline: pointing at a step lists who stands on it; list view reads the page\'s filters', async () => {
+    const p = await ctx(owner, 'jobs-id', { id: jobId }, 'node:interview')
+    expect(p.data!.pointing_at).toMatchObject({ people: [{ name: 'Ben Okafor' }] })
+    const l = await ctx(owner, 'jobs-id', { id: jobId }, undefined, { view: 'list', q: 'okafor' })
+    expect(l.data).toMatchObject({ view: 'list', list: { matching: 1, filters: { search: 'okafor' }, rows: [{ name: 'Ben Okafor' }] } })
+    expect(JSON.stringify(l.data)).not.toContain('ben@example.test')
+  })
+
+  it('inbox, form, import, library, jobs and settings pages have data', async () => {
+    const inbox = await ctx(emp('i2'), 'inbox', {}, undefined, { list: 'schedule' })
+    expect(inbox.data).toMatchObject({ showing_tab: 'Schedule', tasks: { mine: [{ candidateName: 'Ben Okafor' }] } })
+    expect(inbox.data).toHaveProperty('done_latest')
+    for (const route of ['jobs-id-form', 'import-id']) expect((await ctx(owner, route, { id: jobId })).anchors.map(a => a.id)).toContain('field:cv')
+    expect((await ctx(owner, 'library-flows-id-form', { id: 'standard' })).label).toBe('Standard hire · Form template')
+    expect((await ctx(owner, 'library-offers', {})).data).toMatchObject({ offer_letters: [{ name: 'Standard offer' }] })
+    expect((await ctx(owner, 'jobs', {})).data).toMatchObject({ jobs: [{ title: 'Barista', active: 1 }] })
+    expect((await ctx(owner, 'settings', {})).data).toHaveProperty('settings')
+    await rejects(ctx(emp('i2'), 'jobs-id-form', { id: jobId }), 404, 'not_found')
+  })
+
+  it('every Help topic reads as plain text for the guide', () => {
+    const dir = 'app/components/help'
+    const texts = readdirSync(dir).map(f => helpText(readFileSync(`${dir}/${f}`, 'utf8')))
+    const all = texts.join('\n')
+    expect(all).toContain('Up for grabs')
+    expect(all).not.toMatch(/<\w|\{\{|scoped|@keyframes/)
+    expect(all.length).toBeLessThan(25_000) // all of it goes in every prompt
   })
 
   it('fit cuts long strings, then long lists, under the cap', () => {

@@ -35,6 +35,8 @@ watch(() => route.path, () => {
   focus.value = null
   if (open.value) loadContext()
 })
+// a new tab (inbox ?list=, pipeline ?view=) is new data; search keystrokes are not, the question carries them anyway
+watch(() => [route.query.list, route.query.view], () => { if (open.value) loadContext() })
 
 function onKey(e: KeyboardEvent) {
   if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'j' && show.value) {

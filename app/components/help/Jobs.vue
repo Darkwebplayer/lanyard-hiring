@@ -8,12 +8,15 @@
     </div>
     <p>A job holds the role, its apply form and the <b>workflow</b> each candidate goes through. Nothing reaches candidates until you <b>Publish</b>.</p>
     <h4>Starting a job</h4>
-    <ul>
-      <li><b>AI screening</b>: the AI scores CVs, and you only look at the strong and borderline ones.</li>
-      <li><b>Simple</b>: you review everyone yourself. No AI.</li>
-      <li>Or start from one of <b>your workflow templates</b>, a blank workflow, or a copy of another job (its form and workflow, not its candidates).</li>
-    </ul>
-    <p>You can change any stage later.</p>
+    <p><b>New job</b> walks you through five steps. Anything past the role can wait and be filled in later.</p>
+    <ol>
+      <li><b>The role</b>: the job title and how many <b>Openings</b>. Hiring two of the same role? Make one job with 2 openings.</li>
+      <li><b>How you hire</b>: the workflow. Under <b>New workflow</b>, <b>Describe it in your own words</b> and AI drafts the stages for you to check, pick a ready-made one (<b>AI screening</b> scores CVs so you only look at the strong and borderline ones; <b>Simple</b> has you review everyone, no AI), or <b>Start blank</b>. Under <b>Use existing</b>, start from one of <b>your workflow templates</b>, or <b>Copy another job</b> (its form and workflow, not its candidates).</li>
+      <li><b>About the job</b>: description, location, salary range (shown on the apply page only if you tick it) and a closing date. Leave the date empty to keep it open.</li>
+      <li><b>Must-haves</b>: skills and minimum years of experience. AI screening scores each CV against these.</li>
+      <li><b>Check</b>: what you’re making and what happens to an applicant. Create it, then check the form and Publish.</li>
+    </ol>
+    <p>After that, change anything in the job’s tabs: <b>Pipeline</b>, <b>Workflow</b>, <b>Application form</b> and <b>Job details</b>.</p>
     <h4>What the labels mean</h4>
     <ul>
       <li><b>Draft</b>: not published yet. <b>Live</b>: taking applications. <b>Closed</b>: not taking any. <b>Archived</b>: kept for the record, can’t change.</li>

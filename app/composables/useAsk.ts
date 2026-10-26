@@ -47,8 +47,9 @@ export const useAsk = () => {
 
   const where = () => {
     const r = router.currentRoute.value
-    const params = Object.fromEntries(Object.entries(r.params).map(([k, v]) => [k, Array.isArray(v) ? v.join('/') : String(v)]))
-    return { route: String(r.name ?? ''), params }
+    const flat = (o: object) => Object.fromEntries(Object.entries(o).filter(([, v]) => v != null).map(([k, v]) => [k, Array.isArray(v) ? v.join('/') : String(v)]))
+    // the query says which tab or filter is showing (inbox ?list=, pipeline ?view=list&q=…)
+    return { route: String(r.name ?? ''), params: flat(r.params), query: flat(r.query) }
   }
 
   // GET /api/ask/context, once per page and focus. A new label under a running thread gets a divider.
@@ -60,7 +61,7 @@ export const useAsk = () => {
     ctxKey = key
     ctxLoading.value = true
     reading.value = !ctx.value || JSON.stringify(w) !== ctxPage
-    ctxLoad = api<AskContext>('/api/ask/context', { query: { route: w.route, params: JSON.stringify(w.params), focus: focus.value ?? undefined } })
+    ctxLoad = api<AskContext>('/api/ask/context', { query: { route: w.route, params: JSON.stringify(w.params), query: JSON.stringify(w.query), focus: focus.value ?? undefined } })
       .catch(() => null)
       .then((c) => {
         if (key !== ctxKey) return

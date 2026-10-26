@@ -10,6 +10,12 @@
     </div>
     <p>Each stage is a column on your board. Everyone who reaches it goes through its steps, top to bottom: <b>Automated actions</b>, then <b>Assigned tasks</b>, then <b>Advancement rules</b>.</p>
 
+    <p>Switch between <b>Stage list</b> and <b>Canvas</b> at the top. Both edit the same workflow: the list by stage, the canvas step by step with every arrow.</p>
+    <ul>
+      <li><b>Candidates see</b> is the name a stage has on the candidate’s status page, like “In review”. Stages candidates don’t see reach them only by email.</li>
+      <li><b>Questions for manual moves</b> are asked when someone moves a candidate into the stage by hand.</li>
+    </ul>
+
     <h4 id="manual">Why “Manual review” doesn’t get everyone</h4>
     <div class="bands" role="img" aria-label="A score under 40 goes to Decision, 40 to 69 goes to a person for manual review, 70 and up goes to Interview.">
       <span class="lo">Under 40 · closed</span>

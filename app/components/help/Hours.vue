@@ -9,7 +9,7 @@
           <em>{{ h }}</em><span v-for="d in 5" :key="d" :class="{ pick: h === '10' && d === 3 }" />
         </template>
       </div>
-      <span class="faint">Booked: Wed 10:00. It shows in your inbox.</span>
+      <span class="faint">Booked: Wed 10:00. It shows in Schedule, in your inbox.</span>
     </div>
     <p>When an assigned task lets the candidate book, they get a link and pick a free time <b>inside these hours</b>. Without hours, nobody can book you.</p>
     <ul>

@@ -16,7 +16,7 @@
     <h4>Inviting people</h4>
     <p>Add their email and a role. They sign in with Google using that address and join the list at once. To change an invite’s role, invite the same address again.</p>
     <h4>Roles &amp; permissions</h4>
-    <p>Name roles the way you talk, like “Shift lead”. An assigned task can go to a role, so anyone with it can pick up the task. Deactivating someone signs them out at once. Their history stays, but tasks waiting on them stay too, so reassign those.</p>
+    <p>Name roles the way you talk, like “Shift lead”. An assigned task can go to a role: it waits under <b>Up for grabs</b> in their inbox, and the first to press <b>Take it</b> gets it. Deactivating someone signs them out at once. Their history stays, but tasks waiting on them stay too, so reassign those.</p>
   </div>
 </template>
 
