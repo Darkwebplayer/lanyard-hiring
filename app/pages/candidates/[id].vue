@@ -6,26 +6,8 @@ const route = useRoute()
 const id = computed(() => route.params.id as string)
 const { isManager } = useMe()
 
-const tl = ref<Timeline | null>(null)
-const error = ref<ApiError | null>(null)
-const loading = ref(true)
-async function load() {
-  try {
-    tl.value = await api<Timeline>(`/api/applications/${id.value}`)
-    error.value = null
-  }
-  catch (e) {
-    error.value = e as ApiError
-  }
-  finally {
-    loading.value = false
-  }
-}
-watch(id, () => {
-  tl.value = null
-  loading.value = true
-  load()
-}, { immediate: true })
+const { data: tl, error, refresh: load } = useCached(() => `candidate:${id.value}`, () => api<Timeline>(`/api/applications/${id.value}`))
+const loading = computed(() => !tl.value && !error.value)
 
 // #offer-h, #node:interview (an Updates link): once the page is there, take the person to that part
 watch([tl, () => route.hash], async ([t, hash], [was, wasHash]) => {
@@ -192,7 +174,7 @@ const isUrl = (v: unknown) => typeof v === 'string' && /^https?:\/\/\S+$/.test(v
       <Icon name="alert" :size="28" />
       <h1>Couldn’t load this candidate</h1>
       <p>{{ error.message }}</p>
-      <button class="btn" @click="loading = true; load()"><Icon name="retry" />Retry</button>
+      <button class="btn" @click="load"><Icon name="retry" />Retry</button>
     </div>
 
     <template v-else-if="tl && app">

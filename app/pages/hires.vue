@@ -11,14 +11,7 @@ interface Report {
   hired?: Hire[]
 }
 
-const report = ref<Report | null>(null)
-const error = ref('')
-async function load() {
-  error.value = ''
-  try { report.value = await api<Report>('/api/reports/hires') }
-  catch (e) { error.value = toApiError(e).message }
-}
-load()
+const { data: report, error, refresh: load } = useCached('hires', () => api<Report>('/api/reports/hires'))
 
 const open = (j: Row) => Math.max(j.openings - j.hired, 0)
 // Live jobs first, then the most open seats: that's where hiring work is left.
@@ -52,7 +45,7 @@ const applications = computed(() => (report.value?.jobs ?? []).reduce((s, j) => 
 
     <div v-if="error" class="empty" role="alert">
       <h2>The report didn’t load</h2>
-      <p>{{ error }}</p>
+      <p>{{ error.message }}</p>
       <button class="btn" @click="load"><Icon name="retry" />Try again</button>
     </div>
 

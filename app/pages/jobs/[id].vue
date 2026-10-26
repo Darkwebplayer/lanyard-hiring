@@ -14,7 +14,7 @@ export interface Board {
   counts: { key: string | null, status: 'active' | 'closed', outcome: string | null, n: number, failed: number, overdue: number }[]
   preview: PipelineRow[] // the first five of each group, in list order
 }
-export interface PipelineState { board: Ref<Board | null>, error: Ref<string | null>, load: () => Promise<void> }
+export interface PipelineState { board: Ref<Board | null>, error: Ref<ApiError | null>, load: () => Promise<void> }
 </script>
 
 <script setup lang="ts">
@@ -30,20 +30,11 @@ const job = computed(() => detail.value?.job)
 useHead({ title: () => job.value?.title ?? 'Job' })
 
 // The board counts live here so the tab can show its count; the pipeline tab reads them via inject.
-const board = ref<Board | null>(null)
-const boardError = ref<string | null>(null)
-async function loadBoard() {
-  boardError.value = null
-  try { board.value = await api<Board>(`/api/jobs/${id}/board`) }
-  catch (e) { boardError.value = toApiError(e).message }
-}
+const { data: board, error: boardError, refresh: loadBoard } = useCached(`board:${id}`, () => api<Board>(`/api/jobs/${id}/board`))
 provide<PipelineState>('pipeline', { board, error: boardError, load: loadBoard })
 
-onMounted(() => {
-  // a different job's state may be cached from an earlier visit; refresh either way
-  refresh()
-  loadBoard()
-})
+// the job's own state is kept between visits too; refresh it every time
+onMounted(refresh)
 
 const archived = computed(() => job.value?.status === 'archived')
 const notFound = computed(() => error.value?.status === 404)

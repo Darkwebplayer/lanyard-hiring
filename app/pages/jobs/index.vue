@@ -11,14 +11,7 @@ useHead({ title: 'Jobs' })
 const route = useRoute()
 const router = useRouter()
 
-const jobs = ref<JobRow[] | null>(null)
-const loadError = ref<string | null>(null)
-async function load() {
-  loadError.value = null
-  try { jobs.value = await api<JobRow[]>('/api/jobs') }
-  catch (e) { loadError.value = toApiError(e).message }
-}
-onMounted(load)
+const { data: jobs, error: loadError, refresh: load } = useCached('jobs', () => api<JobRow[]>('/api/jobs'))
 
 const FILTERS = [
   { value: 'all', label: 'All' },
@@ -67,7 +60,7 @@ watch([() => route.query.new, jobs, () => flowPresets.value ?? presetsError.valu
     </header>
 
     <div v-if="loadError" class="form-error" role="alert">
-      <Icon name="alert" />{{ loadError }} <button class="btn btn-sm" @click="load">Retry</button>
+      <Icon name="alert" />{{ loadError.message }} <button class="btn btn-sm" @click="load">Retry</button>
     </div>
 
     <section v-else-if="jobs && !jobs.length" class="panel empty">

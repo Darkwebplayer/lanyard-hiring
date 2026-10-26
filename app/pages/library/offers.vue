@@ -6,14 +6,7 @@ const toast = useToast()
 
 interface Template { id: string | null, name: string, body: string, builtIn?: boolean, createdAt?: string }
 
-const list = ref<Template[] | null>(null)
-const error = ref('')
-async function refresh() {
-  error.value = ''
-  try { list.value = await api<Template[]>('/api/offer-templates') }
-  catch (e) { error.value = toApiError(e).message }
-}
-refresh()
+const { data: list, error, refresh } = useCached('offer-templates', () => api<Template[]>('/api/offer-templates'))
 
 // The holes a letter can use; filled when an offer is made. Samples drive the preview: the company's own name,
 // otherwise plain made-up Singapore-style details. Dates read as the letter writes them.
@@ -144,7 +137,7 @@ async function confirmDelete() {
 
     <div v-if="error && !list" class="empty" role="alert">
       <h2>The offer letters didn’t load</h2>
-      <p>{{ error }}</p>
+      <p>{{ error.message }}</p>
       <button type="button" class="btn" @click="refresh"><Icon name="retry" />Try again</button>
     </div>
 

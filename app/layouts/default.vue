@@ -36,6 +36,7 @@ async function signOut() {
   await createAuthClient().signOut()
   me.value = null
   await navigateTo('/login')
+  clearNuxtState() // the next person to sign in here never sees this one's cached pages
 }
 </script>
 

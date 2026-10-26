@@ -11,21 +11,14 @@ const LEVELS: { value: RoleLevel, label: string }[] = [
   { value: 'employee', label: 'Employee: only their own tasks' },
 ]
 
-const users = ref<User[] | null>(null)
-const invites = ref<Invite[]>([])
-const roles = ref<Role[]>([])
-const loadError = ref('')
-async function load() {
-  loadError.value = ''
-  try {
-    const [u, r] = await Promise.all([api<{ users: User[], invites: Invite[] }>('/api/users'), api<Role[]>('/api/roles')])
-    users.value = u.users
-    invites.value = u.invites
-    roles.value = r
-  }
-  catch (e) { loadError.value = toApiError(e).message }
-}
-load()
+const { data, error: loadError, refresh: load } = useCached('team', async () => {
+  const [u, roles] = await Promise.all([api<{ users: User[], invites: Invite[] }>('/api/users'), api<Role[]>('/api/roles')])
+  return { ...u, roles }
+})
+// the lists below write back into the cached answer; nothing to write into until it's in
+const users = computed<User[] | null>({ get: () => data.value?.users ?? null, set: v => data.value && v && (data.value.users = v) })
+const invites = computed<Invite[]>({ get: () => data.value?.invites ?? [], set: v => data.value && (data.value.invites = v) })
+const roles = computed<Role[]>({ get: () => data.value?.roles ?? [], set: v => data.value && (data.value.roles = v) })
 
 const sortedRoles = computed(() => [...roles.value].sort((a, b) => a.name.localeCompare(b.name)))
 // Admin first, then by name. Not by active: a row that jumps when switched off puts the next click on someone else.
@@ -157,7 +150,7 @@ async function addRole() {
 
     <div v-if="loadError" class="empty" role="alert">
       <h2>The team didn’t load</h2>
-      <p>{{ loadError }}</p>
+      <p>{{ loadError.message }}</p>
       <button class="btn" @click="load"><Icon name="retry" />Try again</button>
     </div>
 

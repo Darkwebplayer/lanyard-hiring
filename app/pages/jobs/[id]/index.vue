@@ -28,7 +28,7 @@ const nameOf = (uid: string) => names.value.get(uid)
 <template>
   <div>
     <div v-if="error" class="form-error" role="alert">
-      <Icon name="alert" />{{ error }} <button class="btn btn-sm" @click="load">Retry</button>
+      <Icon name="alert" />{{ error.message }} <button class="btn btn-sm" @click="load">Retry</button>
     </div>
 
     <div v-else-if="!board || !detail" class="panel" aria-busy="true">
