@@ -29,6 +29,7 @@ const MESSAGES: Record<string, string> = {
   already_applied: 'You’ve already applied for this job with this email.',
   invalid_scorecard: 'Some scorecard answers need another look.',
   already_submitted: 'You’ve already submitted this scorecard.',
+  task_taken: 'Someone else took this task first.',
   task_closed: 'This task has finished or moved on, so it can’t take changes.',
   node_not_in_version: 'That step isn’t in the workflow this candidate is on.',
   already_closed: 'This application is already closed. Reopen it first.',

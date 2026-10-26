@@ -1,4 +1,4 @@
-import { type AnyColumn, type SQL, and, asc, count, desc, eq, ilike, inArray, isNotNull, isNull, lte, notInArray, or, sql } from 'drizzle-orm'
+import { type AnyColumn, type SQL, and, asc, count, desc, eq, gte, ilike, inArray, isNotNull, isNull, lte, notInArray, or, sql } from 'drizzle-orm'
 import type { FormField, Graph } from '../../shared/workflow/types'
 import type { Db } from '../db/client'
 import { applicationEvents, applications, candidates, jobs, jobVersions, nodeRuns, offers, taskAssignments, user } from '../db/schema'
@@ -11,6 +11,10 @@ export interface Viewer { userId: string, level: Level }
 // An assignment grants access while it is open, or for good once its holder submitted.
 // Removed (or moved-away) assignees who never submitted lose access.
 export const holdsAssignment = or(isNull(taskAssignments.closedAt), isNotNull(taskAssignments.submittedAt))
+
+// Still on the task when it ended (or now): not passed, let go or taken off before then. Needs node_runs joined.
+// Whose calendar a booked interview belongs to.
+export const heldThrough = or(holdsAssignment, and(eq(nodeRuns.status, 'completed'), gte(taskAssignments.closedAt, nodeRuns.completedAt)))
 
 // Managers see every application; others only those they hold a task on. Anything else is 404 so ids don't leak.
 export async function assertCanSee(db: Db, viewer: Viewer, applicationId: string) {

@@ -88,12 +88,13 @@ describe('panel through the inbox', () => {
   it('two assignees finish a blind panel and the flow continues; the third is closed out', async () => {
     const id = await apply(await panelJob())
     const run = await taskOf(id)
+    // three for a panel of two: up for grabs until two take it (a scorecard counts as taking it)
     for (const u of ['i1', 'i2', 'i3']) {
-      const { mine } = await listTasks(db, emp(u), ADMIN, t)
-      expect(mine.map(m => m.runId)).toContain(run.id)
-      expect(mine.find(m => m.runId === run.id)).toMatchObject({ title: expect.stringMatching(/^Interview Jane Doe/), overdue: false })
+      const { mine, open } = await listTasks(db, emp(u), ADMIN, t)
+      expect(mine).toEqual([])
+      expect(open.find(m => m.runId === run.id)).toMatchObject({ title: expect.stringMatching(/^Interview Jane Doe/), overdue: false, grab: { need: 2, taken: [] } })
     }
-    expect((await listTasks(db, emp('outsider'), ADMIN, t)).mine).toEqual([])
+    expect(await listTasks(db, emp('outsider'), ADMIN, t)).toMatchObject({ mine: [], open: [] })
     await rejects(getTask(db, emp('outsider'), run.id, t), 404, 'task_not_found')
 
     await submitTask(deps(), run.id, 'i1', score)
@@ -111,7 +112,7 @@ describe('panel through the inbox', () => {
     expect(await submitTask(deps(), run.id, 'i2', { technical: 5, communication: 4, hire: true })).toEqual({ completed: true })
     await drain()
     expect(await db.query.applications.findFirst({ where: eq(s.applications.id, id) })).toMatchObject({ status: 'active', currentNodeKey: 'make_offer' })
-    expect((await listTasks(db, emp('i3'), ADMIN, t)).mine.map(m => m.runId)).not.toContain(run.id)
+    expect(await listTasks(db, emp('i3'), ADMIN, t)).toMatchObject({ mine: [], open: [] })
     // i3 was closed out without submitting: no access any more; i1 keeps it
     await rejects(getTask(db, emp('i3'), run.id, t), 404, 'task_not_found')
     await rejects(timeline(db, emp('i3'), id, t), 404, 'application_not_found')
@@ -191,9 +192,9 @@ describe('manager inbox', () => {
       expect(ids('stuck')).toContain(stuckApp)
 
       const forI1 = await listTasks(db, emp('i1'), ADMIN, later)
-      expect(Object.keys(forI1)).toEqual(['mine', 'calledOff'])
-      expect(forI1.mine.map(r => r.applicationId)).toContain(overdueApp)
-      expect(forI1.mine.map(r => r.applicationId)).not.toContain(blockedApp) // already submitted
+      expect(Object.keys(forI1)).toEqual(['mine', 'open', 'calledOff'])
+      expect(forI1.open.map(r => r.applicationId)).toContain(overdueApp) // a panel of 2 from 3: up for grabs
+      expect([...forI1.mine, ...forI1.open].map(r => r.applicationId)).not.toContain(blockedApp) // already submitted
     }
     finally {
       await setActive('i2', true)

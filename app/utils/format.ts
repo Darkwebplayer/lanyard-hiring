@@ -14,6 +14,9 @@ export function fmtDate(iso: string | Date | null | undefined) {
   return (d.getFullYear() === new Date().getFullYear() ? dayMonth : dayMonthYear).format(d)
 }
 
+// "2:00 pm", in the viewer's zone
+export const fmtTime = (iso: string | Date) => time.format(new Date(iso))
+
 export function fmtDateTime(iso: string | Date | null | undefined) {
   if (!iso) return ''
   return `${fmtDate(iso)}, ${time.format(new Date(iso))}`

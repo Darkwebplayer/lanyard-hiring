@@ -237,6 +237,9 @@ export const taskAssignments = pgTable('task_assignments', {
   submittedAt: ts('submitted_at'),
   values: jsonb('values'),
   closedAt: ts('closed_at'),
+  // Sent to more people than the step needs: each one takes it (claimedAt) or passes (passedAt, also closed).
+  claimedAt: ts('claimed_at'),
+  passedAt: ts('passed_at'),
 }, t => [
   primaryKey({ columns: [t.runId, t.userId] }),
   index('task_assignments_user_idx').on(t.userId, t.closedAt),

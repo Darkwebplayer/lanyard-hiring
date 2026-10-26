@@ -1,0 +1,690 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lanyard Inbox Mocks</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Mock of the Lanyard Inbox: tasks you can take, your schedule, what you did. Tokens copied from app/assets/css/main.css. */
+:root {
+  color-scheme: light;
+  --bg: oklch(0.974 0.004 330); --surface: oklch(1 0 0); --sunk: oklch(0.955 0.005 330); --hover: oklch(0.944 0.006 330);
+  --ink: oklch(0.24 0.018 330); --ink-2: oklch(0.46 0.016 330); --ink-3: oklch(0.53 0.012 330);
+  --line: oklch(0.912 0.008 330); --line-2: oklch(0.86 0.01 330);
+  --accent: oklch(0.55 0.21 352); --accent-press: oklch(0.49 0.2 352); --accent-ink: oklch(0.47 0.19 352); --accent-tint: oklch(0.955 0.03 352); --accent-line: oklch(0.86 0.08 352);
+  --ok: oklch(0.5 0.12 155); --ok-tint: oklch(0.955 0.04 155); --warn: oklch(0.5 0.1 70); --warn-tint: oklch(0.962 0.05 85);
+  --bad: oklch(0.52 0.19 27); --bad-tint: oklch(0.958 0.03 27); --machine: oklch(0.34 0.02 330);
+  --white: #fff;
+  --shadow-1: 0 1px 0 0 oklch(1 0 0 / 0.9) inset, 0 1px 2px oklch(0.3 0.04 330 / 0.07);
+  --shadow-2: 0 1px 0 0 oklch(1 0 0 / 0.9) inset, 0 1px 2px oklch(0.3 0.04 330 / 0.07), 0 10px 28px -12px oklch(0.3 0.04 330 / 0.18);
+  --shadow-3: 0 2px 4px oklch(0.3 0.04 330 / 0.08), 0 24px 48px -16px oklch(0.3 0.04 330 / 0.28);
+  --font: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  --t-xs: 0.75rem; --t-sm: 0.8125rem; --t-md: 0.875rem; --t-lg: 1rem; --t-xl: 1.25rem; --t-2xl: 1.625rem;
+  --r-field: 10px; --r-card: 20px; --r-panel: 14px; --r-pill: 999px;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1); --t-micro: 140ms; --t-move: 220ms;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 400 var(--t-md)/1.45 var(--font); -webkit-font-smoothing: antialiased; }
+h1, h2, h3, h4 { margin: 0; font-weight: 600; text-wrap: balance; }
+p { margin: 0; text-wrap: pretty; }
+svg { display: block; flex: none; }
+button, input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+[hidden] { display: none !important; }
+
+/* ---- the page around the mock ---- */
+.doc { max-width: 1480px; margin: 0 auto; padding: 32px 16px 64px; display: grid; gap: 20px; }
+.doc-head { display: grid; gap: 8px; max-width: 78ch; }
+.doc-head h1 { font-size: var(--t-2xl); letter-spacing: -0.015em; }
+.doc-head p { color: var(--ink-2); }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.tabs button { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 14px; border: 0; border-radius: var(--r-pill); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-2); font-weight: 600; cursor: pointer; }
+.tabs button b { font: 500 var(--t-xs) var(--mono); color: var(--ink-3); }
+.tabs button[aria-pressed="true"] { background: var(--ink); color: var(--white); box-shadow: none; }
+.tabs button[aria-pressed="true"] b { color: oklch(1 0 0 / 0.6); }
+.note { display: grid; gap: 6px; max-width: 96ch; padding: 14px 16px; border-radius: var(--r-panel); background: var(--surface); border: 1px solid var(--line); }
+.note h2 { font-size: var(--t-lg); }
+.note ul { margin: 0; padding-left: 1.2em; color: var(--ink-2); display: grid; gap: 4px; }
+.note li strong { color: var(--ink); }
+.scroll { overflow-x: auto; border-radius: 16px; box-shadow: var(--shadow-3); border: 1px solid var(--line-2); }
+
+/* ---- app window ---- */
+.app { width: 1440px; height: 880px; display: grid; grid-template-columns: 88px 420px minmax(0, 1fr); background: var(--bg); overflow: hidden; position: relative; }
+.rail { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 14px 0 16px; border-right: 1px solid var(--line); }
+.mark { display: grid; justify-items: center; gap: 4px; padding: 8px 6px 14px; }
+.mark i { position: relative; width: 30px; height: 36px; border-radius: 9px; background: var(--ink); }
+.mark i::before { content: ""; position: absolute; top: 6px; left: 50%; translate: -50% 0; width: 12px; height: 4px; border-radius: 4px; background: var(--accent); }
+.mark span { font-size: 11px; font-weight: 700; }
+.rail a { display: grid; justify-items: center; gap: 4px; width: 72px; padding: 8px 0 7px; border-radius: 16px; color: var(--ink-2); font-size: var(--t-xs); font-weight: 600; text-decoration: none; }
+.rail .ico { position: relative; display: grid; place-items: center; width: 44px; height: 30px; border-radius: var(--r-pill); }
+.rail a.cur { color: var(--ink); }
+.rail a.cur .ico { background: var(--surface); box-shadow: var(--shadow-1), 0 0 0 1px var(--line); color: var(--accent-ink); }
+.rail .count { position: absolute; top: -3px; right: -2px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--accent); color: var(--white); font-size: 10.5px; line-height: 18px; text-align: center; box-shadow: 0 0 0 2px var(--bg); }
+.rail .spacer { flex: 1; }
+.avatar { --s: 32px; width: var(--s); height: var(--s); border-radius: 50%; display: inline-grid; place-items: center; font-weight: 600; font-size: calc(var(--s) * 0.38); background: var(--accent-tint); color: var(--accent-ink); flex: none; }
+
+/* ---- shared pieces ---- */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 38px; padding: 0 18px; border: 0; border-radius: var(--r-pill); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-2); font-weight: 600; white-space: nowrap; cursor: pointer; text-decoration: none; color: var(--ink); transition: background var(--t-micro) var(--ease), scale var(--t-micro) var(--ease); }
+.btn:hover { background: var(--hover); }
+.btn:active { scale: 0.97; }
+.btn svg { width: 16px; height: 16px; }
+.btn-sm { height: 30px; padding: 0 12px; font-size: var(--t-sm); gap: 6px; }
+.btn-sm svg { width: 14px; height: 14px; }
+.btn-lg { height: 46px; padding: 0 24px; font-size: var(--t-lg); }
+.btn-primary { background: var(--accent); color: var(--white); box-shadow: 0 1px 0 0 oklch(1 0 0 / 0.25) inset, 0 1px 2px oklch(0.4 0.15 352 / 0.3); }
+.btn-primary:hover { background: var(--accent-press); }
+.btn-quiet { background: transparent; box-shadow: none; color: var(--ink-2); }
+.chip { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px; border-radius: var(--r-pill); font-size: var(--t-xs); font-weight: 600; white-space: nowrap; background: var(--sunk); color: var(--ink-2); }
+.chip svg { width: 12px; height: 12px; }
+.chip-ok { background: var(--ok-tint); color: var(--ok); }
+.chip-accent { background: var(--accent-tint); color: var(--accent-ink); }
+.chip-warn { background: var(--warn-tint); color: var(--warn); }
+.card { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-card); box-shadow: var(--shadow-2); min-width: 0; }
+[data-slot]::before { content: ""; position: absolute; top: 9px; left: 50%; translate: -50% 0; width: 30px; height: 5px; border-radius: 9px; background: var(--line-2); transition: background var(--t-move) var(--ease), width var(--t-move) var(--ease); }
+[data-slot="accent"]::before { background: var(--accent); }
+[data-slot="ok"]::before { background: var(--ok); }
+.muted { color: var(--ink-2); } .faint { color: var(--ink-3); }
+.kbd { font: 500 var(--t-xs) var(--mono); padding: 1px 6px; border-radius: 6px; background: var(--sunk); box-shadow: inset 0 -1px 0 var(--line-2); color: var(--ink-2); }
+.seg { display: inline-flex; padding: 3px; gap: 2px; background: var(--sunk); border-radius: var(--r-pill); }
+.seg button { white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 14px; border: 0; border-radius: var(--r-pill); background: none; font-weight: 600; font-size: var(--t-sm); color: var(--ink-2); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-1), 0 0 0 1px var(--line); }
+.seg .n { font-weight: 600; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.seg .n-bad { color: var(--bad); }
+
+/* ---- list column ---- */
+.list { display: flex; flex-direction: column; border-right: 1px solid var(--line); padding: 0 12px; overflow-y: auto; min-height: 0; }
+.list-head { position: sticky; top: 0; z-index: 1; display: grid; gap: 14px; padding: 28px 8px 14px; background: var(--bg); }
+.list-head h1 { font-size: var(--t-2xl); letter-spacing: -0.015em; }
+.sec { display: flex; gap: 8px; align-items: baseline; margin: 18px 8px 2px; font-size: var(--t-sm); font-weight: 600; color: var(--ink-2); }
+.sec:first-child { margin-top: 2px; }
+.sec-hint { margin: 0 8px 6px; font-size: var(--t-xs); color: var(--ink-3); }
+.rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.row { position: relative; display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; grid-template-areas: "av title title" "av job due"; gap: 2px 12px; align-items: center; padding: 10px 12px; border-radius: var(--r-panel); color: var(--ink); text-decoration: none; cursor: pointer; transition: background var(--t-micro) var(--ease), opacity var(--t-move) var(--ease), translate var(--t-move) var(--ease); }
+.row:hover { background: var(--hover); }
+.row .avatar { grid-area: av; align-self: start; margin-top: 2px; }
+.row .title { grid-area: title; font-weight: 600; line-height: 1.3; }
+.row .job { grid-area: job; color: var(--ink-2); font-size: var(--t-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row .due { grid-area: due; }
+.row.current { background: var(--accent-tint); }
+.row.current::before { content: ""; position: absolute; left: 0; top: 50%; translate: -0 -50%; width: 4px; height: 22px; border-radius: 4px; background: var(--accent); }
+/* up for grabs: nobody holds it yet, so the avatar is an empty outline, the badge without a face */
+.row.open .avatar { background: transparent; box-shadow: inset 0 0 0 1.5px var(--line-2); color: var(--ink-3); }
+.row.open.current .avatar { box-shadow: inset 0 0 0 1.5px var(--accent-line); color: var(--accent-ink); }
+.row.leaving { opacity: 0; translate: 0 -6px; }
+.row.arriving { animation: arrive var(--t-move) var(--ease); }
+@keyframes arrive { from { opacity: 0; translate: 0 -8px; background: var(--accent-tint); } }
+.row .who { grid-column: 2 / -1; display: flex; align-items: center; gap: 6px; font-size: var(--t-xs); color: var(--ink-3); }
+.stack { display: inline-flex; }
+.stack .avatar { --s: 18px; font-size: 8px; box-shadow: 0 0 0 2px var(--bg); background: var(--sunk); color: var(--ink-2); }
+.stack .avatar + .avatar { margin-left: -5px; }
+.list-foot { position: sticky; bottom: 0; margin-top: auto; display: flex; gap: 6px; align-items: center; padding: 14px 8px 18px; background: linear-gradient(transparent, var(--bg) 35%); font-size: var(--t-sm); color: var(--ink-3); }
+
+/* schedule list */
+.day { display: grid; gap: 2px; }
+.day-h { display: flex; justify-content: space-between; align-items: baseline; margin: 18px 8px 4px; font-size: var(--t-sm); font-weight: 600; color: var(--ink-2); }
+.day:first-child .day-h { margin-top: 2px; }
+.day-h .today { color: var(--accent-ink); }
+.slot-row { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; gap: 0 12px; align-items: baseline; padding: 10px 12px; border-radius: var(--r-panel); cursor: pointer; position: relative; }
+.slot-row:hover { background: var(--hover); }
+.slot-row.current { background: var(--accent-tint); }
+.slot-row.current::before { content: ""; position: absolute; left: 0; top: 50%; translate: 0 -50%; width: 4px; height: 22px; border-radius: 4px; background: var(--accent); }
+.slot-row time { grid-row: span 2; font: 600 var(--t-md) var(--font); font-variant-numeric: tabular-nums; }
+.slot-row time small { display: block; font-weight: 500; font-size: var(--t-xs); color: var(--ink-3); }
+.slot-row .t { font-weight: 600; }
+.slot-row .s { font-size: var(--t-sm); color: var(--ink-2); grid-column: 2; }
+.slot-row .past { color: var(--ink-3); }
+.free { margin: 0 8px; padding: 8px 12px; border-radius: var(--r-panel); border: 1px dashed var(--line-2); font-size: var(--t-sm); color: var(--ink-3); }
+.hours-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 22px 8px 0; padding: 12px 14px; border-radius: var(--r-panel); background: var(--surface); border: 1px solid var(--line); font-size: var(--t-sm); }
+.hours-line a { color: var(--accent-ink); font-weight: 600; text-decoration: none; }
+
+/* done list */
+.search { position: relative; }
+.search svg { position: absolute; left: 12px; top: 50%; translate: 0 -50%; color: var(--ink-3); width: 16px; height: 16px; }
+.search input { width: 100%; height: 38px; padding: 0 12px 0 36px; border: 1px solid var(--line-2); border-radius: var(--r-field); background: var(--surface); }
+.row.done { grid-template-areas: "av title when" "av job due"; }
+.row .when { grid-area: when; justify-self: end; font-size: var(--t-xs); color: var(--ink-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.row.done .avatar { background: var(--sunk); color: var(--ink-2); }
+.row.passed { color: var(--ink-3); }
+.row.passed .title { font-weight: 500; }
+
+/* ---- detail ---- */
+.detail { min-width: 0; padding: 28px 40px 48px; overflow-y: auto; }
+.detail > * { max-width: 760px; }
+.said { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; padding: 10px 16px; border-radius: var(--r-panel); background: var(--ok-tint); color: var(--ok); font-weight: 600; animation: arrive var(--t-move) var(--ease); }
+.said .undo { margin-left: auto; color: var(--ink); background: none; border: 0; font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 0.18em; }
+.task { padding: 30px 30px 26px; display: grid; gap: 22px; }
+.task-head { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 4px 14px; align-items: center; }
+.task-head .avatar { --s: 44px; grid-row: span 2; }
+.task-head h2 { font-size: var(--t-xl); letter-spacing: -0.01em; }
+.task-head .sub { color: var(--ink-2); font-size: var(--t-sm); grid-column: 2; }
+.task-head .chip { grid-row: 1; grid-column: 3; }
+.facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; border: 1px solid var(--line); border-radius: var(--r-panel); }
+.facts div { padding: 12px 14px; display: grid; gap: 2px; }
+.facts div + div { border-left: 1px solid var(--line); }
+.facts dt { font-size: var(--t-xs); color: var(--ink-3); font-weight: 600; }
+.facts dd { margin: 0; font-weight: 600; }
+.facts dd small { display: block; font-weight: 400; color: var(--ink-2); font-size: var(--t-sm); }
+.qs { display: flex; flex-wrap: wrap; gap: 6px; }
+.lbl { font-size: var(--t-sm); font-weight: 600; color: var(--ink); margin-bottom: 8px; display: flex; justify-content: space-between; align-items: baseline; }
+.lbl span { font-weight: 400; color: var(--ink-2); }
+
+/* the week beside the decision: seven days, your booked interviews as marks */
+.week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.wd { display: grid; grid-template-rows: auto 1fr; gap: 6px; padding: 8px 8px 10px; border-radius: 12px; background: var(--sunk); min-height: 112px; }
+.wd b { font-size: var(--t-xs); font-weight: 600; color: var(--ink-2); display: flex; justify-content: space-between; }
+.wd b i { font-style: normal; color: var(--ink-3); font-weight: 500; font-variant-numeric: tabular-nums; }
+.wd.today { background: var(--surface); box-shadow: inset 0 0 0 1px var(--accent-line); }
+.wd.today b { color: var(--accent-ink); }
+.wd.off { background: repeating-linear-gradient(135deg, var(--sunk) 0 6px, var(--bg) 6px 12px); }
+.wd .ev { display: grid; gap: 4px; align-content: start; }
+.wd .ev span { display: block; padding: 3px 6px; border-radius: 6px; background: var(--accent-tint); color: var(--accent-ink); font-size: 11px; line-height: 1.3; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wd .ev span small { display: block; font-weight: 400; color: var(--ink); }
+.wd.due { box-shadow: inset 0 0 0 1.5px var(--warn); }
+.wd.due::after { content: "Due"; justify-self: start; align-self: end; font-size: 10.5px; font-weight: 600; color: var(--warn); }
+.week-say { margin-top: 8px; font-size: var(--t-sm); color: var(--ink-2); }
+.act { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding-top: 4px; border-top: 1px solid var(--line); padding-top: 20px; }
+.act .faint { font-size: var(--t-sm); margin-left: 6px; }
+.answers { display: grid; gap: 0; border: 1px solid var(--line); border-radius: var(--r-panel); }
+.answers div { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 12px; padding: 12px 14px; }
+.answers div + div { border-top: 1px solid var(--line); }
+.answers dt { color: var(--ink-2); }
+.answers dd { margin: 0; font-weight: 600; }
+.answers dd.text { font-weight: 400; }
+.mgr { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-radius: var(--r-panel); background: var(--sunk); font-size: var(--t-sm); color: var(--ink-2); }
+.mgr .btn { margin-left: auto; }
+.now { display: flex; gap: 8px; align-items: center; font-size: var(--t-sm); color: var(--ink-2); }
+
+/* ---- everyone's schedule: people on the left, the week as a calendar on the right ---- */
+.sub-seg { justify-self: start; }
+.sub-seg button { height: 26px; padding: 0 12px; }
+.people { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.people label { display: grid; grid-template-columns: 18px 28px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 12px; border-radius: var(--r-panel); cursor: pointer; }
+.people label:hover { background: var(--hover); }
+.people input { appearance: none; margin: 0; width: 18px; height: 18px; border-radius: 6px; border: 1.5px solid var(--line-2); background: var(--surface); display: grid; place-content: center; cursor: pointer; }
+.people input:checked { background: var(--accent); border-color: var(--accent); }
+.people input:checked::before { content: ""; width: 10px; height: 10px; background: #fff; clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%); }
+.people .avatar { --s: 28px; }
+.people .nm { font-weight: 600; }
+.people .nm small { display: block; font-weight: 400; font-size: var(--t-xs); color: var(--ink-3); }
+.people .ct { font-size: var(--t-sm); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.people .off { color: var(--ink-3); }
+.cal-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.cal-head h2 { font-size: var(--t-xl); margin-right: auto; }
+.cal-head .btn-icon { width: 30px; padding: 0; }
+.cal { --hr: 70px; position: relative; display: grid; grid-template-columns: 52px repeat(5, minmax(0, 1fr)) repeat(2, minmax(0, 0.45fr)); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-card); box-shadow: var(--shadow-1); overflow: hidden; max-width: none !important; }
+.cal .dh { padding: 10px 10px 8px; font-size: var(--t-sm); font-weight: 600; color: var(--ink-2); border-bottom: 1px solid var(--line); border-left: 1px solid var(--line); display: flex; justify-content: space-between; }
+.cal .dh i { font-style: normal; font-weight: 500; color: var(--ink-3); }
+.cal .dh.today { color: var(--accent-ink); }
+.cal .gut { border-bottom: 1px solid var(--line); }
+.cal .times { position: relative; height: calc(var(--hr) * 8); }
+.cal .times span { position: absolute; right: 8px; translate: 0 -50%; font-size: var(--t-xs); color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.cal .col { position: relative; height: calc(var(--hr) * 8); border-left: 1px solid var(--line); background: repeating-linear-gradient(to bottom, transparent 0 calc(var(--hr) - 1px), var(--line) calc(var(--hr) - 1px) var(--hr)); }
+.cal .col.today { background-color: oklch(0.985 0.01 352); }
+.cal .col.wknd { background-color: var(--sunk); }
+.cal .now { position: absolute; left: 0; right: 0; height: 2px; background: var(--accent); z-index: 2; }
+.cal .now::before { content: ""; position: absolute; left: -4px; top: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.ev2 { position: absolute; left: 4px; right: 4px; display: grid; align-content: start; gap: 1px; padding: 5px 7px; border-radius: 8px; background: var(--accent-tint); color: var(--ink); font-size: 11.5px; line-height: 1.25; overflow: hidden; cursor: pointer; border: 0; text-align: left; }
+.ev2:hover { background: oklch(0.93 0.05 352); }
+.ev2 b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ev2 .by { display: flex; align-items: center; gap: 5px; color: var(--ink-2); }
+.ev2 .by .avatar { --s: 16px; font-size: 7.5px; background: var(--surface); }
+.ev2.past { background: var(--sunk); color: var(--ink-3); }
+.ev2.past .by { color: var(--ink-3); }
+.ev2.sel { box-shadow: 0 0 0 2px var(--accent); }
+.ev2.short { grid-template-columns: 16px minmax(0, 1fr); align-items: center; gap: 5px; padding-block: 3px; }
+.ev2.short .avatar { --s: 16px; font-size: 7.5px; background: var(--surface); }
+.ev2.half { right: 50%; } .ev2.half2 { left: 50%; }
+.pop { position: absolute; z-index: 5; width: 300px; padding: 16px; display: grid; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-panel); box-shadow: var(--shadow-3); }
+.pop h3 { font-size: var(--t-lg); }
+.pop dl { margin: 0; display: grid; grid-template-columns: 64px 1fr; gap: 4px 10px; font-size: var(--t-sm); }
+.pop dt { color: var(--ink-3); } .pop dd { margin: 0; }
+.pop .row-btns { display: flex; gap: 6px; }
+.cal-foot { display: flex; gap: 8px; align-items: center; margin-top: 12px; font-size: var(--t-sm); color: var(--ink-2); max-width: none !important; }
+.cal-foot a { color: var(--accent-ink); font-weight: 600; text-decoration: none; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-inbox" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13h4l1.5 2.5h5L16 13h4"/><path d="M5 6.5 4 13v5h16v-5l-1-6.5A1.5 1.5 0 0 0 17.5 5h-11A1.5 1.5 0 0 0 5 6.5Z"/></symbol>
+  <symbol id="i-jobs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="7" width="16" height="12" rx="2.5"/><path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7M4 12h16"/></symbol>
+  <symbol id="i-lib" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h4v16H5zM10 4h4v16h-4zM15.5 5l3.6-.8 3 15.4-3.6.8z"/></symbol>
+  <symbol id="i-hires" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8v5a4 4 0 0 1-8 0V4ZM12 13v4M8.5 20h7M8 6H5v1.5A2.5 2.5 0 0 0 7.5 10M16 6h3v1.5a2.5 2.5 0 0 1-2.5 2.5"/></symbol>
+  <symbol id="i-team" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M15.5 5.6a3.2 3.2 0 0 1 0 5.8M17.5 14.2A5.5 5.5 0 0 1 20.5 19"/></symbol>
+  <symbol id="i-set" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/></symbol>
+  <symbol id="i-ask" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5.5h14a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5h-7l-4.5 3.5v-3.5H5A1.5 1.5 0 0 1 3.5 16V7A1.5 1.5 0 0 1 5 5.5Z"/><path d="M10 9.6a2 2 0 1 1 2.6 1.9c-.4.2-.6.5-.6 1V13M12 15.2v.1"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M8.5 12.2 11 14.6l4.6-5"/></symbol>
+  <symbol id="i-person" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l2.5 2"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5.5" width="16" height="14" rx="2.5"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.5-4.5"/></symbol>
+  <symbol id="i-hand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 12V6.5a1.5 1.5 0 0 1 3 0V11M11 10.5V5a1.5 1.5 0 0 1 3 0v5.5M14 10.5V6.5a1.5 1.5 0 0 1 3 0V14a6 6 0 0 1-6 6h-.5a6 6 0 0 1-4.6-2.2L4 15.2a1.5 1.5 0 0 1 2.3-1.9L8 15"/></symbol>
+</svg>
+
+<template id="rail">
+  <nav class="rail" aria-label="Main">
+    <div class="mark"><i></i><span>Lanyard</span></div>
+    <a href="#" class="cur"><span class="ico"><svg width="20" height="20"><use href="#i-inbox"/></svg><b class="count">2</b></span>Inbox</a>
+    <a href="#"><span class="ico"><svg width="20" height="20"><use href="#i-jobs"/></svg></span>Jobs</a>
+    <a href="#"><span class="ico"><svg width="20" height="20"><use href="#i-lib"/></svg></span>Library</a>
+    <a href="#"><span class="ico"><svg width="20" height="20"><use href="#i-hires"/></svg></span>Hires</a>
+    <a href="#"><span class="ico"><svg width="20" height="20"><use href="#i-team"/></svg></span>Team</a>
+    <a href="#"><span class="ico"><svg width="20" height="20"><use href="#i-set"/></svg></span>Settings</a>
+    <span class="spacer"></span>
+    <a href="#"><span class="ico"><svg width="20" height="20"><use href="#i-ask"/></svg></span>Ask</a>
+    <span class="avatar" style="--s:36px">MR</span>
+  </nav>
+</template>
+
+<div class="doc">
+  <header class="doc-head">
+    <h1>Inbox: take a task, see your week, look back</h1>
+    <p>Mock for approval, no code changed yet. Seen as Maya Reyes, a Shift lead (employee), on Monday 26 October. The last tab shows a manager. In the first tab, try <b>Take it</b> and <b>Not for me</b>.</p>
+  </header>
+
+  <div class="tabs" role="group" aria-label="Mock">
+    <button type="button" aria-pressed="true" data-f="tasks"><b>1</b>Tasks: take or pass</button>
+    <button type="button" aria-pressed="false" data-f="sched"><b>2</b>Schedule</button>
+    <button type="button" aria-pressed="false" data-f="done"><b>3</b>Done (employee)</button>
+    <button type="button" aria-pressed="false" data-f="mgr"><b>4</b>Done (manager)</button>
+    <button type="button" aria-pressed="false" data-f="all"><b>5</b>Everyone’s schedule (manager)</button>
+  </div>
+
+  <!-- 1 TASKS -->
+  <section class="frame" data-frame="tasks">
+    <div class="note">
+      <h2>Tasks: one list, two groups</h2>
+      <ul>
+        <li><strong>Up for grabs</strong> holds tasks the workflow sent to a role or to several people. The first person to take one gets it, and it leaves everyone else’s list. A task sent only to you skips this group and goes straight to <strong>Yours</strong>.</li>
+        <li>The detail shows <strong>your next 7 days</strong> beside the choice, so you can see if you have room before you take it.</li>
+        <li><strong>Not for me</strong> hides it from you only. If everyone passes, it goes to the manager’s “Needs attention” list as Blocked, as it does now.</li>
+        <li>The empty outline avatar means nobody holds it yet. When you take it, the slot on the card turns magenta, as it does for every task a person holds.</li>
+      </ul>
+    </div>
+    <div class="scroll"><div class="app">
+      <slot-rail></slot-rail>
+      <aside class="list" aria-label="Tasks">
+        <header class="list-head">
+          <h1>Inbox</h1>
+          <div class="seg" role="group" aria-label="Show">
+            <button aria-pressed="true">Tasks <b class="n" id="nTasks">5</b></button>
+            <button aria-pressed="false">Schedule</button>
+            <button aria-pressed="false">Done</button>
+          </div>
+        </header>
+        <section>
+          <h2 class="sec" id="openHead">Up for grabs <span class="faint" id="nOpen">3</span></h2>
+          <p class="sec-hint">Sent to your role. The first person to take one gets it.</p>
+          <ul class="rows" id="openRows">
+            <li><div class="row open current" data-id="priya">
+              <span class="avatar">PN</span><span class="title">Interview Priya Nair</span><span class="job">Barista · Shoreditch</span>
+              <span class="chip chip-warn due"><svg><use href="#i-clock"/></svg>Due Thu</span>
+              <span class="who"><span class="stack"><span class="avatar">JO</span><span class="avatar">SK</span><span class="avatar">DL</span></span>Also open for 3 others</span>
+            </div></li>
+            <li><div class="row open" data-id="luis">
+              <span class="avatar">LO</span><span class="title">Trial shift: Luis Ortega</span><span class="job">Shift lead · Camden</span>
+              <span class="chip due"><svg><use href="#i-clock"/></svg>Due 3 Nov</span>
+              <span class="who"><span class="stack"><span class="avatar">JO</span><span class="avatar">SK</span></span>Also open for 2 others</span>
+            </div></li>
+            <li><div class="row open" data-id="daniel">
+              <span class="avatar">DK</span><span class="title">Panel interview: Daniel Kim</span><span class="job">Pastry chef · Shoreditch</span>
+              <span class="chip due"><svg><use href="#i-clock"/></svg>Due 4 Nov</span>
+              <span class="who"><span class="stack"><span class="avatar">JO</span></span>Needs 2 people · Jonah took it</span>
+            </div></li>
+          </ul>
+        </section>
+        <section>
+          <h2 class="sec">Yours <span class="faint" id="nMine">2</span></h2>
+          <ul class="rows" id="mineRows">
+            <li><div class="row">
+              <span class="avatar">AO</span><span class="title">Interview Aisha Okafor</span><span class="job">Shift lead · Camden</span>
+              <span class="chip chip-accent due"><svg><use href="#i-cal"/></svg>Today 14:00</span>
+            </div></li>
+            <li><div class="row">
+              <span class="avatar">TB</span><span class="title">Interview Tom Becker</span><span class="job">Barista · Shoreditch</span>
+              <span class="chip due"><svg><use href="#i-cal"/></svg>Tue 10:30</span>
+            </div></li>
+          </ul>
+        </section>
+        <footer class="list-foot"><span class="kbd">j</span><span class="kbd">k</span> next and previous task</footer>
+      </aside>
+      <main class="detail">
+        <p class="said" id="said" hidden></p>
+        <article class="card task" data-slot="" id="taskCard">
+          <header class="task-head">
+            <span class="avatar">PN</span>
+            <h2>Interview Priya Nair</h2>
+            <span class="chip" id="stateChip"><svg><use href="#i-hand"/></svg>Up for grabs</span>
+            <p class="sub">Barista · Shoreditch · sent to Shift leads 2 hours ago</p>
+          </header>
+          <dl class="facts">
+            <div><dt>What</dt><dd>45 min interview<small>Front counter, Shoreditch</small></dd></div>
+            <div><dt>When</dt><dd>Priya picks a time<small>inside your interview hours</small></dd></div>
+            <div><dt>Due</dt><dd>Thu 29 Oct<small>scorecard sent by then</small></dd></div>
+          </dl>
+          <div>
+            <p class="lbl">Scorecard <span>4 questions</span></p>
+            <div class="qs"><span class="chip">Technical skills (1–5)</span><span class="chip">Communication (1–5)</span><span class="chip">Hire?</span><span class="chip">Notes</span></div>
+          </div>
+          <div>
+            <p class="lbl">Your next 7 days <span>Interview hours Mon–Fri, 9:00–17:00</span></p>
+            <div class="week">
+              <div class="wd today"><b>Mon 26 <i>1</i></b><div class="ev"><span>14:00<small>Aisha O.</small></span></div></div>
+              <div class="wd"><b>Tue 27 <i>2</i></b><div class="ev"><span>10:30<small>Tom B.</small></span><span>15:00<small>Grace M.</small></span></div></div>
+              <div class="wd"><b>Wed 28 <i></i></b><div class="ev"></div></div>
+              <div class="wd due"><b>Thu 29 <i></i></b><div class="ev"></div></div>
+              <div class="wd"><b>Fri 30 <i>1</i></b><div class="ev"><span>11:00<small>Oliver H.</small></span></div></div>
+              <div class="wd off"><b>Sat 31</b><div class="ev"></div></div>
+              <div class="wd off"><b>Sun 1</b><div class="ev"></div></div>
+            </div>
+            <p class="week-say">Wednesday and Thursday are free before it is due.</p>
+          </div>
+          <footer class="act" id="act">
+            <button class="btn btn-primary btn-lg" id="take"><svg><use href="#i-hand"/></svg>Take it</button>
+            <button class="btn btn-quiet" id="pass">Not for me</button>
+            <span class="faint">Jonah, Sam and Dev also see it until someone takes it.</span>
+          </footer>
+        </article>
+      </main>
+    </div></div>
+  </section>
+
+  <!-- 2 SCHEDULE -->
+  <section class="frame" data-frame="sched" hidden>
+    <div class="note">
+      <h2>Schedule: what is booked, day by day</h2>
+      <ul>
+        <li>Every interview a candidate booked with you, from today on. Days with nothing booked are left out, so a long week stays short.</li>
+        <li><strong>Waiting to book</strong> lists the tasks you took where the candidate has the link but has not picked a time yet. They will land inside your interview hours.</li>
+        <li>Your interview hours move here from the button at the top of today’s Inbox, because they decide what this list can hold.</li>
+        <li>Choosing an interview opens its task on the right, the same as in Tasks.</li>
+      </ul>
+    </div>
+    <div class="scroll"><div class="app">
+      <slot-rail></slot-rail>
+      <aside class="list" aria-label="Schedule">
+        <header class="list-head">
+          <h1>Inbox</h1>
+          <div class="seg" role="group" aria-label="Show">
+            <button aria-pressed="false">Tasks <b class="n">5</b></button>
+            <button aria-pressed="true">Schedule</button>
+            <button aria-pressed="false">Done</button>
+          </div>
+        </header>
+        <div class="day">
+          <p class="day-h"><span class="today">Today · Mon 26 Oct</span><span class="faint">1</span></p>
+          <div class="slot-row current"><time>14:00<small>45 min</small></time><span class="t">Aisha Okafor</span><span class="chip chip-accent">In 3 h</span><span class="s">Interview · Shift lead, Camden</span></div>
+        </div>
+        <div class="day">
+          <p class="day-h"><span>Tomorrow · Tue 27 Oct</span><span class="faint">2</span></p>
+          <div class="slot-row"><time>10:30<small>45 min</small></time><span class="t">Tom Becker</span><span></span><span class="s">Interview · Barista, Shoreditch</span></div>
+          <div class="slot-row"><time>15:00<small>30 min</small></time><span class="t">Grace Mensah</span><span></span><span class="s">Second call · Barista, Shoreditch</span></div>
+        </div>
+        <div class="day">
+          <p class="day-h"><span>Fri 30 Oct</span><span class="faint">1</span></p>
+          <div class="slot-row"><time>11:00<small>2 h</small></time><span class="t">Oliver Hughes</span><span></span><span class="s">Trial shift · Shift lead, Camden</span></div>
+        </div>
+        <div class="day">
+          <p class="day-h"><span>Waiting to book</span><span class="faint">1</span></p>
+          <div class="slot-row"><time class="past">—</time><span class="t">Hana Sato</span><span></span><span class="s">Interview · Pastry chef · link sent Sat</span></div>
+        </div>
+        <p class="hours-line"><span><b>Interview hours</b> <span class="muted">Mon–Fri, 9:00–17:00</span></span><a href="#">Change</a></p>
+      </aside>
+      <main class="detail">
+        <article class="card task" data-slot="accent">
+          <header class="task-head">
+            <span class="avatar">AO</span>
+            <h2>Interview Aisha Okafor</h2>
+            <span class="chip chip-accent"><svg><use href="#i-person"/></svg>Yours</span>
+            <p class="sub">Shift lead · Camden · you took it on Thu</p>
+          </header>
+          <dl class="facts">
+            <div><dt>When</dt><dd>Today, 14:00–14:45<small>Aisha booked it on Fri</small></dd></div>
+            <div><dt>Where</dt><dd>Back office<small>Camden shop</small></dd></div>
+            <div><dt>Due</dt><dd>Wed 28 Oct<small>scorecard sent by then</small></dd></div>
+          </dl>
+          <div>
+            <p class="lbl">Scorecard <span>Fill it in during or after the interview</span></p>
+            <div class="qs"><span class="chip">Leading a shift (1–5)</span><span class="chip">Communication (1–5)</span><span class="chip">Hire?</span><span class="chip">Notes</span></div>
+          </div>
+          <footer class="act"><button class="btn btn-primary btn-lg">Open scorecard<svg><use href="#i-arrow"/></svg></button><button class="btn btn-quiet"><svg><use href="#i-cal"/></svg>Add to calendar</button></footer>
+        </article>
+      </main>
+    </div></div>
+  </section>
+
+  <!-- 3 DONE, EMPLOYEE -->
+  <section class="frame" data-frame="done" hidden>
+    <div class="note">
+      <h2>Done: what you worked on</h2>
+      <ul>
+        <li>Every task you sent, newest first, grouped by month. Tasks you passed on stay here too, greyed, so the record is complete.</li>
+        <li>Choosing one shows your own answers, read-only. Employees see only what they wrote. They do not get the candidate page or other people’s scores.</li>
+        <li>The chip on the right is your answer to the scorecard’s Hire? question, so you can scan your calls at a glance.</li>
+      </ul>
+    </div>
+    <div class="scroll"><div class="app">
+      <slot-rail></slot-rail>
+      <aside class="list" aria-label="Done">
+        <header class="list-head">
+          <h1>Inbox</h1>
+          <div class="seg" role="group" aria-label="Show">
+            <button aria-pressed="false">Tasks <b class="n">5</b></button>
+            <button aria-pressed="false">Schedule</button>
+            <button aria-pressed="true">Done</button>
+          </div>
+          <label class="search"><svg><use href="#i-search"/></svg><input type="search" placeholder="Find a candidate or job" aria-label="Find a candidate or job"></label>
+        </header>
+        <h2 class="sec">October <span class="faint">6</span></h2>
+        <ul class="rows">
+          <li><div class="row done current"><span class="avatar">GM</span><span class="title">Interview Grace Mensah</span><span class="job">Barista · Shoreditch</span><time class="when">sent Wed 21</time><span class="chip chip-ok due">Hire</span></div></li>
+          <li><div class="row done"><span class="avatar">BW</span><span class="title">Trial shift: Ben Walsh</span><span class="job">Shift lead · Camden</span><time class="when">sent Mon 19</time><span class="chip due">No hire</span></div></li>
+          <li><div class="row done passed"><span class="avatar">RA</span><span class="title">Interview Rosa Alvarez</span><span class="job">Barista · Shoreditch</span><time class="when">passed Fri 16</time><span class="chip due">Passed</span></div></li>
+          <li><div class="row done"><span class="avatar">KT</span><span class="title">Interview Kemi Taiwo</span><span class="job">Barista · Shoreditch</span><time class="when">sent Tue 13</time><span class="chip chip-ok due">Hire</span></div></li>
+          <li><div class="row done"><span class="avatar">MB</span><span class="title">Interview Marco Bianchi</span><span class="job">Pastry chef · Shoreditch</span><time class="when">sent Thu 8</time><span class="chip due">No hire</span></div></li>
+          <li><div class="row done"><span class="avatar">EL</span><span class="title">Document check: Ella Lund</span><span class="job">Barista · Shoreditch</span><time class="when">done Fri 2</time><span class="chip chip-ok due">Done</span></div></li>
+        </ul>
+        <h2 class="sec">September <span class="faint">11</span></h2>
+        <ul class="rows">
+          <li><div class="row done"><span class="avatar">SP</span><span class="title">Interview Sara Patel</span><span class="job">Shift lead · Camden</span><time class="when">sent 29 Sep</time><span class="chip chip-ok due">Hire</span></div></li>
+        </ul>
+      </aside>
+      <main class="detail">
+        <article class="card task" data-slot="ok">
+          <header class="task-head">
+            <span class="avatar">GM</span>
+            <h2>Interview Grace Mensah</h2>
+            <span class="chip chip-ok"><svg><use href="#i-check"/></svg>Sent</span>
+            <p class="sub">Barista · Shoreditch · you sent this on Wed 21 Oct</p>
+          </header>
+          <div>
+            <p class="lbl">Your answers</p>
+            <dl class="answers">
+              <div><dt>Technical skills (1–5)</dt><dd>4</dd></div>
+              <div><dt>Communication (1–5)</dt><dd>5</dd></div>
+              <div><dt>Hire?</dt><dd>Yes</dd></div>
+              <div><dt>Notes</dt><dd class="text">Made a flat white under pressure while talking us through it. Has weekend availability. Would be a strong opener.</dd></div>
+            </dl>
+          </div>
+          <p class="now"><svg width="16" height="16"><use href="#i-arrow"/></svg>Grace went on to a second call.</p>
+        </article>
+      </main>
+    </div></div>
+  </section>
+
+  <!-- 4 DONE, MANAGER -->
+  <section class="frame" data-frame="mgr" hidden>
+    <div class="note">
+      <h2>Done, seen by a manager</h2>
+      <ul>
+        <li>Managers keep their fourth view, <strong>Needs attention</strong>.</li>
+        <li>In Done, each task also links to the candidate’s page, where the scores, the decision trace and what happened next are shown.</li>
+        <li>Up for grabs looks the same for a manager. A manager who takes a task takes it like anyone else, and can still reassign it on the candidate page.</li>
+      </ul>
+    </div>
+    <div class="scroll"><div class="app">
+      <slot-rail></slot-rail>
+      <aside class="list" aria-label="Done">
+        <header class="list-head">
+          <h1>Inbox</h1>
+          <div class="seg" role="group" aria-label="Show">
+            <button aria-pressed="false">Tasks <b class="n">3</b></button>
+            <button aria-pressed="false">Schedule</button>
+            <button aria-pressed="true">Done</button>
+            <button aria-pressed="false">Needs attention <b class="n n-bad">2</b></button>
+          </div>
+          <label class="search"><svg><use href="#i-search"/></svg><input type="search" placeholder="Find a candidate or job" aria-label="Find a candidate or job"></label>
+        </header>
+        <h2 class="sec">October <span class="faint">4</span></h2>
+        <ul class="rows">
+          <li><div class="row done current"><span class="avatar">GM</span><span class="title">Second call: Grace Mensah</span><span class="job">Barista · Shoreditch</span><time class="when">sent Fri 23</time><span class="chip chip-ok due">Hire</span></div></li>
+          <li><div class="row done"><span class="avatar">IW</span><span class="title">Make an offer to Ivy Wong</span><span class="job">Shift lead · Camden</span><time class="when">done Wed 14</time><span class="chip chip-ok due">Accepted</span></div></li>
+          <li><div class="row done"><span class="avatar">BW</span><span class="title">HR approval: Ben Walsh</span><span class="job">Shift lead · Camden</span><time class="when">sent Tue 20</time><span class="chip due">No</span></div></li>
+          <li><div class="row done"><span class="avatar">KT</span><span class="title">Second call: Kemi Taiwo</span><span class="job">Barista · Shoreditch</span><time class="when">sent Mon 12</time><span class="chip chip-ok due">Hire</span></div></li>
+        </ul>
+      </aside>
+      <main class="detail">
+        <article class="card task" data-slot="ok">
+          <header class="task-head">
+            <span class="avatar">GM</span>
+            <h2>Second call: Grace Mensah</h2>
+            <span class="chip chip-ok"><svg><use href="#i-check"/></svg>Sent</span>
+            <p class="sub">Barista · Shoreditch · you sent this on Fri 23 Oct</p>
+          </header>
+          <div>
+            <p class="lbl">Your answers</p>
+            <dl class="answers">
+              <div><dt>Fit with the team (1–5)</dt><dd>5</dd></div>
+              <div><dt>Hire?</dt><dd>Yes</dd></div>
+              <div><dt>Notes</dt><dd class="text">Agrees with Maya. Can start 9 Nov.</dd></div>
+            </dl>
+          </div>
+          <div class="mgr"><span>Grace is now at <b>Make offer</b>. Maya’s interview: 4 · 5 · Yes.</span><a class="btn btn-sm" href="#">Open Grace’s page<svg><use href="#i-arrow"/></svg></a></div>
+        </article>
+      </main>
+    </div></div>
+  </section>
+
+  <!-- 5 EVERYONE'S SCHEDULE -->
+  <section class="frame" data-frame="all" hidden>
+    <div class="note">
+      <h2>Everyone’s schedule: the team’s week as a calendar</h2>
+      <ul>
+        <li>Managers get a <strong>Mine · Everyone</strong> switch in Schedule. Everyone shows the whole team’s booked interviews and trial shifts on a week calendar.</li>
+        <li>The left column becomes the team list. Tick people to show or hide them. The count says how many interviews each person has this week, so you can see who is busy before you assign or reassign.</li>
+        <li>Every event shows its interviewer’s initials. They all use the one accent colour: in Lanyard, colour means status, not a person. Past events turn grey.</li>
+        <li>Choosing an event opens a small card with Open task and Open candidate. Weekends are narrow because most shops interview Monday to Friday. They widen when something is booked.</li>
+      </ul>
+    </div>
+    <div class="scroll"><div class="app">
+      <slot-rail></slot-rail>
+      <aside class="list" aria-label="Team">
+        <header class="list-head">
+          <h1>Inbox</h1>
+          <div class="seg" role="group" aria-label="Show">
+            <button aria-pressed="false">Tasks <b class="n">3</b></button>
+            <button aria-pressed="true">Schedule</button>
+            <button aria-pressed="false">Done</button>
+            <button aria-pressed="false">Needs attention <b class="n n-bad">2</b></button>
+          </div>
+          <div class="seg sub-seg" role="group" aria-label="Whose schedule">
+            <button aria-pressed="false">Mine</button>
+            <button aria-pressed="true">Everyone</button>
+          </div>
+        </header>
+        <h2 class="sec">Team this week <span class="faint">9 interviews</span></h2>
+        <ul class="people">
+          <li><label><input type="checkbox" checked><span class="avatar">MR</span><span class="nm">Maya Reyes<small>Shift lead</small></span><span class="ct">4</span></label></li>
+          <li><label><input type="checkbox" checked><span class="avatar">JO</span><span class="nm">Jonah Osei<small>Shift lead</small></span><span class="ct">3</span></label></li>
+          <li><label><input type="checkbox" checked><span class="avatar">SK</span><span class="nm">Sam Kowalski<small>Head chef</small></span><span class="ct">2</span></label></li>
+          <li><label><input type="checkbox" checked><span class="avatar">DL</span><span class="nm">Dev Lal<small>Shift lead</small></span><span class="ct off">0</span></label></li>
+          <li><label><input type="checkbox"><span class="avatar">AB</span><span class="nm">Ana Brooks (you)<small>Owner</small></span><span class="ct off">0</span></label></li>
+        </ul>
+        <p class="hours-line"><span><b>Waiting to book</b> <span class="muted">3 candidates have a link</span></span><a href="#">See them</a></p>
+      </aside>
+      <main class="detail" style="position:relative">
+        <div class="cal-head">
+          <h2>26 Oct – 1 Nov</h2>
+          <button class="btn btn-sm">Today</button>
+          <button class="btn btn-sm btn-icon" aria-label="Previous week">‹</button>
+          <button class="btn btn-sm btn-icon" aria-label="Next week">›</button>
+        </div>
+        <div class="cal" id="cal"></div>
+        <p class="cal-foot">Shows booked times only. Tasks without a time are in each person’s Tasks.</p>
+      </main>
+    </div></div>
+  </section>
+</div>
+
+<script>
+const rail = document.getElementById('rail').content
+document.querySelectorAll('slot-rail').forEach(s => s.replaceWith(rail.cloneNode(true)))
+
+document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.tabs button').forEach(x => x.setAttribute('aria-pressed', x === b))
+  document.querySelectorAll('.frame').forEach(f => f.hidden = f.dataset.frame !== b.dataset.f)
+}))
+
+// Take it / Not for me, played out on Priya's task
+const $ = id => document.getElementById(id)
+const priya = document.querySelector('[data-id="priya"]')
+function leave(then) {
+  priya.classList.add('leaving')
+  setTimeout(() => { priya.parentElement.remove(); then() }, 220)
+}
+function say(html) { $('said').innerHTML = html; $('said').hidden = false }
+$('take').addEventListener('click', () => leave(() => {
+  $('nOpen').textContent = 2
+  $('nMine').textContent = 3
+  const li = document.createElement('li')
+  li.innerHTML = `<div class="row current arriving"><span class="avatar">PN</span><span class="title">Interview Priya Nair</span><span class="job">Barista · Shoreditch</span><span class="chip chip-warn due"><svg><use href="#i-clock"/></svg>Due Thu</span></div>`
+  $('mineRows').append(li)
+  $('taskCard').dataset.slot = 'accent'
+  $('stateChip').className = 'chip chip-accent'
+  $('stateChip').innerHTML = '<svg><use href="#i-person"/></svg>Yours'
+  $('act').innerHTML = '<button class="btn btn-primary btn-lg">Open scorecard<svg><use href="#i-arrow"/></svg></button><span class="faint">Priya now has a link to book a time inside your hours.</span>'
+  say('<svg width="16" height="16"><use href="#i-check"/></svg>It’s yours. Jonah, Sam and Dev no longer see it.')
+}))
+$('pass').addEventListener('click', () => leave(() => {
+  $('nOpen').textContent = 2
+  $('nTasks').textContent = 4
+  $('taskCard').hidden = true
+  say('<svg width="16" height="16"><use href="#i-check"/></svg>Passed. Priya’s interview is gone from your list.<button class="undo" onclick="location.reload()">Undo</button>')
+}))
+
+// everyone's week: [day 0-6, start hour, minutes, candidate, what, interviewer, past]
+const EV = [
+  [0, 9.5, 45, 'Leo Martin', 'Interview', 'JO', 1], [0, 10.5, 30, 'Nina Fox', 'Phone call', 'SK', 1],
+  [0, 14, 45, 'Aisha Okafor', 'Interview', 'MR', 0, 'sel'], [1, 10.5, 45, 'Tom Becker', 'Interview', 'MR', 0],
+  [1, 10.5, 60, 'Yusuf Ali', 'Interview', 'JO', 0], [1, 15, 30, 'Grace Mensah', 'Second call', 'MR', 0],
+  [2, 13, 120, 'Pia Lang', 'Trial shift', 'SK', 0], [3, 9, 45, 'Omar Haddad', 'Interview', 'JO', 0],
+  [4, 11, 120, 'Oliver Hughes', 'Trial shift', 'MR', 0],
+]
+const cal = document.getElementById('cal')
+const DAYS = ['Mon 26', 'Tue 27', 'Wed 28', 'Thu 29', 'Fri 30', 'Sat 31', 'Sun 1']
+let html = '<div class="gut"></div>' + DAYS.map((d, i) => `<div class="dh${i === 0 ? ' today' : ''}">${d}<i>${EV.filter(e => e[0] === i).length || ''}</i></div>`).join('')
+html += '<div class="times">' + [10, 11, 12, 13, 14, 15, 16].map(h => `<span style="top:calc(var(--hr) * ${h - 9})">${h}:00</span>`).join('') + '</div>'
+const fmt = h => `${Math.floor(h)}:${String(Math.round(h % 1 * 60)).padStart(2, '0')}`
+for (let d = 0; d < 7; d++) {
+  const evs = EV.filter(e => e[0] === d)
+  html += `<div class="col${d === 0 ? ' today' : ''}${d > 4 ? ' wknd' : ''}">` + (d === 0 ? '<span class="now" style="top:calc(var(--hr) * 2)"></span>' : '')
+  evs.forEach((e, k) => {
+    const clash = evs.some((o, j) => j !== k && o[1] < e[1] + e[2] / 60 && e[1] < o[1] + o[2] / 60)
+    const side = clash ? (evs.findIndex(o => o === e) === evs.findIndex(o => o[1] < e[1] + e[2] / 60 && e[1] < o[1] + o[2] / 60) ? ' half' : ' half2') : ''
+    const body = e[2] <= 30 ? `<span class="avatar">${e[5]}</span><b>${fmt(e[1])} ${e[3]}</b>` : `<b>${fmt(e[1])} ${e[3]}</b><span class="by"><span class="avatar">${e[5]}</span>${e[4]}</span>`
+    html += `<button class="ev2${e[6] ? ' past' : ''}${e[7] ? ' sel' : ''}${e[2] <= 30 ? ' short' : ''}${side}" style="top:calc(var(--hr) * ${e[1] - 9} + 2px);height:calc(var(--hr) * ${e[2] / 60} - 4px)" title="${e[4]} with ${e[3]}">${body}</button>`
+  })
+  html += '</div>'
+}
+cal.innerHTML = html
+const pop = document.createElement('div')
+pop.className = 'pop'
+pop.style.cssText = 'left:240px;top:420px'
+pop.innerHTML = '<h3>Interview Aisha Okafor</h3><dl><dt>When</dt><dd>Today, 14:00–14:45</dd><dt>Where</dt><dd>Back office, Camden</dd><dt>With</dt><dd>Maya Reyes</dd><dt>Job</dt><dd>Shift lead, Camden</dd></dl><div class="row-btns"><a class="btn btn-sm btn-primary" href="#">Open candidate</a><a class="btn btn-sm" href="#">Open task</a></div>'
+cal.parentElement.append(pop)
+</script>
+</body>
+</html>

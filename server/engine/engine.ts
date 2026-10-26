@@ -195,18 +195,94 @@ async function activateHumanTask(w: Walk, node: GraphNode, config: HumanTaskConf
   const instructions = config.instructions ? render(config.instructions, w.ctx) : undefined
   const [run] = await tx.insert(nodeRuns).values({ ...base, status: 'waiting_on_human', dueAt, input: { title, instructions } }).returning()
   await tx.insert(taskAssignments).values(assignees.map(userId => ({ runId: run!.id, userId })))
-  if (config.booking) {
-    const [b] = await tx.insert(bookings).values({ runId: run!.id, token: newBookingToken(), durationMin: config.booking.duration_min, location: config.booking.where ?? null }).returning()
-    const names = await tx.select({ name: user.name }).from(user).where(inArray(user.id, assignees)).orderBy(asc(user.name))
-    await queueEmail(tx, {
-      applicationId: app.id, kind: 'booking_request', key: `booking:${b!.id}`,
-      ...words.bookingRequest({
-        first: w.ctx.candidate.first_name, job: w.ctx.job.title, company: (await getSettings(tx)).companyName,
-        url: `${w.deps.appUrl ?? ''}/book/${b!.token}`, durationMin: b!.durationMin, interviewers: names.map(n => n.name), location: b!.location,
-      }),
-    }, w.deps.appUrl ?? '')
-  }
+  await settle(tx, w.deps, app, run!, config, t)
   await event(tx, app.id, 'task_assigned', { node: node.key, runId: run!.id, assignees })
+}
+
+// A human task sent to more people than it needs waits for them to take it. Once enough have taken it (claimedAt,
+// or a scorecard sent), everyone else is let go. Once nobody spare is left, the booking link goes out, so the
+// candidate books against the hours of the people who will be there. Caller holds the application lock.
+async function settle(tx: Tx, deps: EngineDeps, app: Application, run: Run, config: HumanTaskConfig, t: Date) {
+  let rows = await tx.select().from(taskAssignments).where(eq(taskAssignments.runId, run.id))
+  const live = () => rows.filter(r => r.submittedAt || !r.closedAt)
+  const taken = live().filter(r => r.claimedAt || r.submittedAt)
+  if (taken.length >= config.min_submissions && live().length > taken.length) {
+    await tx.update(taskAssignments).set({ closedAt: t })
+      .where(and(eq(taskAssignments.runId, run.id), isNull(taskAssignments.closedAt), isNull(taskAssignments.claimedAt), isNull(taskAssignments.submittedAt)))
+    rows = await tx.select().from(taskAssignments).where(eq(taskAssignments.runId, run.id))
+  }
+  if (!config.booking || live().length > config.min_submissions) return
+  const [had] = await tx.select({ id: bookings.id }).from(bookings).where(eq(bookings.runId, run.id))
+  if (had) return
+  const ctx = await buildContext(tx, app.id)
+  const [b] = await tx.insert(bookings).values({ runId: run.id, token: newBookingToken(), durationMin: config.booking.duration_min, location: config.booking.where ?? null }).returning()
+  const names = await tx.select({ name: user.name }).from(user).where(inArray(user.id, live().map(r => r.userId))).orderBy(asc(user.name))
+  await queueEmail(tx, {
+    applicationId: app.id, kind: 'booking_request', key: `booking:${b!.id}`,
+    ...words.bookingRequest({
+      first: ctx.candidate.first_name, job: ctx.job.title, company: (await getSettings(tx)).companyName,
+      url: `${deps.appUrl ?? ''}/book/${b!.token}`, durationMin: b!.durationMin, interviewers: names.map(n => n.name), location: b!.location,
+    }),
+  }, deps.appUrl ?? '')
+}
+
+// Locks the application behind a waiting human task and returns what claim and pass need.
+async function lockTask(tx: Tx, runId: string, userId: string) {
+  const [r] = await tx.select({ applicationId: nodeRuns.applicationId }).from(nodeRuns).where(eq(nodeRuns.id, runId))
+  if (!r) throw new DomainError(404, 'task_not_found')
+  const app = await lockApplication(tx, r.applicationId)
+  const [run] = await tx.select().from(nodeRuns).where(eq(nodeRuns.id, runId))
+  const [mine] = await tx.select().from(taskAssignments).where(and(eq(taskAssignments.runId, runId), eq(taskAssignments.userId, userId)))
+  if (!mine || run!.nodeType !== 'human_task') throw new DomainError(404, 'task_not_found')
+  if (run!.status !== 'waiting_on_human') throw new DomainError(409, 'task_closed')
+  const config = configOf(findNode(await loadGraph(tx, app.jobVersionId), run!.nodeKey)) as HumanTaskConfig
+  return { app, run: run!, mine, config }
+}
+
+// "Take it". Taking a task you already hold does nothing; one someone else took first is 409 task_taken.
+export async function claimTask(deps: EngineDeps, runId: string, userId: string) {
+  const appId = await deps.db.transaction(async (tx) => {
+    const { app, run, mine, config } = await lockTask(tx, runId, userId)
+    if (mine.claimedAt || mine.submittedAt) return app.id
+    if (mine.closedAt) throw new DomainError(409, 'task_taken')
+    const t = now(deps)
+    await tx.update(taskAssignments).set({ claimedAt: t }).where(and(eq(taskAssignments.runId, runId), eq(taskAssignments.userId, userId)))
+    await settle(tx, deps, app, run, config, t)
+    await event(tx, app.id, 'task_claimed', { node: run.nodeKey, runId }, userId)
+    return app.id
+  })
+  await flush(deps, [], appId)
+  return { claimed: true }
+}
+
+// "Not for me": only while the task is still up for grabs. If everyone passes, managers see it as blocked.
+export async function passTask(deps: EngineDeps, runId: string, userId: string) {
+  const appId = await deps.db.transaction(async (tx) => {
+    const { app, run, mine, config } = await lockTask(tx, runId, userId)
+    if (mine.closedAt || mine.submittedAt || mine.claimedAt) throw new DomainError(409, 'task_taken')
+    const t = now(deps)
+    await tx.update(taskAssignments).set({ closedAt: t, passedAt: t }).where(and(eq(taskAssignments.runId, runId), eq(taskAssignments.userId, userId)))
+    await settle(tx, deps, app, run, config, t)
+    await event(tx, app.id, 'task_passed', { node: run.nodeKey, runId }, userId)
+    return app.id
+  })
+  await flush(deps, [], appId) // the last pass can leave just enough people: their booking link goes out
+  return { passed: true }
+}
+
+// Undo a pass, while nobody has taken the task in the meantime (no booking link has gone out either).
+export async function unpassTask(deps: EngineDeps, runId: string, userId: string) {
+  return deps.db.transaction(async (tx) => {
+    const { app, run, mine, config } = await lockTask(tx, runId, userId)
+    if (!mine.passedAt) return { passed: false }
+    const rows = await tx.select().from(taskAssignments).where(eq(taskAssignments.runId, runId))
+    const taken = rows.filter(r => r.claimedAt || r.submittedAt).length
+    const [b] = await tx.select({ id: bookings.id }).from(bookings).where(eq(bookings.runId, runId))
+    if (taken >= config.min_submissions || b) throw new DomainError(409, 'task_taken')
+    await tx.update(taskAssignments).set({ closedAt: null, passedAt: null }).where(and(eq(taskAssignments.runId, runId), eq(taskAssignments.userId, userId)))
+    await event(tx, app.id, 'task_unpassed', { node: run.nodeKey, runId }, userId)
+    return { passed: false }
+  })
 }
 
 // Queued like an auto step: its handler emails the candidate the link, then the run waits for the documents
@@ -395,7 +471,10 @@ export async function submitTask(deps: EngineDeps, runId: string, userId: string
 
     const submitted = await tx.select({ values: taskAssignments.values }).from(taskAssignments)
       .where(and(eq(taskAssignments.runId, runId), sql`${taskAssignments.submittedAt} is not null`))
-    if (submitted.length < config.min_submissions) return { completed: false, applicationId: app.id }
+    if (submitted.length < config.min_submissions) {
+      await settle(tx, deps, app, run!, config, t)
+      return { completed: false, applicationId: app.id }
+    }
 
     const output = aggregateScorecard(config.scorecard, submitted.map(s => s.values as Record<string, unknown>))
     await tx.update(nodeRuns).set({ status: 'completed', output, completedAt: t }).where(eq(nodeRuns.id, runId))
@@ -428,7 +507,7 @@ export async function answerOfferStep(tx: Tx, deps: EngineDeps, app: Application
 
 // Add or remove assignees on a waiting task. Submissions already made are kept.
 export async function reassignTask(deps: EngineDeps, runId: string, change: { add: string[], remove: string[] }, actorId: string) {
-  return deps.db.transaction(async (tx) => {
+  const res = await deps.db.transaction(async (tx) => {
     const [r] = await tx.select({ applicationId: nodeRuns.applicationId }).from(nodeRuns).where(eq(nodeRuns.id, runId))
     if (!r) throw new DomainError(404, 'task_not_found')
     const app = await lockApplication(tx, r.applicationId)
@@ -440,8 +519,10 @@ export async function reassignTask(deps: EngineDeps, runId: string, change: { ad
       const bad = change.add.filter(id => !usable.includes(id))
       if (bad.length) throw new DomainError(422, 'bad_assignee', bad.map(id => ({ code: 'bad_assignee', message: `${id} cannot be assigned` })))
       // re-adding someone who was removed reopens their assignment
-      await tx.insert(taskAssignments).values(usable.map(userId => ({ runId, userId })))
-        .onConflictDoUpdate({ target: [taskAssignments.runId, taskAssignments.userId], set: { closedAt: null }, setWhere: isNull(taskAssignments.submittedAt) })
+      // a manager's pick is theirs, no taking needed
+      const t = now(deps)
+      await tx.insert(taskAssignments).values(usable.map(userId => ({ runId, userId, claimedAt: t })))
+        .onConflictDoUpdate({ target: [taskAssignments.runId, taskAssignments.userId], set: { closedAt: null, passedAt: null, claimedAt: t }, setWhere: isNull(taskAssignments.submittedAt) })
     }
     const removed = change.remove.length
       ? (await tx.update(taskAssignments).set({ closedAt: now(deps) })
@@ -457,9 +538,12 @@ export async function reassignTask(deps: EngineDeps, runId: string, change: { ad
       const reachable = rows.filter(r => r.submittedAt || (!r.closedAt && accessLevel(r, r.level, deps.adminEmail))).length
       if (reachable < config.min_submissions) throw new DomainError(422, 'below_min_submissions')
     }
+    if (run!.nodeType === 'human_task') await settle(tx, deps, app, run!, configOf(findNode(await loadGraph(tx, app.jobVersionId), run!.nodeKey)) as HumanTaskConfig, now(deps))
     await event(tx, app.id, 'task_reassigned', { runId, add: change.add, remove: removed }, actorId)
-    return tx.select().from(taskAssignments).where(eq(taskAssignments.runId, runId))
+    return { appId: app.id, rows: await tx.select().from(taskAssignments).where(eq(taskAssignments.runId, runId)) }
   })
+  await flush(deps, [], res.appId) // settling may have sent the booking link
+  return res.rows
 }
 
 export type MoveTarget = { node: string } | { close: Outcome }

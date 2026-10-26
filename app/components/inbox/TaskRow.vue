@@ -3,10 +3,15 @@ import type { RouteLocationRaw } from 'vue-router'
 import type { TaskRow } from '~/composables/useTasks'
 
 defineProps<{ task: TaskRow, to: RouteLocationRaw, current: boolean }>()
+
+// up for grabs: who else has it, and how many it still needs when that's more than one
+const who = (g: NonNullable<TaskRow['grab']>) => g.need > 1
+  ? `Needs ${g.need} people${g.taken.length ? ` · ${g.taken.join(', ')} took it` : ''}`
+  : `Also open for ${plural(g.others.length, 'other')}`
 </script>
 
 <template>
-  <NuxtLink :to="to" class="row" :class="{ current }" :data-task="task.runId" :aria-current="current ? 'page' : undefined">
+  <NuxtLink :to="to" class="row" :class="{ current, open: task.grab }" :data-task="task.runId" :aria-current="current ? 'page' : undefined">
     <Avatar :name="task.candidateName" :size="32" class="av" />
     <span class="title">{{ task.title }}</span>
     <span class="job">{{ task.jobTitle }}</span>
@@ -14,6 +19,7 @@ defineProps<{ task: TaskRow, to: RouteLocationRaw, current: boolean }>()
     <span v-if="task.booking" class="book" :class="{ waiting: !task.booking.startsAt }">
       <Icon name="calendar" :size="14" />{{ task.booking.cancelledAt ? `Cancelled: the interview on ${fmtBooked(task.booking.startsAt)}` : task.booking.startsAt ? `Interview ${fmtBooked(task.booking.startsAt)}` : 'Waiting for the candidate to book' }}
     </span>
+    <span v-if="task.grab" class="who">{{ who(task.grab) }}</span>
   </NuxtLink>
 </template>
 
@@ -31,6 +37,10 @@ defineProps<{ task: TaskRow, to: RouteLocationRaw, current: boolean }>()
 .book { grid-column: 2 / -1; display: inline-flex; gap: 6px; align-items: center; font-size: var(--t-sm); font-weight: 500; color: var(--ink); }
 .book svg { color: var(--accent-ink); flex: none; }
 .book.waiting { color: var(--ink-3); font-weight: 400; }
+.who { grid-column: 2 / -1; font-size: var(--t-xs); color: var(--ink-3); }
+/* up for grabs: nobody holds it yet, so the face is an empty outline */
+.row.open .av { background: transparent; box-shadow: inset 0 0 0 1.5px var(--line-2); color: var(--ink-3); }
+.row.open.current .av { box-shadow: inset 0 0 0 1.5px var(--accent-line); color: var(--accent-ink); }
 .book.waiting svg { color: var(--ink-3); }
 /* current: the accent tint plus a short accent bar, the slot turned on its side */
 .row.current { background: var(--accent-tint); }

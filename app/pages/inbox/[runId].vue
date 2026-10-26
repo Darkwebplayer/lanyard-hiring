@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TaskRow } from '~/composables/useTasks'
+import type { InboxFlash, TaskRow } from '~/composables/useTasks'
 import { type Timeline, fmtVal, humanise } from '~/components/candidate/Trace.vue'
 import type { ScorecardField } from '~~/shared/workflow/registry'
 
@@ -8,13 +8,14 @@ interface TaskDetail extends TaskRow {
   scorecard: ScorecardField[], minSubmissions: number, canSubmit: boolean, assignments: Assignment[]
   instructions: string | null
   offer?: boolean // Make offer: answered through the offer dialog, not a scorecard
+  plan: { durationMin: number, where: string | null } | null // the step lets the candidate book; the link goes out once it's taken
 }
 
 const route = useRoute()
 const router = useRouter()
 const { me, isManager } = useMe()
 const { inbox, refresh: refreshInbox } = useTasks()
-const flash = useState<{ at: string, text: string, next?: { to: string, title: string } } | null>('inbox-flash', () => null)
+const flash = useState<InboxFlash | null>('inbox-flash', () => null)
 
 const id = computed(() => route.params.runId as string)
 const task = ref<TaskDetail | null>(null)
@@ -166,6 +167,52 @@ async function submit() {
     busy.value = false
   }
 }
+// Up for grabs: take it, or pass it on
+const claiming = ref<'take' | 'pass' | null>(null)
+const firstName = (name: string) => name.split(' ')[0]
+async function take() {
+  const t = task.value!
+  claiming.value = 'take'
+  formError.value = ''
+  try {
+    await api(`/api/tasks/${t.runId}/claim`, { method: 'POST' })
+    await Promise.all([load(), refreshInbox()])
+    const g = t.grab!
+    flash.value = {
+      at: route.path,
+      text: g.need > 1 && g.taken.length + 1 < g.need
+        ? `You’re on it. It needs ${plural(g.need - g.taken.length - 1, 'more person', 'more people')}.`
+        : `It’s yours.${g.others.length ? ` ${g.others.filter(n => !g.taken.includes(n)).map(firstName).join(', ')} no longer see it.` : ''}`,
+    }
+  }
+  catch (e) {
+    formError.value = (e as ApiError).message
+    await Promise.all([load(), refreshInbox()])
+  }
+  finally {
+    claiming.value = null
+  }
+}
+async function pass() {
+  const t = task.value!
+  claiming.value = 'pass'
+  formError.value = ''
+  try {
+    await api(`/api/tasks/${t.runId}/pass`, { method: 'POST' })
+    await refreshInbox()
+    const next = inbox.value?.mine.find(r => r.nodeType !== 'request_documents') ?? inbox.value?.open?.[0]
+    const to = next ? `/inbox/${next.runId}` : '/inbox'
+    flash.value = { at: to, text: `Passed. ${t.title} is gone from your list.`, undo: t.runId }
+    await router.replace({ path: to, query: route.query })
+  }
+  catch (e) {
+    formError.value = (e as ApiError).message
+    await Promise.all([load(), refreshInbox()])
+  }
+  finally {
+    claiming.value = null
+  }
+}
 </script>
 
 <template>
@@ -187,7 +234,8 @@ async function submit() {
   </div>
 
   <div v-else class="stack" :class="{ arrived }">
-    <header class="card head" data-slot="accent">
+    <NuxtLink v-if="route.query.list === 'schedule'" :to="{ path: '/inbox', query: route.query }" class="back"><Icon name="arrow-left" :size="14" />Back to the week</NuxtLink>
+    <header class="card head" :data-slot="task.grab ? 'none' : 'accent'">
       <div class="head-top">
         <Avatar :name="task.candidateName" :size="44" />
         <div class="head-txt">
@@ -237,7 +285,35 @@ async function submit() {
       <div v-else-if="snapLoading" class="snap" aria-busy="true" aria-label="Loading the candidate"><span class="skeleton" style="height:14px;width:48%" /></div>
     </header>
 
-    <section v-if="task.offer" class="card form-card">
+    <section v-if="task.grab" class="card form-card grab" aria-labelledby="grab-h">
+      <div class="ro-head">
+        <h3 id="grab-h">Up for grabs</h3>
+        <span class="faint">{{ task.grab.need > 1 ? `Needs ${task.grab.need} people` : 'The first person to take it gets it' }}</span>
+      </div>
+      <dl class="facts">
+        <div v-if="task.plan"><dt>What</dt><dd>{{ task.plan.durationMin }} min interview<small v-if="task.plan.where">{{ task.plan.where }}</small></dd></div>
+        <div v-if="task.plan"><dt>When</dt><dd>{{ firstName(task.candidateName) }} picks a time<small>inside your interview hours, once you take it</small></dd></div>
+        <div><dt>Due</dt><dd>{{ task.dueAt ? fmtDate(task.dueAt) : 'No due date' }}<small v-if="task.scorecard.length">scorecard sent by then</small></dd></div>
+      </dl>
+      <div v-if="task.scorecard.length">
+        <p class="lbl">Scorecard <span>{{ plural(task.scorecard.length, 'question') }}</span></p>
+        <ul class="qs"><li v-for="f in task.scorecard" :key="f.key" class="chip">{{ f.label }}</li></ul>
+      </div>
+      <div>
+        <p class="lbl">Your next 7 days <NuxtLink to="/inbox/hours">Interview hours</NuxtLink></p>
+        <InboxWeekStrip :due-at="task.dueAt" />
+      </div>
+      <p v-if="formError" class="form-error" role="alert"><Icon name="alert" :size="16" />{{ formError }}</p>
+      <div class="foot">
+        <button type="button" class="btn btn-primary btn-lg" :aria-busy="claiming === 'take'" :disabled="!!claiming" @click="take">
+          <span v-if="claiming === 'take'" class="spinner" />Take it
+        </button>
+        <button type="button" class="btn btn-quiet" :aria-busy="claiming === 'pass'" :disabled="!!claiming" @click="pass">Not for me</button>
+        <span v-if="task.grab.others.length" class="faint">{{ task.grab.others.map(firstName).join(', ') }} also see it until {{ task.grab.need > 1 ? 'enough people take it' : 'someone takes it' }}.</span>
+      </div>
+    </section>
+
+    <section v-else-if="task.offer" class="card form-card">
       <template v-if="task.status === 'waiting_on_human'">
         <div><button type="button" class="btn btn-primary" :disabled="!snap || !isManager" @click="offerDlg?.open()"><Icon name="mail" />Make offer…</button></div>
         <p class="faint">The task closes when {{ snap?.candidate.firstName ?? 'they' }} answers, or you record their answer on their page.</p>
@@ -304,7 +380,7 @@ async function submit() {
       <p v-if="formError" class="form-error" role="alert"><Icon name="alert" :size="16" />{{ formError }}</p>
     </section>
 
-    <section v-if="isPanel" class="card panel-card" aria-labelledby="panel-h">
+    <section v-if="isPanel && !task.grab" class="card panel-card" aria-labelledby="panel-h">
       <div class="ro-head">
         <h3 id="panel-h">Interview panel</h3>
         <span class="progress">
@@ -335,6 +411,7 @@ async function submit() {
 
 <style scoped>
 .stack { display: grid; gap: 20px; }
+.back { justify-self: start; display: inline-flex; gap: 6px; align-items: center; margin-bottom: -8px; font-size: var(--t-sm); font-weight: 600; text-decoration: none; }
 .arrived { animation: rise var(--t-move) var(--ease); }
 
 .head { padding: 28px 28px 24px; }
@@ -392,6 +469,17 @@ async function submit() {
 
 .foot { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: center; padding-top: 4px; }
 .foot .faint { font-size: var(--t-sm); }
+
+.grab .ro-head .faint { font-size: var(--t-sm); }
+.facts { margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); border: 1px solid var(--line); border-radius: var(--r-panel); }
+.facts div { display: grid; gap: 2px; padding: 12px 14px; }
+.facts div + div { border-left: 1px solid var(--line); }
+.facts dt { font-size: var(--t-xs); font-weight: 600; color: var(--ink-3); }
+.facts dd { margin: 0; font-weight: 600; }
+.facts small { display: block; font-weight: 400; font-size: var(--t-sm); color: var(--ink-2); }
+.lbl { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; font-size: var(--t-sm); font-weight: 600; }
+.lbl span, .lbl a { font-weight: 400; color: var(--ink-2); }
+.qs { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
 
 .ro-head { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; }
 .reason { display: flex; gap: 10px; align-items: flex-start; color: var(--ink-2); }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TaskRow } from '~/composables/useTasks'
+import type { InboxFlash, TaskRow } from '~/composables/useTasks'
 
 useHead({ title: 'Inbox' })
 const { inbox, error, refresh } = useTasks()
@@ -11,11 +11,16 @@ const router = useRouter()
 if (inbox.value) refresh()
 
 // what the last scorecard did, said at the top of the page it led to (set by the task page)
-const flash = useState<{ at: string, text: string, next?: { to: string, title: string } } | null>('inbox-flash', () => null)
+const flash = useState<InboxFlash | null>('inbox-flash', () => null)
 
 const loading = computed(() => !inbox.value && !error.value)
 const mine = computed(() => inbox.value?.mine ?? [])
-const view = computed(() => (isManager.value && route.query.list === 'attention' ? 'attention' : 'mine'))
+const open = computed(() => inbox.value?.open ?? [])
+// Tasks (?list absent), Schedule, Done, and for managers Needs attention
+const view = computed(() => {
+  const l = route.query.list
+  return l === 'schedule' || l === 'done' ? l : l === 'attention' && isManager.value ? 'attention' : 'mine'
+})
 const selected = computed(() => route.params.runId as string | undefined)
 
 // failed and stuck steps are automatic ones: no scorecard to open, so they act inline
@@ -31,9 +36,27 @@ const attentionCount = computed(() => attention.value.reduce((n, s) => n + s.row
 const linkTo = (t: TaskRow) => (t.nodeType === 'request_documents' ? `/candidates/${t.applicationId}` : { path: `/inbox/${t.runId}`, query: route.query })
 // the open task stays only if the list switched to also holds it; else back to the list's own start
 const setView = (v: string) => {
-  const rows = v === 'attention' ? attention.value.flatMap(s => s.rows) : mine.value
+  const rows = v === 'attention' ? attention.value.flatMap(s => s.rows) : v === 'mine' ? [...open.value, ...mine.value] : []
   const keep = !!selected.value && rows.some(t => t.runId === selected.value)
-  router.replace({ path: keep ? route.path : '/inbox', query: v === 'attention' ? { list: 'attention' } : {} })
+  router.replace({ path: keep ? route.path : '/inbox', query: v === 'mine' ? {} : { list: v } })
+}
+
+// "Not for me", taken back from the banner
+const undoing = ref(false)
+async function undoPass(runId: string) {
+  undoing.value = true
+  try {
+    await api(`/api/tasks/${runId}/pass`, { method: 'DELETE' })
+    flash.value = null
+    await refresh()
+    await router.replace({ path: `/inbox/${runId}`, query: {} })
+  }
+  catch (e) {
+    flash.value = { at: route.path, text: (e as ApiError).message }
+  }
+  finally {
+    undoing.value = false
+  }
 }
 
 const retrying = ref<string | null>(null)
@@ -84,17 +107,19 @@ watch(selected, async (id) => {
   <div class="inbox">
     <aside ref="list" class="list" aria-label="Tasks" data-tour="tasks">
       <header class="list-head">
-        <div class="title-row">
-          <h1>Inbox</h1>
-          <NuxtLink to="/inbox/hours" class="btn btn-sm btn-quiet hours-link" data-tour="hours" :aria-current="route.path === '/inbox/hours' ? 'page' : undefined"><Icon name="calendar" />Interview availability</NuxtLink>
-        </div>
-        <div v-if="isManager && (inbox || loading)" class="seg" role="radiogroup" aria-label="Show">
-          <label><input type="radio" name="list" :checked="view === 'mine'" @change="setView('mine')"><span>My tasks <b v-if="inbox" class="n">{{ mine.length }}</b></span></label>
-          <label><input type="radio" name="list" :checked="view === 'attention'" @change="setView('attention')"><span>Needs attention <b v-if="attentionCount" class="n n-bad">{{ attentionCount }}</b></span></label>
+        <h1>Inbox</h1>
+        <div class="seg" role="radiogroup" aria-label="Show">
+          <label><input type="radio" name="list" :checked="view === 'mine'" @change="setView('mine')"><span>Tasks <b v-if="inbox" class="n">{{ mine.length + open.length }}</b></span></label>
+          <label data-tour="hours"><input type="radio" name="list" :checked="view === 'schedule'" @change="setView('schedule')"><span>Schedule</span></label>
+          <label><input type="radio" name="list" :checked="view === 'done'" @change="setView('done')"><span>Done</span></label>
+          <label v-if="isManager"><input type="radio" name="list" :checked="view === 'attention'" @change="setView('attention')"><span>Needs attention <b v-if="attentionCount" class="n n-bad">{{ attentionCount }}</b></span></label>
         </div>
       </header>
 
-      <div v-if="loading" class="rows" aria-busy="true" aria-label="Loading tasks">
+      <InboxScheduleList v-if="view === 'schedule'" />
+      <InboxDoneList v-else-if="view === 'done'" />
+
+      <div v-else-if="loading" class="rows" aria-busy="true" aria-label="Loading tasks">
         <div v-for="i in 6" :key="i" class="sk-row">
           <span class="skeleton" style="width:32px;height:32px;border-radius:50%" />
           <span class="skeleton" :style="{ height: '14px', width: `${60 + (i * 13) % 30}%` }" />
@@ -104,8 +129,15 @@ watch(selected, async (id) => {
 
 
       <template v-else-if="inbox && view === 'mine'">
+        <section v-if="open.length" aria-labelledby="sec-open">
+          <h2 id="sec-open" class="sec">Up for grabs <span class="faint">{{ open.length }}</span></h2>
+          <p class="sec-hint">Sent to your role. The first to take one gets it.</p>
+          <ul class="rows">
+            <li v-for="t in open" :key="t.runId"><InboxTaskRow :task="t" :to="linkTo(t)" :current="t.runId === selected" /></li>
+          </ul>
+        </section>
         <section aria-labelledby="sec-mine">
-          <h2 id="sec-mine" class="sec" :class="{ 'sr-only': isManager }">My tasks <span class="faint">{{ mine.length }}</span></h2>
+          <h2 id="sec-mine" class="sec" :class="{ 'sr-only': !open.length }">Yours <span class="faint">{{ mine.length }}</span></h2>
           <ul v-if="mine.length" class="rows">
             <li v-for="t in mine" :key="t.runId"><InboxTaskRow :task="t" :to="linkTo(t)" :current="t.runId === selected" /></li>
           </ul>
@@ -153,7 +185,7 @@ watch(selected, async (id) => {
         </section>
       </template>
 
-      <footer v-if="inbox && (view === 'mine' ? mine.length : attention.length) > 1" class="list-foot faint">
+      <footer v-if="inbox && (view === 'mine' ? mine.length + open.length : view === 'attention' ? attention.length : 2) > 1" class="list-foot faint">
         <span class="kbd">j</span><span class="kbd">k</span> next and previous task
       </footer>
     </aside>
@@ -162,6 +194,7 @@ watch(selected, async (id) => {
       <p class="said" aria-live="polite"><template v-if="flash && flash.at === route.path">
         <Icon name="check" :size="16" /><span>{{ flash.text }}</span>
         <NuxtLink v-if="flash.next" :to="flash.next.to" class="next">Next: {{ flash.next.title }}<Icon name="arrow-right" :size="14" /></NuxtLink>
+        <button v-if="flash.undo" type="button" class="next undo" :aria-busy="undoing" :disabled="undoing" @click="undoPass(flash.undo)">Undo</button>
       </template></p>
       <NuxtPage />
     </section>
@@ -177,13 +210,11 @@ watch(selected, async (id) => {
 }
 .list-head { position: sticky; top: 0; z-index: 1; display: grid; gap: 14px; padding: 28px 8px 14px; background: var(--bg); }
 .list-head .seg { justify-self: start; }
-.title-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.hours-link { margin-right: -8px; }
-.hours-link[aria-current] { --b-bg: var(--accent-tint); color: var(--accent-ink); }
 .n { font-weight: 600; color: var(--ink-3); font-variant-numeric: tabular-nums; }
 .n-bad { color: var(--bad); }
 .sec { display: flex; gap: 8px; align-items: baseline; margin: 16px 8px 6px; font-size: var(--t-sm); font-weight: 600; color: var(--ink-2); letter-spacing: 0; }
 section:first-of-type .sec:not(.sr-only) { margin-top: 2px; }
+.sec-hint { margin: -2px 8px 6px; font-size: var(--t-xs); color: var(--ink-3); }
 .rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
 .sk-row { display: grid; grid-template-columns: 32px 1fr; gap: 8px 12px; align-items: center; padding: 12px; }
 .calm { display: flex; gap: 8px; align-items: center; padding: 12px 8px; color: var(--ink-2); }
@@ -210,4 +241,5 @@ section:first-of-type .sec:not(.sr-only) { margin-top: 2px; }
 .said { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; margin-bottom: 16px; padding: 10px 16px; border-radius: var(--r-panel); background: var(--ok-tint); color: var(--ok); font-weight: 600; }
 .said:empty { display: block; padding: 0; margin: 0; }
 .said .next { display: inline-flex; gap: 4px; align-items: center; margin-left: auto; color: var(--ink); font-weight: 600; }
+.said .undo { border: 0; background: none; padding: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 0.18em; }
 </style>

@@ -663,6 +663,59 @@ tr.group th{text-align:left;font-weight:600;padding-top:1.25rem;border-bottom:1p
 </section>
 
 <section id="sessions">
+<article class="session" id="session-2026-10-26-inbox">
+<h2><span class="key">Session 2026-10-26 (inbox)<span class="vh">:</span></span> Take a task before you work it, with your week beside the choice</h2>
+<p class="kicker">Existing, Revamp · screen scope · Inbox · mock app/design-mocks/inbox-mocks.html approved by the owner on 2026-10-26, then built</p>
+<p class="lede">The owner wants one person per task. A task sent to a role is now “Up for grabs” until one person takes it. The Inbox also gets Schedule (booked interviews) and Done (what you sent).</p>
+<h3><span class="key">Brief</span> An interviewer between shifts, deciding if they have room for one more</h3>
+<p>For: employees who interview (shift leads, chefs) and managers. Job: take the right tasks, do them, look back. Moment: a short look between real work. Feel: fair and calm; nobody doubles up. Signature moment: Take it, with your next 7 days beside the button. Ending: the slot turns magenta and the task moves to Yours. Screens: 960 px to 2560 px, as the rest of the recruiter app.</p>
+<h3 class="i-list"><span class="key">Decisions</span> 13</h3>
+<div class="scroll"><table>
+<thead><tr><th scope="col">Element</th><th scope="col">Decision</th><th scope="col">Because</th><th scope="col">Rejected default</th></tr></thead>
+<tbody>
+<tr><td>Views</td><td>Tasks · Schedule · Done in the existing segmented control; managers keep Needs attention as a fourth</td><td>One place for “what is mine”; the control is already there</td><td>A new Schedule page in the rail</td></tr>
+<tr><td>Up for grabs</td><td>A group above Yours in Tasks, not its own view</td><td>The choice to take work and the work you hold are read together</td><td>A separate “Open tasks” tab</td></tr>
+<tr><td>Week strip</td><td>Your next 7 days above Take it, the due day ringed</td><td>The owner’s reason: see your load before you accept</td><td>A link to the Schedule view</td></tr>
+<tr><td>Nobody holds it</td><td>Empty outline avatar and a grey slot; magenta once taken</td><td>The slot already means “a person acts”; empty means nobody yet</td><td>A “New” or “Open” chip</td></tr>
+<tr><td>Not for me</td><td>Quiet button; hides it from you only; Undo in the banner</td><td>Passing is normal, not a failure; everyone passing already shows as Blocked</td><td>A confirm dialog with a reason field</td></tr>
+<tr><td>Schedule</td><td>Agenda by day, empty days left out; Waiting to book at the end; interview hours move here</td><td>A short list beats a mostly empty calendar grid</td><td>A week grid</td></tr>
+<tr><td>Done</td><td>By month, search, your Hire? answer as a chip, date in its own right column</td><td>People scan their calls and dates down the list</td><td>A plain table</td></tr>
+<tr><td>Everyone’s schedule</td><td>Managers only: a Mine · Everyone switch in Schedule; Everyone is a week calendar with the team list as tick-boxes and a count per person</td><td>A manager plans who takes what from the team’s load; a grid shows clashes and gaps that a list hides</td><td>A separate Calendar page in the rail; one shared list</td></tr>
+<tr><td>Your own calendar</td><td>Everyone gets the week calendar in Schedule’s right side, beside the day list; managers also get Everyone</td><td>The owner asked: people plan their own week too, not only managers</td><td>Calendar for managers only</td></tr>
+<tr><td>Booking link</td><td>Sent once the task has its people (taken, or nobody spare left), with only their names and hours</td><td>The owner agreed: the candidate books with the person who will be there</td><td>Link at step start to every assignee</td></tr>
+<tr><td>Rail count</td><td>Counts Yours only</td><td>The owner agreed: the number means “waits on you”</td><td>Yours plus Up for grabs</td></tr>
+<tr><td>Event colour</td><td>All events in the accent tint, with the interviewer’s initials; past ones grey</td><td>In Lanyard, colour means status, not a person; initials scale to any team size</td><td>One colour per person</td></tr>
+<tr><td>Access in Done</td><td>Employees see only their own answers; managers also get the candidate page</td><td>Employees have no candidate page today</td><td>Same view for everyone</td></tr>
+</tbody></table></div>
+<h3 class="i-list" id="chunks-2026-10-26-inbox"><span class="key">Chunks</span> 1 chunk, mock only</h3>
+<div class="scroll"><table>
+<thead><tr><th scope="col">Chunk</th><th scope="col">Files it owns</th><th scope="col">Behaviour contract (baseline)</th><th scope="col">Checks</th><th scope="col">Parity</th></tr></thead>
+<tbody>
+<tr><td>C-2 Inbox build</td><td>app/pages/inbox.vue, app/pages/inbox/index.vue, app/pages/inbox/[runId].vue, app/components/inbox/*, server/domain/tasks.ts, server/engine/engine.ts</td><td>As C-1</td><td>check.py on the inbox files: 0 errors, 0 questions; typecheck; 260 tests</td><td>Code parity: scorecard, j/k, next task after a send, Needs attention and reassign keep their code paths; tests 19–26 and the ops inbox tests pass. Changed on purpose: a role task starts in Up for grabs; the Interview availability button moved into Schedule. Visual parity owed: the dev database needs migration 0014 first</td></tr>
+<tr><td>C-1 Inbox mock</td><td>app/design-mocks/inbox-mocks.html</td><td>Today every assignee of a task gets it at once; managers see My tasks and Needs attention; Interview availability is a button at the top</td><td>check.py, check.py --inventory</td><td>not applicable: no app code changed. Compared at build: the scorecard, j/k keys, the next task opening after a send, Needs attention and reassign must act the same</td></tr>
+</tbody></table></div>
+<h3 class="i-alert"><span class="key">App-wide states</span> In the Inbox views</h3>
+<div class="scroll"><table>
+<thead><tr><th scope="col">State</th><th scope="col">Here</th></tr></thead>
+<tbody>
+<tr><td>Not found</td><td>A task someone else took first: “Jonah took this one” and it leaves your list</td></tr>
+<tr><td>No access</td><td>Employees opening a Done task see only their own answers, as getTask does today</td></tr>
+<tr><td>Signed out</td><td>not applicable: the app shell sends you to sign-in, as now</td></tr>
+<tr><td>Crash</td><td>“My tasks didn’t load” with Retry, as now, per view</td></tr>
+<tr><td>Offline</td><td>Same as crash; Take it shows its error under the button and keeps the task in Up for grabs</td></tr>
+<tr><td>First launch</td><td>Empty Schedule: “Nothing booked. Interviews you take show here.” Empty Done: “Tasks you send show here.”</td></tr>
+</tbody></table></div>
+<h3 class="i-motion"><span class="key">Motion map</span> Two moments move; the rest is instant</h3>
+<div class="scroll"><table>
+<thead><tr><th scope="col">Moment</th><th scope="col">Tier</th><th scope="col">Why</th></tr></thead>
+<tbody>
+<tr><td>Take it</td><td>transition</td><td>Row leaves Up for grabs, arrives in Yours on the accent tint; slot turns magenta (220 ms); banner says who no longer sees it</td></tr>
+<tr><td>Not for me</td><td>micro</td><td>Row fades out; banner with Undo</td></tr>
+<tr><td>Switch view</td><td>none</td><td>Frequent; must be instant</td></tr>
+</tbody></table></div>
+<h3>Look notes</h3>
+<p>Looked at all four frames and the taken state at 1440 px. Fixed: the manager’s four segments wrapped (now nowrap, list 420 px); schedule rows had a gap under the name. check.py on the mock: 0 errors. Two questions. (1) The edge bar on booked interviews in the week strip: changed to the accent tint, so the bar means only “current row”. (2) Middle dots: kept for “Barista · Shoreditch”, which is one phrase (job and shop); the Done date moved to its own column. check.py --inventory on app/: the mock uses only existing tokens; the drift it lists is from earlier sessions. Build: check.py on the inbox files gives 0 errors and 0 questions. Owed: the look at three widths, keyboard-only and largest text, and a fresh critique, once migration 0014 is on the dev database and the pages can render.</p>
+</article>
 <article class="session" id="session-2026-10-26-status">
 <h2><span class="key">Session 2026-10-26 (candidate status)<span class="vh">:</span></span> One private link per candidate; the page shows only what we already emailed</h2>
 <p class="kicker">Existing, Revamp · screen scope · new public page /status/[token], built after the owner approved the mock (canvas: claude.ai/artifact/BLCY538FZweRb456dMSGKW)</p>

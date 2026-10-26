@@ -3,7 +3,7 @@ import { z } from 'zod'
 import type { Db, Tx } from '../db/client'
 import { applicationEvents, applications, availability, bookings, candidates, jobs, nodeRuns, settings, taskAssignments, user } from '../db/schema'
 import { atLeastManager } from './access'
-import type { Viewer } from './applications'
+import { heldThrough, type Viewer } from './applications'
 import { queueEmail, words } from './emails'
 import { DomainError } from './errors'
 
@@ -123,7 +123,7 @@ async function offer(db: Db | Tx, b: Awaited<ReturnType<typeof loadBooking>>, no
         .innerJoin(nodeRuns, eq(nodeRuns.id, bookings.runId))
         .innerJoin(taskAssignments, eq(taskAssignments.runId, bookings.runId))
         .where(and(ne(bookings.runId, b.runId), ne(nodeRuns.status, 'cancelled'), isNull(bookings.cancelledAt), inArray(taskAssignments.userId, people.map(p => p.id)),
-          or(isNull(taskAssignments.closedAt), eq(nodeRuns.status, 'completed')),
+          heldThrough,
           gt(bookings.startsAt, new Date(now.getTime() - 86_400_000)), lt(bookings.startsAt, new Date(now.getTime() + WINDOW_MS)))))
         .map(r => ({ start: r.start!, end: new Date(r.start!.getTime() + r.minutes * 60_000) }))
     : []

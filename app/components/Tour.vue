@@ -13,9 +13,9 @@ const route = useRoute()
 const EMPLOYEE: Step[] = [
   { title: 'Welcome to Lanyard', body: 'A one-minute look at where your work lives. You can replay this from your avatar menu.' },
   { target: 'inbox', title: 'Your inbox is home', body: 'Everything someone asks you to do lands here. The number shows how many are waiting.' },
-  { route: '/inbox', target: 'tasks', title: 'My tasks', body: 'Click one to open it. Press j and k to move to the next and previous task.' },
+  { route: '/inbox', target: 'tasks', title: 'Your tasks', body: 'Click one to open it. Tasks sent to your whole role wait under Up for grabs until someone takes them. Press j and k to move between tasks.' },
   { route: '/inbox', target: 'task', title: 'Fill it in, send it, done', body: 'A task opens here with its scorecard. When you submit one, the next task opens by itself.' },
-  { route: '/inbox', target: 'hours', title: 'Set your interview availability', body: 'Candidates can only book an interview with you inside these hours. Without them, nobody can book you.' },
+  { route: '/inbox', target: 'hours', title: 'Your schedule and interview hours', body: 'Schedule shows the interviews booked with you. Set your interview hours there: candidates can only book you inside them.' },
 ]
 const MANAGER: Step[] = [
   { target: 'jobs', title: 'Your jobs', body: 'Every role you’re hiring for, with its candidates and where each one is.' },

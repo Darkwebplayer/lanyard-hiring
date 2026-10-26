@@ -8,9 +8,10 @@ import { createJob, publish, saveDraft } from '../server/domain/jobs'
 import { makeOffer, offerInput, respondToOffer } from '../server/domain/offers'
 import { listDocuments, markReceived } from '../server/domain/documents'
 import {
-  type AutoHandler, type EngineDeps, type Enqueued, executeAutoRun, HandlerError, moveApplication, reassignTask,
-  retryRun, startApplication, submitTask, sweep,
+  type AutoHandler, type EngineDeps, type Enqueued, claimTask, executeAutoRun, HandlerError, moveApplication, passTask, reassignTask,
+  retryRun, startApplication, submitTask, sweep, unpassTask,
 } from '../server/engine/engine'
+import { listDone, listTasks } from '../server/domain/tasks'
 import { testDb } from './db'
 
 // Engine cases from backend_plan.md §6.4, numbered as there. Fake handlers stand in for CV/AI/email.
@@ -345,6 +346,41 @@ describe('human tasks', () => {
     await rejects(submitTask(deps(), task.id, 'outsider', { technical: 5, communication: 5, hire: true }), 409, 'task_closed')
     expect(await submitTask(deps(), task.id, 'owner', { technical: 4, communication: 4, hire: true })).toEqual({ completed: true })
     await rejects(reassignTask(deps(), task.id, { add: ['ghost'], remove: [] }, 'owner'), 409, 'task_closed')
+  })
+
+  it('up for grabs: one of a role takes it, the others are let go; passing, undo, and the booking link waits for the taker', async () => {
+    const id = await apply(await publishedJob((tpl) => {
+      const n = tpl.workflow.nodes.find(n => n.key === 'interview')!
+      n.config = { ...(n.config as object), assignees: { users: [], roles: [role], job_owner: false }, booking: { duration_min: 45 } }
+    }))
+    await drain()
+    const task = await latest(id)
+    const asI = (u: string) => listTasks(db, { userId: u, level: 'employee' }, ADMIN, t)
+    const links = () => db.select().from(s.bookings).where(eq(s.bookings.runId, task.id))
+    expect(await links()).toEqual([]) // nobody holds it yet, so no booking link
+    expect(await asI('i1')).toMatchObject({ mine: [], open: [{ runId: task.id, grab: { others: ['I2', 'Out'], taken: [], need: 1 } }] })
+
+    await passTask(deps(), task.id, 'outsider')
+    expect((await asI('outsider')).open).toEqual([])
+    expect((await listDone(db, { userId: 'outsider', level: 'employee' }, t)).find(r => r.runId === task.id)).toMatchObject({ passed: true })
+    await unpassTask(deps(), task.id, 'outsider')
+    expect((await asI('outsider')).open).toHaveLength(1)
+
+    await claimTask(deps(), task.id, 'i1')
+    await claimTask(deps(), task.id, 'i1') // twice is fine
+    await rejects(claimTask(deps(), task.id, 'i2'), 409, 'task_taken')
+    await rejects(passTask(deps(), task.id, 'i1'), 409, 'task_taken')
+    await rejects(passTask(deps(), task.id, 'outsider'), 409, 'task_taken') // let go when i1 took it
+    expect((await asI('i1')).mine.map(r => r.runId)).toEqual([task.id])
+    expect(await asI('i2')).toMatchObject({ mine: [], open: [] })
+    const [b] = await links()
+    const [ask] = await db.select().from(s.candidateEmails).where(and(eq(s.candidateEmails.applicationId, id), eq(s.candidateEmails.kind, 'booking_request')))
+    expect(ask!.body).toContain(`/book/${b!.token}`)
+    expect(ask!.body).toContain('I1')
+    expect(ask!.body).not.toContain('I2')
+    await rejects(submitTask(deps(), task.id, 'i2', interview({ technical: 4, communication: 4, hire: true })), 409, 'task_closed')
+    expect(await submitTask(deps(), task.id, 'i1', interview({ technical: 4, communication: 4, hire: true }))).toEqual({ completed: true })
+    expect((await listDone(db, { userId: 'i1', level: 'employee' }, t)).find(r => r.runId === task.id)).toMatchObject({ passed: false, answer: { label: 'Hire?', yes: true } })
   })
 
   it('24. due date comes from due_days', async () => {

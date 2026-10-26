@@ -6,8 +6,9 @@ const flash = useState<{ at: string } | null>('inbox-flash', () => null)
 
 // with tasks waiting, the first one opens by itself; nobody starts from a blank page
 const router = useRouter()
-const first = computed(() => inbox.value?.mine.find(t => t.nodeType !== 'request_documents')) // those open on the candidate page
-const opening = computed(() => !!first.value && route.query.list !== 'attention')
+const list = computed(() => route.query.list as string | undefined)
+const first = computed(() => inbox.value?.mine.find(t => t.nodeType !== 'request_documents') ?? inbox.value?.open?.[0]) // documents open on the candidate page
+const opening = computed(() => !!first.value && !list.value)
 // after mount, so it never races the navigation that brought us here
 onMounted(async () => {
   await router.isReady()
@@ -25,7 +26,13 @@ async function retry() {
 </script>
 
 <template>
-  <div v-if="(!inbox && !error) || opening" class="sk" aria-hidden="true">
+  <InboxCalendar v-if="list === 'schedule'" />
+
+  <div v-else-if="list === 'done'" class="empty">
+    <p>Choose a task to see what you sent.</p>
+  </div>
+
+  <div v-else-if="(!inbox && !error) || opening" class="sk" aria-hidden="true">
     <div class="card sk-card sk-head">
       <span class="skeleton" style="width:44px;height:44px;border-radius:50%" />
       <div class="sk-lines"><span class="skeleton" style="height:22px;width:62%" /><span class="skeleton" style="height:14px;width:40%" /></div>
@@ -41,7 +48,7 @@ async function retry() {
     <button class="btn" :aria-busy="retrying" @click="retry"><span v-if="retrying" class="spinner" /><Icon v-else name="retry" />Retry</button>
   </div>
 
-  <div v-else-if="inbox.mine.length || route.query.list === 'attention'" class="empty">
+  <div v-else-if="inbox.mine.length || inbox.open?.length || list === 'attention'" class="empty">
     <p>Choose a late or blocked task to see its scorecard.</p>
   </div>
 
