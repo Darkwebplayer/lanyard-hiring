@@ -98,7 +98,7 @@ const about = computed(() => [
 const mustHave = computed(() => [form.skills.join(', '), form.minYears !== '' && `${plural(form.minYears, 'year')} or more`].filter(Boolean).join(' · '))
 
 // ---- steps ----
-const TITLES = ['What’s the job called?', 'How do you want to hire?', 'About the job', 'What must they have?', 'Check and create']
+const TITLES = ['Job title', 'Hiring workflow', 'Job description', 'Requirements', 'Review and create']
 const hint = computed(() => [
   'Use the title people search for. It’s the heading on your apply page.',
   'Pick the closest one. Every step can be changed later.',
@@ -200,7 +200,7 @@ const TAB_CAPS = ['Everyone who applied, by stage.', 'What happens to each appli
               <input id="nj-title" ref="titleInput" v-model="form.title" required pattern=".*\S.*" maxlength="200" autocomplete="off" placeholder="e.g. Shop assistant">
             </div>
             <div class="field narrow">
-              <label for="nj-openings">How many people?</label>
+              <label for="nj-openings">Openings</label>
               <input id="nj-openings" v-model.number="form.openings" type="number" min="1" max="10000" required>
             </div>
             <p class="hint">Hiring two of the same role? Make one job with 2 openings, not two jobs.</p>
@@ -228,7 +228,7 @@ const TAB_CAPS = ['Everyone who applied, by stage.', 'What happens to each appli
                 </span>
               </label>
               <div v-if="form.from === 'describe'" class="field">
-                <label for="nj-describe">How you hire</label>
+                <label for="nj-describe">Hiring process description</label>
                 <textarea id="nj-describe" v-model="form.describe" required maxlength="2000" rows="4" placeholder="Café barista: quick call, one paid trial shift, then offer." />
               </div>
             </template>
@@ -294,7 +294,7 @@ const TAB_CAPS = ['Everyone who applied, by stage.', 'What happens to each appli
               <span class="hint">Press Enter or comma after each. Paste a comma list to add several.</span>
             </div>
             <div class="field narrow">
-              <label for="nj-years">At least this many years</label>
+              <label for="nj-years">Minimum years of experience</label>
               <input id="nj-years" v-model.number="form.minYears" type="number" min="0" max="60" step="0.5">
             </div>
             <p v-if="chosen.ai" class="tip"><b>Tip</b><span>The AI reads the description, but scores against these. A hard rule like “no more than 6 demerit points” is safer here as a skill, or as a question on the form.</span></p>
@@ -308,7 +308,7 @@ const TAB_CAPS = ['Everyone who applied, by stage.', 'What happens to each appli
                 <button type="button" class="link" aria-label="Edit the job title" @click="go(1)">Edit</button>
               </div>
               <div class="sumrow">
-                <dt>How you hire</dt>
+                <dt>Workflow</dt>
                 <dd>
                   {{ chosen.name }}
                   <span v-if="form.from === 'describe'" class="chips"><span class="chip chip-ink">Drafted after you create</span></span>
@@ -317,7 +317,7 @@ const TAB_CAPS = ['Everyone who applied, by stage.', 'What happens to each appli
                 <button type="button" class="link" aria-label="Edit how you hire" @click="go(2)">Edit</button>
               </div>
               <div class="sumrow">
-                <dt>About</dt>
+                <dt>Description</dt>
                 <dd>
                   <span v-if="about">{{ about }}</span>
                   <span v-if="form.description.trim()" class="clip faint">{{ form.description }}</span>
@@ -326,7 +326,7 @@ const TAB_CAPS = ['Everyone who applied, by stage.', 'What happens to each appli
                 <button type="button" class="link" aria-label="Edit about the job" @click="go(3)">Edit</button>
               </div>
               <div class="sumrow">
-                <dt>Must have</dt>
+                <dt>Requirements</dt>
                 <dd><span v-if="mustHave">{{ mustHave }}</span><span v-else class="faint">Nothing yet</span></dd>
                 <button type="button" class="link" aria-label="Edit the must-haves" @click="go(4)">Edit</button>
               </div>

@@ -146,7 +146,7 @@ const maxLabel = (t: FieldType) => t === 'number' ? 'Highest value' : t === 'lis
   <div v-else class="layout">
     <form class="editor" @submit.prevent="save">
       <section class="panel core" aria-labelledby="core-h">
-        <h2 id="core-h" class="eyebrow">Always asked</h2>
+        <h2 id="core-h" class="eyebrow">Standard fields</h2>
         <ul>
           <li v-for="c in CORE" :key="c.label">
             <Icon name="lock" :size="14" /><span>{{ c.label }}</span><span class="faint">{{ c.required ? 'Required' : 'Optional' }}</span>
@@ -155,7 +155,7 @@ const maxLabel = (t: FieldType) => t === 'number' ? 'Highest value' : t === 'lis
       </section>
 
       <fieldset :disabled="readOnly" class="fields">
-        <legend class="sr-only">Your questions</legend>
+        <legend class="sr-only">Custom questions</legend>
         <p v-if="!readOnly && rows.some(locked)" class="lock-note"><Icon name="lock" :size="14" />Locked fields are in v{{ lockVersion }}. Candidates have answered them, so their key and type stay. To ask something different, add a new field.</p>
         <p v-if="!rows.length" class="panel none">No questions of your own yet. Add one to ask for a CV, a portfolio or anything else.</p>
 
@@ -217,7 +217,7 @@ const maxLabel = (t: FieldType) => t === 'number' ? 'Highest value' : t === 'lis
       </fieldset>
 
       <section v-if="flowIssues.length" class="panel flow-issues" role="alert">
-        <h2 class="eyebrow">This breaks the workflow</h2>
+        <h2 class="eyebrow">Workflow conflicts</h2>
         <ul>
           <li v-for="is in flowIssues" :key="is.message">
             <NuxtLink :to="source.flowHref(is.node)"><code>{{ is.node }}</code></NuxtLink> {{ is.message }}
@@ -236,7 +236,7 @@ const maxLabel = (t: FieldType) => t === 'number' ? 'Highest value' : t === 'lis
     </form>
 
     <aside class="preview" aria-labelledby="pv-h">
-      <h2 id="pv-h" class="eyebrow">What candidates see</h2>
+      <h2 id="pv-h" class="eyebrow">Candidate preview</h2>
       <div class="card sheet" inert>
         <label v-for="c in CORE" :key="c.label" class="field">
           <span class="label">{{ c.label }}<span v-if="!c.required" class="opt"> (optional)</span></span>

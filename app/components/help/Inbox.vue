@@ -4,7 +4,7 @@ const { isManager } = useMe()
 
 <template>
   <div class="topic-body">
-    <h3>Your inbox</h3>
+    <h3>Inbox</h3>
     <div class="dia list" role="img" aria-label="A list of three tasks. Pressing j moves to the next one. Sending a scorecard opens the next task.">
       <div class="dia-item r1">Interview Ben Okafor<span class="chip">Due today</span></div>
       <div class="dia-item r2">Review Mei Tan<span class="chip">2 days</span></div>

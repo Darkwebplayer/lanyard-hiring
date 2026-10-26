@@ -239,7 +239,7 @@ defineExpose({ open: openDialog })
         <p class="tip">Did {{ first }} answer on the phone or by email? Use <b>Record their answer</b>. It counts the same as clicking the link, and the confirmation email still goes.</p>
       </template>
       <details class="letter-wrap">
-        <summary>Read the letter</summary>
+        <summary>View letter</summary>
         <!-- renderMarkdown escapes everything first: safe to inject -->
         <div class="letter" v-html="renderMarkdown(current.letter, 3)" />
       </details>
@@ -267,22 +267,22 @@ defineExpose({ open: openDialog })
           <span v-if="tplErr" class="error"><Icon name="alert" :size="16" />{{ tplErr }} The built-in letter still works.</span>
         </div>
         <div class="field">
-          <label for="offer-salary">Pay</label>
+          <label for="offer-salary">Salary</label>
           <input id="offer-salary" v-model="form.salary" required maxlength="100" :placeholder="salaryHint">
           <span class="hint">As it should read in the letter, e.g. “SGD 4,800 a month”.</span>
         </div>
         <div class="two">
           <div class="field">
-            <label for="offer-start">Starts</label>
+            <label for="offer-start">Start date</label>
             <input id="offer-start" v-model="form.start" type="date" required :min="today()">
           </div>
           <div class="field">
-            <label for="offer-exp">Open until <span class="optional">optional</span></label>
+            <label for="offer-exp">Offer expires <span class="optional">optional</span></label>
             <input id="offer-exp" v-model="form.expires" type="date" :min="today()">
           </div>
         </div>
         <div class="field">
-          <label for="offer-loc">Where <span class="optional">optional</span></label>
+          <label for="offer-loc">Location <span class="optional">optional</span></label>
           <input id="offer-loc" v-model="form.location" maxlength="200" :placeholder="placeHint">
         </div>
         <p class="note">We email the letter link to <b>{{ tl.candidate.email }}</b> and keep a copy on {{ first }}’s page.</p>
@@ -315,7 +315,7 @@ defineExpose({ open: openDialog })
     <form @submit.prevent="record">
       <div class="dialog-body">
         <div>
-          <h2 id="ans-h">Record {{ first }}’s answer</h2>
+          <h2 id="ans-h">Record {{ first }}’s response</h2>
           <p class="muted sub">For when {{ first }} answered on the phone, by email or in person.</p>
         </div>
         <div class="pick" role="group" aria-label="Their answer">
@@ -323,7 +323,7 @@ defineExpose({ open: openDialog })
           <button type="button" class="btn" :aria-pressed="!ans.accepted" @click="ans.accepted = false">{{ first }} declined</button>
         </div>
         <div class="field">
-          <label for="ans-via">How did {{ first }} tell you?</label>
+          <label for="ans-via">Response received via</label>
           <select id="ans-via" v-model="ans.via">
             <option value="phone">On the phone</option>
             <option value="email">By email</option>

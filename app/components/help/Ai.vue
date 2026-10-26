@@ -1,6 +1,6 @@
 <template>
   <div class="topic-body">
-    <h3>What the AI does</h3>
+    <h3>AI screening</h3>
     <HelpAiReadsDiagram />
     <p>An <b>AI screening</b> step reads each application and scores it from 0 to 100 on each thing you list, like “Skills match” and “Experience”. The overall score is the average of those.</p>
     <h4>What it reads</h4>

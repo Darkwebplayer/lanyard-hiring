@@ -58,7 +58,7 @@ const next = computed(() => here.value ? nextMoves(props.tl, props.graph, here.v
       </li>
     </ol>
     <template v-if="next.length">
-      <h3 class="nh">Can go next</h3>
+      <h3 class="nh">Possible next steps</h3>
       <ul class="next">
         <li v-for="m in next" :key="'node' in m.to ? m.to.node : m.to.closed">
           <span v-if="m.branch" class="lbl">{{ m.branch }}</span>{{ m.name }}

@@ -10,7 +10,7 @@
     <ul>
       <li><b>Match the columns</b>: for each column in your file, pick where it goes. Everyone needs a name and an email. A “Full name” column is split into first and last.</li>
       <li>Send a column to <b>Note on their timeline</b> to keep anything else.</li>
-      <li><b>Start everyone at</b> the start of the workflow, or use a column to pick each person’s stage.</li>
+      <li><b>Starting step</b>: the start of the workflow, or use a column to pick each person’s stage.</li>
       <li>People already in the job, and rows with problems, are skipped. The check shows them before you import.</li>
     </ul>
     <p>Imported people have no CV file, so a step that reads the CV can’t work for them. Lanyard warns you and suggests a later place to start. Consent wasn’t collected, and their page says so.</p>

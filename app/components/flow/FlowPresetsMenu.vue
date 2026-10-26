@@ -134,7 +134,7 @@ async function save() {
           <input id="sp-name" v-model="draft.name" required maxlength="100" autocomplete="off" placeholder="e.g. Weekend shop staff">
         </div>
         <div v-else class="field">
-          <label for="sp-target">Preset to replace</label>
+          <label for="sp-target">Template to replace</label>
           <select id="sp-target" v-model="draft.target" required>
             <option v-for="p in flowPresets" :key="p.id" :value="p.id">{{ p.name }}</option>
           </select>

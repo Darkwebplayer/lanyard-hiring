@@ -1,6 +1,6 @@
 <template>
   <div class="topic-body">
-    <h3>How a stage works</h3>
+    <h3>Stages</h3>
     <div class="dia sd" role="img" aria-label="A person enters the stage. Lanyard acts first, then a person works, then a rule moves them to the next stage.">
       <div class="b"><em class="m" aria-hidden="true"><Icon name="ai" :size="11" /></em>First, Lanyard does these</div>
       <div class="b"><em class="p" aria-hidden="true"><Icon name="person" :size="11" /></em>Then a person does these</div>
@@ -21,7 +21,7 @@
     <h4 id="decision">Decision sends one email, not both</h4>
     <p>The Decision stage lists the offer email and the rejection email, but a candidate gets <b>one or the other</b>, depending on the path that brought them there. Closing someone by hand sends no email at all.</p>
 
-    <h4>Changes and Publish</h4>
+    <h4>Publishing changes</h4>
     <p>Edits save to a draft as you go. They reach new applicants when you <b>Publish</b>. People already in keep the version they started on.</p>
   </div>
 </template>

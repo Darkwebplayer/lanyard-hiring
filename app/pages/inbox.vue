@@ -89,7 +89,7 @@ watch(selected, async (id) => {
           <NuxtLink to="/inbox/hours" class="btn btn-sm btn-quiet hours-link" data-tour="hours" :aria-current="route.path === '/inbox/hours' ? 'page' : undefined"><Icon name="calendar" />Interview availability</NuxtLink>
         </div>
         <div v-if="isManager && (inbox || loading)" class="seg" role="radiogroup" aria-label="Show">
-          <label><input type="radio" name="list" :checked="view === 'mine'" @change="setView('mine')"><span>Yours <b v-if="inbox" class="n">{{ mine.length }}</b></span></label>
+          <label><input type="radio" name="list" :checked="view === 'mine'" @change="setView('mine')"><span>My tasks <b v-if="inbox" class="n">{{ mine.length }}</b></span></label>
           <label><input type="radio" name="list" :checked="view === 'attention'" @change="setView('attention')"><span>Needs attention <b v-if="attentionCount" class="n n-bad">{{ attentionCount }}</b></span></label>
         </div>
       </header>
@@ -105,7 +105,7 @@ watch(selected, async (id) => {
 
       <template v-else-if="inbox && view === 'mine'">
         <section aria-labelledby="sec-mine">
-          <h2 id="sec-mine" class="sec" :class="{ 'sr-only': isManager }">Your tasks <span class="faint">{{ mine.length }}</span></h2>
+          <h2 id="sec-mine" class="sec" :class="{ 'sr-only': isManager }">My tasks <span class="faint">{{ mine.length }}</span></h2>
           <ul v-if="mine.length" class="rows">
             <li v-for="t in mine" :key="t.runId"><InboxTaskRow :task="t" :to="linkTo(t)" :current="t.runId === selected" /></li>
           </ul>

@@ -23,7 +23,7 @@ const source = (e: Email) => e.kind === 'flow' ? stepName(props.tl, props.tl.run
 <template>
   <section v-if="emails?.length || failed" class="panel emails" aria-labelledby="emails-h">
     <div class="ehead">
-      <h2 id="emails-h" class="sec">Emails to {{ tl.candidate.firstName }}</h2>
+      <h2 id="emails-h" class="sec">Email history</h2>
       <span v-if="emails" class="faint">{{ plural(emails.length, 'sent', 'sent') }}</span>
     </div>
     <p class="faint">Every email sent to the candidate. This is your record.</p>

@@ -296,7 +296,7 @@ function closedLine(c: StageView['closed'][number]) {
         <p class="sub">Each stage is a column on the Pipeline board.</p>
       </div>
       <div class="panel box">
-        <h3>See it as a diagram</h3>
+        <h3>Diagram view</h3>
         <p class="sub">Every step and branch on a canvas, for changes the stage list can’t make.</p>
         <button type="button" class="btn btn-sm canvas-btn" @click="emit('canvas')"><Icon name="split" />Open canvas</button>
       </div>

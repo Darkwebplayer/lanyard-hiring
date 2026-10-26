@@ -176,7 +176,7 @@ async function submit() {
             </div>
           </fieldset>
           <fieldset v-if="!closed">
-            <legend class="legend">Or close it</legend>
+            <legend class="legend">Close application</legend>
             <div class="opts">
               <label v-for="c in CLOSES" :key="c" class="opt">
                 <input v-model="choice" type="radio" name="move-to" :value="`close:${c}`">
@@ -198,7 +198,7 @@ async function submit() {
 
         <!-- the same radio rows as the board and list: one tap per reason, all of them visible -->
         <fieldset v-if="rejecting" class="field">
-          <legend class="legend">Why are they rejected?</legend>
+          <legend class="legend">Rejection reason</legend>
           <p v-if="settingsErr" class="error" role="alert"><Icon name="alert" :size="16" />{{ settingsErr }}</p>
           <div v-else-if="!settings" class="faint"><span class="spinner" /></div>
           <div v-else class="reasons">
@@ -214,7 +214,7 @@ async function submit() {
         </label>
 
         <fieldset v-if="ask.length" class="ask">
-          <legend class="legend">Asked when someone is moved here</legend>
+          <legend class="legend">Stage questions</legend>
           <div v-for="(f, i) in ask" :key="f.key" class="field">
             <label v-if="f.type === 'boolean'" class="check">
               <input v-model="answers[f.key]" type="checkbox" :data-first="i === 0 || undefined">{{ f.label }}

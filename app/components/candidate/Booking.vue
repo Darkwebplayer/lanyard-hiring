@@ -23,7 +23,7 @@ async function copy() {
 
 <template>
   <section v-if="b" class="panel booking" aria-labelledby="book-h">
-    <h2 id="book-h" class="sec">Booking link</h2>
+    <h2 id="book-h" class="sec">Interview booking</h2>
     <p v-if="b.cancelledAt" class="when muted"><Icon name="calendar" :size="16" /><span>Cancelled. It was booked for {{ fmtBooked(b.startsAt) }}.</span></p>
     <p v-else-if="b.startsAt" class="when"><Icon name="calendar" :size="16" /><span>Booked for <b>{{ fmtBooked(b.startsAt) }}</b>, {{ b.durationMin }} min</span></p>
     <p v-else class="when muted"><Icon name="clock" :size="16" /><span>Not booked yet. We emailed {{ firstName }} the link to pick a {{ b.durationMin }}-minute slot.</span></p>

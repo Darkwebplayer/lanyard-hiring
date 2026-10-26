@@ -25,7 +25,7 @@ const ready = computed(() => text.value.trim().length > 0 && !props.busy)
   <form class="describe" :class="mode" :aria-labelledby="`${uid}-h`" @submit.prevent="ready && emit('draft')">
     <h2 :id="`${uid}-h`">{{ isJob ? 'How do you hire for this job?' : 'How do you hire with this workflow?' }}</h2>
     <p class="muted">Write it the way you would tell a new manager. We draft the steps, and you check them before you save.</p>
-    <label :for="`${uid}-t`" class="sr-only">How you hire</label>
+    <label :for="`${uid}-t`" class="sr-only">Hiring process description</label>
     <textarea
       :id="`${uid}-t`" ref="box" v-model="text" maxlength="2000" rows="4" :readonly="busy"
       placeholder="Café barista: quick call, one paid trial shift, then offer."

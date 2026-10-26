@@ -36,7 +36,7 @@ async function retry() {
   </div>
 
   <div v-else-if="!inbox" class="empty">
-    <h2>Your tasks didn’t load</h2>
+    <h2>My tasks didn’t load</h2>
     <p>{{ error?.message }}</p>
     <button class="btn" :aria-busy="retrying" @click="retry"><span v-if="retrying" class="spinner" /><Icon v-else name="retry" />Retry</button>
   </div>

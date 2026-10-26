@@ -1,6 +1,6 @@
 <template>
   <div class="topic-body">
-    <h3>Your team</h3>
+    <h3>Team</h3>
     <div class="dia roles" role="img" aria-label="Admins see everything. Managers run jobs. Employees see only their own tasks.">
       <div v-for="r in ROLES" :key="r.name" class="role">
         <span class="badge" aria-hidden="true" /><b>{{ r.name }}</b>
@@ -24,7 +24,7 @@
 const ROLES = [
   { name: 'Admin', sees: ['Everything', 'Team', 'Settings'] },
   { name: 'Manager', sees: ['Jobs', 'Candidates', 'Reports'] },
-  { name: 'Employee', sees: ['Their tasks', 'Their hours'] },
+  { name: 'Employee', sees: ['Their tasks', 'Their availability'] },
 ]
 </script>
 

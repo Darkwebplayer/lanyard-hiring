@@ -141,7 +141,7 @@ const scoreRows = (v: Record<string, unknown>) => Object.entries(v).filter(([k])
           </ul>
           <template v-if="canReassign">
             <form v-if="users" class="add" @submit.prevent="pick && reassign({ add: [pick] })">
-              <label :for="`add-${run.id}`" class="sr-only">Add a person to {{ name }}</label>
+              <label :for="`add-${run.id}`" class="sr-only">Add an assignee to {{ name }}</label>
               <select :id="`add-${run.id}`" v-model="pick" required>
                 <option value="" disabled>Add a person…</option>
                 <option v-for="u in addable" :key="u.id" :value="u.id">{{ u.name }}</option>

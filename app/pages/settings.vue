@@ -155,7 +155,7 @@ async function save() {
             <a href="/careers" target="_blank" rel="noopener" class="btn btn-sm btn-quiet">Open it<Icon name="external" :size="14" /></a>
           </div>
           <div class="field">
-            <label for="s-intro">Intro line</label>
+            <label for="s-intro">Introduction</label>
             <textarea id="s-intro" v-model="form.careersIntro" rows="2" maxlength="500" placeholder="We’re a family-run bakery with three shops in Tampines and Bedok." aria-describedby="s-intro-h" />
             <p id="s-intro-h" class="hint">Sits under your company name, above the list of open jobs. <span class="count">{{ form.careersIntro.length }}/500</span></p>
           </div>

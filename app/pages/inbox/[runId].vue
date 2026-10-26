@@ -228,7 +228,7 @@ async function submit() {
           <p v-if="ai.summary" class="ai-sum">“{{ ai.summary }}”</p>
         </div>
         <details v-if="snapAnswers.length" class="snap-answers">
-          <summary>Their answers</summary>
+          <summary>Application answers</summary>
           <dl>
             <div v-for="f in snapAnswers" :key="f.key"><dt>{{ f.label }}</dt><dd :class="{ faint: f.v == null || f.v === '' }">{{ f.v == null || f.v === '' ? 'Not answered' : fmtVal(f.v) }}</dd></div>
           </dl>
@@ -306,7 +306,7 @@ async function submit() {
 
     <section v-if="isPanel" class="card panel-card" aria-labelledby="panel-h">
       <div class="ro-head">
-        <h3 id="panel-h">Panel</h3>
+        <h3 id="panel-h">Interview panel</h3>
         <span class="progress">
           <span class="pips" aria-hidden="true"><i v-for="i in task.minSubmissions" :key="i" :class="{ on: i <= submitted }" /></span>
           {{ Math.min(submitted, task.minSubmissions) }} of {{ task.minSubmissions }} scorecards in

@@ -1,6 +1,6 @@
 <template>
   <div class="topic-body">
-    <h3>A candidate</h3>
+    <h3>Candidate profile</h3>
     <div class="dia why" role="img" aria-label="The Score rationale card: Screen sent this candidate to Interview because their score was 78, which is 70 or more.">
       <span class="eyebrow">Score rationale</span>
       <p class="line">Screen sent this to Interview: <span class="hl">score 78 is 70 or more</span>.</p>
@@ -12,7 +12,7 @@
       <li><b>Hiring progress</b> is their path so far: scorecards, emails, and who each task is with. Add or remove people there.</li>
       <li><b>Application answers</b> has their answers and what they agreed to when they applied.</li>
     </ul>
-    <h4>Moving them on</h4>
+    <h4>Moving candidates</h4>
     <ul>
       <li><b>Next in the workflow</b> follows the usual path. <b>Other moves</b> can skip steps, which asks for a reason.</li>
       <li><b>Close as rejected</b> asks a reason from your list and sends no email.</li>

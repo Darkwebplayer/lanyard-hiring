@@ -269,14 +269,14 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
         </div>
       </section>
       <section class="sec">
-        <div class="legend">Always pulled out</div>
-        <ul class="fixed" aria-label="Always pulled out">
+        <div class="legend">Standard fields</div>
+        <ul class="fixed" aria-label="Standard fields">
           <li class="chip">Current title</li><li class="chip">Years of experience</li><li class="chip">Skills</li>
         </ul>
-        <div class="legend">Also pull out <span class="faint">(up to 10)</span></div>
+        <div class="legend">Additional fields <span class="faint">(up to 10)</span></div>
         <div v-for="(f, i) in c.extract ?? []" :key="i" class="row-card">
           <div class="rc-head">
-            <span class="legend">Fact {{ Number(i) + 1 }}</span>
+            <span class="legend">Field {{ Number(i) + 1 }}</span>
             <button type="button" class="btn btn-quiet btn-icon btn-sm" :aria-label="`Remove ${f.label || 'fact'}`" title="Remove fact" @click="dropExtract(Number(i))"><Icon name="x" /></button>
           </div>
           <div class="field">
@@ -310,7 +310,7 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
 
       <!-- AI review -->
       <section v-else-if="node.type === 'ai_review'" class="sec">
-        <div class="legend">What the AI scores <span class="faint">(0–100 each, up to 10)</span></div>
+        <div class="legend">Scoring criteria <span class="faint">(0–100 each, up to 10)</span></div>
         <div v-for="(cr, i) in c.criteria" :key="i" class="row-card">
           <div class="rc-head">
             <span class="legend">Criterion {{ Number(i) + 1 }}</span>
@@ -321,7 +321,7 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
             <input :id="`cl-${node.key}-${i}`" :value="cr.label" placeholder="e.g. Customer service" @input="relabel(cr, ($event.target as HTMLInputElement).value, 'criterion')">
           </div>
           <div class="field">
-            <label :for="`cd-${node.key}-${i}`">Scoring criteria</label>
+            <label :for="`cd-${node.key}-${i}`">Description</label>
             <textarea :id="`cd-${node.key}-${i}`" v-model="cr.description" rows="2" placeholder="e.g. Has served customers in a shop, café or call centre" />
           </div>
           <details class="adv">
@@ -375,7 +375,7 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
             <span class="legend" :id="`qa-${node.key}-${i}`">Answer</span>
             <div class="seg" role="radiogroup" :aria-labelledby="`qa-${node.key}-${i}`">
               <label><input type="radio" :name="`qa-${node.key}-${i}`" :checked="q.kind === 'yes_no'" @change="setQuestionKind(q, 'yes_no')"><span>Yes or no</span></label>
-              <label><input type="radio" :name="`qa-${node.key}-${i}`" :checked="q.kind === 'choice'" @change="setQuestionKind(q, 'choice')"><span>Pick one</span></label>
+              <label><input type="radio" :name="`qa-${node.key}-${i}`" :checked="q.kind === 'choice'" @change="setQuestionKind(q, 'choice')"><span>Single choice</span></label>
             </div>
           </div>
           <div v-if="q.kind === 'choice'" class="field">
@@ -399,7 +399,7 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
           <p class="hint">The AI only sees CV text and form answers that aren’t protected.</p>
         </div>
         <div class="gives">
-          <span class="legend">A Decision after this can use</span>
+          <span class="legend">Outputs</span>
           <dl>
             <template v-for="(q, i) in c.questions" :key="i"><dt>{{ q.label || q.key || 'Unnamed' }}</dt><dd>{{ givesText(q) }}</dd></template>
           </dl>

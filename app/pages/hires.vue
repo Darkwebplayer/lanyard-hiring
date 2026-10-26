@@ -65,7 +65,7 @@ const applications = computed(() => (report.value?.jobs ?? []).reduce((s, j) => 
       <div class="panel table-wrap" aria-busy="true" aria-label="Loading the report">
         <table class="table">
           <thead>
-            <tr><th>Job</th><th>Status</th><th class="num">Applications</th><th>Seats</th><th class="num">Fill rate</th></tr>
+            <tr><th>Job</th><th>Status</th><th class="num">Applications</th><th>Openings</th><th class="num">Fill rate</th></tr>
           </thead>
           <tbody>
             <tr v-for="i in 5" :key="i"><td v-for="(w, k) in [70, 40, 30, 50, 30]" :key="k" :class="{ num: k === 2 || k === 4 }"><span class="skeleton sk" :style="{ width: `${w}%` }" /></td></tr>
@@ -101,7 +101,7 @@ const applications = computed(() => (report.value?.jobs ?? []).reduce((s, j) => 
         <h2 id="by-job" class="sr-only">By job</h2>
         <table class="table">
           <thead>
-            <tr><th>Job</th><th>Status</th><th class="num">Applications</th><th>Seats</th><th class="num">Fill rate</th></tr>
+            <tr><th>Job</th><th>Status</th><th class="num">Applications</th><th>Openings</th><th class="num">Fill rate</th></tr>
           </thead>
           <tbody>
             <tr v-for="j in rows" :key="j.id">

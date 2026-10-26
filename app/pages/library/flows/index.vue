@@ -220,7 +220,7 @@ async function confirmDelete() {
 
           <div class="sheet-body">
             <section v-if="facts.named.length || facts.problems.length" class="block warns" aria-labelledby="warn-h">
-              <h3 id="warn-h" class="eyebrow">Check after you use it</h3>
+              <h3 id="warn-h" class="eyebrow">Review before use</h3>
               <ul>
                 <li v-for="n in facts.named" :key="n.key">
                   <Icon name="person" :size="16" />
@@ -252,7 +252,7 @@ async function confirmDelete() {
             </section>
 
             <section class="block" aria-labelledby="reads-h">
-              <h3 id="reads-h" class="eyebrow">Reads from each job</h3>
+              <h3 id="reads-h" class="eyebrow">Required job details</h3>
               <template v-if="facts.reads.length">
                 <p class="chips"><span v-for="l in facts.reads" :key="l" class="chip">{{ l }}</span></p>
                 <p class="faint small">Fill these in on each job’s Job details tab. The job says which are empty.</p>

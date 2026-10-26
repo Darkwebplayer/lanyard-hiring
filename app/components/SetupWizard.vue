@@ -19,7 +19,7 @@ const LABELS = ['Company', 'Team', 'Your hours', 'First job']
 const ROLE_VIEW = [
   { name: 'Admin', sees: ['Everything', 'Team', 'Settings'] },
   { name: 'Manager', sees: ['Jobs', 'Candidates', 'Reports'] },
-  { name: 'Employee', sees: ['Their tasks', 'Their hours'] },
+  { name: 'Employee', sees: ['Their tasks', 'Their availability'] },
 ]
 
 onMounted(async () => {
@@ -138,7 +138,7 @@ const daysText = computed(() => {
 })
 
 // ---------- moving between steps ----------
-const primaryLabel = computed(() => step.value === 2 ? (rows.value.some(r => r.email.trim()) ? 'Send invites' : 'Next') : step.value === 3 && !hadHours.value ? 'Save hours' : 'Next')
+const primaryLabel = computed(() => step.value === 2 ? (rows.value.some(r => r.email.trim()) ? 'Send invites' : 'Next') : step.value === 3 && !hadHours.value ? 'Save availability' : 'Next')
 async function primary() {
   error.value = ''
   busy.value = true
@@ -183,13 +183,13 @@ function tour() {
     <form class="mid" novalidate @submit.prevent="primary">
       <section class="main">
         <template v-if="step === 1">
-          <div class="lead"><h3>Your company</h3><p class="faint">Candidates see this name on every apply page and email.</p></div>
+          <div class="lead"><h3>Company profile</h3><p class="faint">Candidates see this name on every apply page and email.</p></div>
           <div class="field">
             <label for="su-name">Company name</label>
             <input id="su-name" v-model="company.name" maxlength="200" autocomplete="organization" placeholder="Northwind Logistics" autofocus>
           </div>
           <div class="field">
-            <label for="su-reply">When candidates reply, send it to</label>
+            <label for="su-reply">Reply-to email</label>
             <input id="su-reply" v-model="company.reply" type="email" placeholder="hiring@company.com">
           </div>
           <label v-if="showAi" class="panel ai-row">
@@ -199,7 +199,7 @@ function tour() {
         </template>
 
         <template v-else-if="step === 2">
-          <div class="lead"><h3>Who helps you hire?</h3><p class="faint">Invite them now, or skip and do it from Team later.</p></div>
+          <div class="lead"><h3>Team members</h3><p class="faint">Invite them now, or skip and do it from Team later.</p></div>
           <div class="invites">
             <div class="row heads" aria-hidden="true"><span>Email</span><span>They can</span><span /></div>
             <div v-for="(r, i) in rows" :key="i" class="row-wrap">
@@ -219,7 +219,7 @@ function tour() {
         </template>
 
         <template v-else-if="step === 3">
-          <div class="lead"><h3>When can you interview?</h3><p class="faint">Candidates pick a time from these hours. Without hours, nobody can book you.</p></div>
+          <div class="lead"><h3>Interview availability</h3><p class="faint">Candidates pick a time from these hours. Without hours, nobody can book you.</p></div>
           <p v-if="hadHours" class="panel note">You’ve set your hours already. Change them on the <NuxtLink to="/inbox/hours" @click.prevent="leave('/inbox/hours')">full hours page</NuxtLink>.</p>
           <template v-else>
             <div class="field tz">
@@ -234,12 +234,12 @@ function tour() {
                 <span :class="{ faint: !on[d.key] }">{{ on[d.key] ? nineToFive : 'Not available' }}</span>
               </li>
             </ul>
-            <NuxtLink to="/inbox/hours" class="go" @click.prevent="leave('/inbox/hours')">Need split hours or weekends? Use the full hours page</NuxtLink>
+            <NuxtLink to="/inbox/hours" class="go" @click.prevent="leave('/inbox/hours')">Need split hours or weekends? Use the full availability page</NuxtLink>
           </template>
         </template>
 
         <template v-else>
-          <div class="lead"><h3>You’re set up</h3><p class="faint">One thing left: the job you’re hiring for.</p></div>
+          <div class="lead"><h3>Setup complete</h3><p class="faint">One thing left: the job you’re hiring for.</p></div>
           <ul class="checks">
             <li><i :class="{ no: !done.company }">{{ done.company ? '✓' : 1 }}</i><span>
               <b>{{ done.company ? company.name : 'Your company' }}</b><br>

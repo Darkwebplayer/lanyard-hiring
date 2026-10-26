@@ -258,7 +258,7 @@ async function addRole() {
         </div>
         <div class="panel table-wrap">
           <table class="table roles">
-            <thead><tr><th>Name</th><th>Level</th><th class="num">People</th></tr></thead>
+            <thead><tr><th>Name</th><th>Access level</th><th class="num">Members</th></tr></thead>
             <tbody>
               <template v-if="!users">
                 <tr v-for="i in 3" :key="i"><td v-for="(w, k) in [50, 40, 20]" :key="k"><span class="skeleton sk" :style="{ width: `${w}%` }" /></td></tr>

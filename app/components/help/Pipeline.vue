@@ -1,10 +1,10 @@
 <template>
   <div class="topic-body">
-    <h3>The pipeline</h3>
+    <h3>Pipeline</h3>
     <HelpFlowDiagram :stages="[{ name: 'Screening', ai: true }, { name: 'Interview' }, { name: 'Decision' }]" />
     <p>Everyone who applied, one column per stage. Switch to <b>List</b> to search, filter and move many at once.</p>
 
-    <h4>Moving someone</h4>
+    <h4>Moving candidates</h4>
     <div class="dia drag" role="img" aria-label="A card is dragged to the next column. That column says Next, and shows what the move sets off before you drop.">
       <div class="cols"><span class="col">Screening<span class="card-mini">Mei Tan</span></span><span class="col to">Interview<span class="tag">Next</span></span></div>
     </div>

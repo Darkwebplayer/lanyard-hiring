@@ -333,7 +333,7 @@ const skipped = (s: Summary) => s.duplicates.length + s.invalid.length
         <div class="lower">
           <div class="where">
             <div class="field">
-              <label for="imp-start">Start everyone at</label>
+              <label for="imp-start">Starting step</label>
               <select id="imp-start" v-model="start" aria-describedby="imp-start-h">
                 <option :value="null">The start of the workflow</option>
                 <optgroup v-for="g in groups" :key="g.label" :label="g.label">

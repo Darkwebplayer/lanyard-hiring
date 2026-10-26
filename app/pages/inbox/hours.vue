@@ -126,7 +126,7 @@ onBeforeRouteLeave(() => !dirty.value || firstTime.value || confirm('Leave witho
 
       <p v-if="problem" class="err" role="alert"><Icon name="alert" :size="14" />{{ problem }}</p>
       <div class="foot">
-        <button class="btn btn-primary" :disabled="saving || !!problem" :aria-busy="saving"><span v-if="saving" class="spinner" />Save hours</button>
+        <button class="btn btn-primary" :disabled="saving || !!problem" :aria-busy="saving"><span v-if="saving" class="spinner" />Save availability</button>
         <span aria-live="polite" class="status">
           <span v-if="saved" class="ok"><Icon name="check" :size="16" />Saved. New booking times use these hours.</span>
           <span v-else-if="saveError" class="err"><Icon name="alert" :size="16" />{{ saveError }}</span>
