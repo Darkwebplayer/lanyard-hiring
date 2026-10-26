@@ -35,7 +35,6 @@ const asCards = (r: Row) => 'node' in r.pos && countAt(r.pos).n <= CARDS
 const peopleAt = (pos: Pos) => (props.board.preview as ListRow[]).filter(r => posId(posOfRow(r) ?? { node: '' }) === posId(pos))
 const personOf = (r: PipelineRow): Person => ({ id: r.id, name: fullName(r.candidate), email: r.candidate.email, at: posOfRow(r)! })
 const late = (r: PipelineRow) => !!r.dueAt && new Date(r.dueAt).getTime() < Date.now()
-const listLink = (r: Row) => ({ query: 'node' in r.pos ? { view: 'list', step: r.pos.node } : { view: 'list', show: r.pos.closed } })
 
 // ---------- people pulled out of a pile by search; gone on reload, as everything groups again ----------
 const picked = ref<Person[]>([])
@@ -294,12 +293,12 @@ const movingLeft = computed(() => moving.value ? Math.max(0, countAt(moving.valu
                   <span v-if="countAt(r.pos).failed" class="chip chip-bad"><Icon name="stop" />{{ countAt(r.pos).failed.toLocaleString() }} stopped</span>
                   <span v-if="countAt(r.pos).overdue" class="chip chip-warn"><Icon name="clock" />{{ countAt(r.pos).overdue.toLocaleString() }} late</span>
                 </div>
-                <NuxtLink :to="listLink(r)" class="g-see" draggable="false">
+                <button type="button" class="g-see" draggable="false" @click="finder!.open(r.id)">
                   <span v-if="facesAt(r.pos).length" class="faces" aria-hidden="true">
                     <Avatar v-for="f in facesAt(r.pos)" :key="f.id" :name="fullName(f.candidate)" :size="24" />
                   </span>
-                  See them in the list
-                </NuxtLink>
+                  See who
+                </button>
               </article>
             </template>
 
@@ -416,8 +415,9 @@ const movingLeft = computed(() => moving.value ? Math.max(0, countAt(moving.valu
 .g-flags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
 .g-top { display: flex; align-items: center; justify-content: space-between; gap: 4px 8px; flex-wrap: wrap; margin-right: -6px; }
 .g-move { flex: none; }
-/* faces and words are one link: the first three of the pile, then where it goes */
+/* faces and words are one button: the first three of the pile; it opens the pile in the find dialog, no tab switch */
 .g-see {
+  border: 0; background: none; font-family: inherit; cursor: pointer;
   white-space: nowrap; display: inline-flex; align-items: center; gap: 8px; margin: 10px 0 0 -6px; padding: 4px 10px 4px 6px; border-radius: var(--r-pill);
   font-size: var(--t-sm); font-weight: 600; color: var(--accent-ink); text-decoration: none;
 }

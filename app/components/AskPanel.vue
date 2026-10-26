@@ -208,6 +208,7 @@ function point(id: string) {
 .ask {
   position: fixed; top: 0; right: 0; bottom: 0; z-index: 30; width: 392px;
   display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr); /* else the column grows to the one-line "Looking at …" and spills off-screen */
   background: var(--surface); border-left: 1px solid var(--line); box-shadow: var(--shadow-3);
 }
 @media (min-width: 1280px) {
@@ -233,7 +234,7 @@ function point(id: string) {
 .turns { display: grid; gap: 16px; }
 .turns:empty { display: none; }
 
-.head { padding: 24px 18px 14px; display: grid; gap: 10px; border-bottom: 1px solid var(--line); }
+.head { padding: 24px 18px 14px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; border-bottom: 1px solid var(--line); }
 .title { display: flex; align-items: center; gap: 8px; min-height: 30px; padding-right: 40px; }
 .title h2 { font-size: var(--t-lg); }
 /* the close button takes the corner pill's place, so open and close are one spot */
