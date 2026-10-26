@@ -15,8 +15,8 @@ const stageQuestion = (c: { name: string, stage: boolean }) => `What is happenin
 const askAt = (c: { id: string, stage: boolean }) => c.stage ? `stage:${c.id}` : c.id === 'other' || c.id === 'closed' ? undefined : `node:${c.id}`
 const stageAsked = (c: { id: string, name: string, stage: boolean }) => asker.open.value && asker.focus.value === askAt(c) && asker.lastQuestion.value === stageQuestion(c)
 const toast = useToast()
-// up to this many, a step shows each person; above it, one pile and the way to the list (the board's preview size)
-const CARDS = 30
+// up to this many, a step shows each person; above it, one pile and the way to the list
+const CARDS = 10
 
 // ---------- columns: stages (with what each does by itself), then steps no stage claims, then Closed ----------
 const columns = computed(() => boardColumns(props.board).map(c => ({

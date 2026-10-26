@@ -18,7 +18,7 @@ import StageList from './StageList.vue'
 import StagesPanel from './StagesPanel.vue'
 import StepPanel from './StepPanel.vue'
 
-// stagesFirst: open on the stage list (a job's Stages tab); the canvas is the advanced view, at ?view=canvas
+// stagesFirst: open on the stage list (a job's Workflow tab), with Canvas as the other tab, at ?view=canvas
 const props = defineProps<{ source: FlowSource, stagesFirst?: boolean }>()
 const emit = defineEmits<{ edit: [], replace: [next: { form: FormField[], workflow: Graph }, name: string] }>()
 const toast = useToast()
@@ -765,6 +765,10 @@ function goTo(key?: string) {
 </script>
 
 <template>
+  <div v-if="stagesFirst" class="seg view-tabs" role="radiogroup" aria-label="Workflow view">
+    <label :title="sv.fits ? undefined : sv.reason"><input type="radio" name="flow-view" :checked="view === 'stages'" :disabled="!sv.fits || describeInline || !!aiDraft" @change="setView('stages')"><span>Stage list</span></label>
+    <label><input type="radio" name="flow-view" :checked="view === 'canvas'" @change="setView('canvas')"><span>Canvas</span></label>
+  </div>
   <div ref="root" class="flow" :class="{ 'has-panel': !!selected, 'read-only': readOnly, editing, 'stages-view': view === 'stages' }" :style="{ height: `${height}px`, marginBottom: `${-pullUp}px` }">
     <nav v-if="!readOnly && view === 'canvas'" class="palette" :class="{ editing, 'on-stages': leftTab === 'stages' }" :aria-label="leftTab === 'steps' ? 'Add a step' : 'Stages'">
       <div class="seg left-tabs" role="radiogroup" aria-label="Show in this column">
@@ -823,7 +827,7 @@ function goTo(key?: string) {
       v-if="view === 'stages'" class="stage-main" :graph="wf" :view="sv" :form="form" :issues-by="issuesBy" :roles="roles" :people="people"
       :selected-key="selectedKey" :read-only="readOnly" :form-href="source.formHref" :palette="palette"
       @select="select" @add="addInStage" @remove="removeInStages" @rename="renameStage" @move="moveStage" @remove-stage="mergeStage"
-      @add-stage="addStageAt" @canvas="setView('canvas')"
+      @add-stage="addStageAt"
     >
       <template #status>
         <div class="panel box status" role="group" aria-label="Draft">
@@ -882,10 +886,6 @@ function goTo(key?: string) {
       </section>
 
       <div class="toolbar" :class="{ 'under-bar': aiDraft }" role="toolbar" aria-label="Canvas">
-        <template v-if="stagesFirst && sv.fits">
-          <button type="button" class="btn btn-quiet btn-sm" @click="setView('stages')"><Icon name="arrow-left" />Stage list</button>
-          <span class="sep" />
-        </template>
         <button type="button" class="btn btn-quiet btn-icon btn-sm" aria-label="Zoom out" title="Zoom out" @click="zoomOut({ duration: ms(160) })"><Icon name="zoom-out" /></button>
         <button type="button" class="btn btn-quiet btn-icon btn-sm" aria-label="Zoom in" title="Zoom in" @click="zoomIn({ duration: ms(160) })"><Icon name="zoom-in" /></button>
         <button type="button" class="btn btn-quiet btn-icon btn-sm" aria-label="Fit the whole flow" title="Fit the whole flow" @click="fitView({ padding: 0.12, duration: ms(260) })"><Icon name="fit" /></button>
@@ -957,6 +957,8 @@ function goTo(key?: string) {
 </template>
 
 <style scoped>
+.view-tabs { margin-bottom: 12px; }
+.view-tabs input:disabled + span { opacity: 0.5; cursor: not-allowed; }
 .flow {
   display: grid; grid-template-columns: 260px minmax(0, 1fr); min-height: 560px; min-width: 0;
   border-top: 1px solid var(--line); background: var(--surface);

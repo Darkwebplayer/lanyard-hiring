@@ -25,7 +25,6 @@ const titleInput = ref<HTMLInputElement>()
 const creating = ref(false)
 const createError = ref<string | null>(null)
 const presetGone = ref(false)
-const otherOpen = ref(false)
 
 // ---- how you hire ----
 const hasAi = (w: Graph) => w.nodes.some(n => n.type === 'ai_review')
@@ -51,6 +50,17 @@ const choice = computed({
   set: (v: string) => v.startsWith('preset:') ? Object.assign(form, { from: 'preset', presetId: v.slice(7) })
     : v.startsWith('template:') ? Object.assign(form, { from: 'template', templateId: v.slice(9) })
     : (form.from = v as From),
+})
+// two tabs over that one group: start a new workflow, or reuse a saved one or another job's.
+// Each tab keeps its last pick, so a look at the other tab loses nothing.
+const canReuse = computed(() => !!flowPresets.value?.length || !!props.jobs.length)
+const lastPick: Record<string, string> = {}
+const tab = computed({
+  get: () => (form.from === 'preset' || form.from === 'job' ? 'existing' : 'new'),
+  set: (v: string) => {
+    lastPick[tab.value] = choice.value
+    choice.value = lastPick[v] ?? (v === 'new' ? 'template:simple' : flowPresets.value?.[0] ? `preset:${flowPresets.value[0].id}` : 'job')
+  },
 })
 const chosen = computed(() => {
   const t = form.from === 'template' ? TEMPLATE_CARDS.find(t => t.id === form.templateId) : undefined
@@ -128,11 +138,11 @@ function open(start?: string) {
   if (start === 'first') start = undefined
   const preset = start && start !== 'standard' ? flowPresets.value?.find(p => p.id === start) : undefined
   presetGone.value = !!start && start !== 'standard' && !preset
+  for (const k in lastPick) delete lastPick[k]
   Object.assign(form, empty(), {
     from: preset ? 'preset' : 'template', templateId: start === 'standard' ? 'ai_screening' : 'simple',
     presetId: preset?.id ?? '', jobId: props.jobs[0]?.id ?? '',
   })
-  otherOpen.value = !!preset
   createError.value = null
   step.value = start ? 2 : 1
   dlg.value?.showModal()
@@ -208,48 +218,52 @@ const TAB_CAPS = ['Everyone who applied, by stage.', 'What happens to each appli
 
           <template v-else-if="step === 2">
             <p v-if="presetGone" class="gone" role="status"><Icon name="alert" :size="14" />That workflow template was deleted, so pick another way to start.</p>
-            <div class="tpls">
-              <label v-for="t in TEMPLATE_CARDS" :key="t.id" class="tpl">
-                <input v-model="choice" type="radio" name="nj-from" :value="`template:${t.id}`">
-                <b class="tpl-name">{{ t.name }}</b>
-                <span class="tpl-desc">{{ t.description }}</span>
-                <span class="tpl-stages" :aria-label="`Stages: ${t.stages.map(s => s.name).join(', ')}`">
-                  <span v-for="s in t.stages" :key="s.name" class="chip" :class="{ 'chip-ink': s.ai }"><Icon v-if="s.ai" name="ai" />{{ s.name }}</span>
-                </span>
-              </label>
+            <div class="seg" role="radiogroup" aria-label="Workflow">
+              <label><input v-model="tab" type="radio" name="nj-tab" value="new"><span>New workflow</span></label>
+              <label><input v-model="tab" type="radio" name="nj-tab" value="existing" :disabled="!canReuse"><span>Use existing</span></label>
             </div>
-            <template v-if="canAsk">
-              <label class="tpl describe">
-                <input v-model="choice" type="radio" name="nj-from" value="describe">
-                <span class="chip chip-ink">AI</span>
-                <span class="describe-text">
-                  <b class="tpl-name">Describe it in your own words</b>
-                  <span class="tpl-desc">“We call people, then the owner meets the good ones.” AI drafts the stages for you to check.</span>
-                </span>
+            <template v-if="tab === 'new'">
+              <template v-if="canAsk">
+                <label class="tpl describe">
+                  <input v-model="choice" type="radio" name="nj-from" value="describe">
+                  <span class="chip chip-ink">AI</span>
+                  <span class="describe-text">
+                    <b class="tpl-name">Describe it in your own words</b>
+                    <span class="tpl-desc">“We call people, then the owner meets the good ones.” AI drafts the stages for you to check.</span>
+                  </span>
+                </label>
+                <div v-if="form.from === 'describe'" class="field">
+                  <label for="nj-describe">Hiring process description</label>
+                  <textarea id="nj-describe" v-model="form.describe" required maxlength="2000" rows="4" placeholder="Café barista: quick call, one paid trial shift, then offer." />
+                </div>
+              </template>
+              <label class="tpl">
+                <input v-model="choice" type="radio" name="nj-from" value="blank">
+                <b class="tpl-name">Start blank</b>
+                <span class="tpl-desc">Only “Applied”. You add every step yourself.</span>
               </label>
-              <div v-if="form.from === 'describe'" class="field">
-                <label for="nj-describe">Hiring process description</label>
-                <textarea id="nj-describe" v-model="form.describe" required maxlength="2000" rows="4" placeholder="Café barista: quick call, one paid trial shift, then offer." />
+              <span id="nj-ready" class="eyebrow">Or start from a ready-made workflow</span>
+              <div class="tpls" role="group" aria-labelledby="nj-ready">
+                <label v-for="t in TEMPLATE_CARDS" :key="t.id" class="tpl">
+                  <input v-model="choice" type="radio" name="nj-from" :value="`template:${t.id}`">
+                  <b class="tpl-name">{{ t.name }}</b>
+                  <span class="tpl-desc">{{ t.description }}</span>
+                  <span class="tpl-stages" :aria-label="`Stages: ${t.stages.map(s => s.name).join(', ')}`">
+                    <span v-for="s in t.stages" :key="s.name" class="chip" :class="{ 'chip-ink': s.ai }"><Icon v-if="s.ai" name="ai" />{{ s.name }}</span>
+                  </span>
+                </label>
               </div>
             </template>
-            <label class="tpl">
-              <input v-model="choice" type="radio" name="nj-from" value="blank">
-              <b class="tpl-name">Start blank</b>
-              <span class="tpl-desc">Only “Applied”. You add every step yourself.</span>
-            </label>
-            <details class="other" :open="otherOpen" @toggle="otherOpen = ($event.target as HTMLDetailsElement).open">
-              <summary>Or reuse: a workflow template, or copy another job</summary>
-              <div class="other-body">
-                <div v-if="flowPresets?.length" class="presets" role="group" aria-labelledby="nj-presets">
-                  <span id="nj-presets" class="eyebrow">Your workflow templates</span>
-                  <label v-for="p in flowPresets" :key="p.id" class="check"><input v-model="choice" type="radio" name="nj-from" :value="`preset:${p.id}`"><span><b>{{ p.name }} <span class="n">{{ counts(p) }}</span></b><span v-if="p.description" class="hint">{{ p.description }}</span></span></label>
-                </div>
-                <label class="check"><input v-model="choice" type="radio" name="nj-from" value="job" :disabled="!jobs.length"><span><b>Copy another job</b><span class="hint">Its form and workflow, not its candidates.</span></span></label>
-                <select v-if="form.from === 'job'" v-model="form.jobId" aria-label="Job to copy" required class="copy-from">
-                  <option v-for="j in jobs" :key="j.id" :value="j.id">{{ j.title }}</option>
-                </select>
+            <div v-else class="other-body">
+              <div v-if="flowPresets?.length" class="presets" role="group" aria-labelledby="nj-presets">
+                <span id="nj-presets" class="eyebrow">Your workflow templates</span>
+                <label v-for="p in flowPresets" :key="p.id" class="check"><input v-model="choice" type="radio" name="nj-from" :value="`preset:${p.id}`"><span><b>{{ p.name }} <span class="n">{{ counts(p) }}</span></b><span v-if="p.description" class="hint">{{ p.description }}</span></span></label>
               </div>
-            </details>
+              <label class="check"><input v-model="choice" type="radio" name="nj-from" value="job" :disabled="!jobs.length"><span><b>Copy another job</b><span class="hint">Its form and workflow, not its candidates.</span></span></label>
+              <select v-if="form.from === 'job'" v-model="form.jobId" aria-label="Job to copy" required class="copy-from">
+                <option v-for="j in jobs" :key="j.id" :value="j.id">{{ j.title }}</option>
+              </select>
+            </div>
           </template>
 
           <template v-else-if="step === 3">
@@ -393,6 +407,7 @@ const TAB_CAPS = ['Everyone who applied, by stage.', 'What happens to each appli
         <button v-if="step > 1" type="button" class="btn" @click="go(step - 1)">Back</button>
         <span v-else class="hint">Takes about two minutes.</span>
         <div class="foot-right">
+          <span v-if="step === 2" class="picked" :title="chosen.name">Selected: <b>{{ chosen.name }}</b></span>
           <button v-if="step === 3" type="button" class="btn btn-quiet" @click="skip">Skip for now</button>
           <button v-if="step < 5" class="btn btn-primary" :disabled="step === 3 && !!salaryError">Next</button>
           <button v-else class="btn btn-primary" :aria-busy="creating" :disabled="creating"><span v-if="creating" class="spinner" />Create job</button>
@@ -435,12 +450,12 @@ dialog.wizard { width: min(960px, calc(100vw - 32px)); }
 .tpl-stages, .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
 .describe { grid-template-columns: auto 1fr; align-items: center; gap: 12px; }
 .describe-text { display: grid; gap: 2px; }
-.other summary { cursor: pointer; font-size: var(--t-sm); font-weight: 600; color: var(--ink-2); padding: 4px 0; }
-.other-body { display: grid; gap: 10px; padding-top: 8px; }
+.main > .seg { justify-self: start; }
+.other-body { display: grid; gap: 10px; }
 .check > span { display: grid; gap: 1px; }
 .check b { font-weight: 600; }
 .n { margin-left: 4px; font-weight: 400; font-size: var(--t-sm); color: var(--ink-2); }
-.presets { display: grid; gap: 10px; max-height: min(220px, 28dvh); overflow-y: auto; padding: 8px 2px 10px; border-block: 1px solid var(--line); }
+.presets { display: grid; gap: 10px; padding: 0 2px 10px; border-bottom: 1px solid var(--line); }
 .gone { display: flex; align-items: center; gap: 6px; font-size: var(--t-sm); color: var(--warn); font-weight: 500; }
 .copy-from { margin-left: 28px; width: calc(100% - 28px); }
 .tip { display: grid; grid-template-columns: auto 1fr; gap: 10px; padding: 12px 14px; border-radius: 12px; background: var(--accent-tint); color: var(--accent-ink); font-size: var(--t-sm); }
@@ -485,7 +500,10 @@ dialog.wizard { width: min(960px, calc(100vw - 32px)); }
 .next > span { display: grid; gap: 2px; }
 
 .foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 16px 28px; border-top: 1px solid var(--line); }
-.foot-right { display: flex; gap: 8px; align-items: center; margin-left: auto; }
+.foot-right { display: flex; gap: 8px; align-items: center; margin-left: auto; min-width: 0; }
+/* the pick stays in view while the cards scroll; long names trim, the full one is in the tooltip */
+.picked { min-width: 0; max-width: 36ch; margin-right: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--t-sm); color: var(--ink-2); }
+.picked b { font-weight: 600; color: var(--ink); }
 @media (max-width: 760px) {
   .body { grid-template-columns: minmax(0, 1fr); overflow-y: auto; }
   .main, .aside { overflow: visible; }

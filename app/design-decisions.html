@@ -663,6 +663,50 @@ tr.group th{text-align:left;font-weight:600;padding-top:1.25rem;border-bottom:1p
 </section>
 
 <section id="sessions">
+<article class="session" id="session-2026-10-26-cleanup">
+<h2><span class="key">Session 2026-10-26 (cleanup)<span class="vh">:</span></span> Reuse is a tab, the canvas is a tab, and the pick is always in view</h2>
+<p class="kicker">Existing, Minimal · component scope · new job wizard step 2, Workflow tab, Pipeline board</p>
+<p class="lede">The owner found three places to clean up. The owner approved each change in chat before we made it.</p>
+<h3 class="i-list" id="chunks-2026-10-26-cleanup"><span class="key">Chunks</span> 3 chunks, one per place</h3>
+<div class="scroll"><table>
+<thead><tr><th scope="col">Chunk</th><th scope="col">Files it owns</th><th scope="col">Behaviour contract (baseline)</th><th scope="col">Checks</th><th scope="col">Parity</th></tr></thead>
+<tbody>
+<tr><td>C-1 Wizard step 2</td><td>components/job/NewJobWizard.vue</td><td>One radio group; Simple selected on open; ?new=&lt;id&gt; selects a saved workflow; create sends the same kind</td><td>typecheck, 252 tests, check.py, browser</td><td>Same radio group and create call. ?new=&lt;id&gt; opens on Use existing. Different on purpose: tabs, the footer pick, tab memory</td></tr>
+<tr><td>C-2 Workflow tab</td><td>components/flow/FlowEditor.vue, components/flow/StageList.vue</td><td>Stage list first; ?view=canvas opens the canvas; a flow that is not stages opens on the canvas</td><td>typecheck, browser</td><td>Same views and same URL. Different on purpose: tabs replace the sidebar box and the back button</td></tr>
+<tr><td>C-3 Pipeline board</td><td>components/pipeline/PipelineBoard.vue</td><td>Cards up to 30 per step, then a pile</td><td>typecheck, 252 tests</td><td>Same pile and moves. Different on purpose: the limit is 10</td></tr>
+</tbody></table></div>
+<h3 class="i-list" id="decisions-2026-10-26-cleanup"><span class="key">Decisions</span> 5, most of them in structure</h3>
+<div class="scroll"><table>
+<thead><tr><th scope="col">Element</th><th scope="col">Decision</th><th scope="col">Because</th><th scope="col">Rejected default</th></tr></thead>
+<tbody>
+<tr><td>Wizard step 2</td><td>Two tabs: “New workflow” and “Use existing”. New workflow shows Describe and Start blank first, then the four ready-made workflows. Simple stays the default</td><td>Reuse was folded at the bottom, so people did not find it</td><td>One long list with a “reuse” fold</td></tr>
+<tr><td>Selected pick</td><td>“Selected: name” at the left of Next. A long name ends in an ellipsis; the tooltip shows all of it</td><td>Simple is selected but sits below the fold. The footer is always in view, and the guide panel stays as it is</td><td>Name in the guide panel (the owner wants the guide kept); a dot on the tab</td></tr>
+<tr><td>Tab memory</td><td>Each tab keeps its last pick until the wizard closes</td><td>A look at the other tab must not lose a pick</td><td>Reset to Simple on each switch</td></tr>
+<tr><td>Workflow tab</td><td>“Stage list | Canvas” tabs at the top. The sidebar box and the back button are gone. Stage list is off when the flow cannot show as stages; the tooltip says why</td><td>The canvas is a main view, not an afterthought</td><td>A box in the sidebar</td></tr>
+<tr><td>Pipeline board</td><td>A step shows each person up to 10. Above 10, one pile</td><td>30 cards in one column is too long to scan</td><td>30</td></tr>
+</tbody></table></div>
+<h3 class="i-motion"><span class="key">Motion map</span> No new motion; the tabs are instant</h3>
+<div class="scroll"><table>
+<thead><tr><th scope="col">Moment</th><th scope="col">Tier</th><th scope="col">Why</th></tr></thead>
+<tbody>
+<tr><td>Wizard tab switch</td><td>none</td><td>A frequent, small choice; the list changes at once, as the job tabs do</td></tr>
+<tr><td>Footer pick changes</td><td>none</td><td>The selected card already shows its ring; the text follows at once</td></tr>
+<tr><td>Stage list / Canvas switch</td><td>transition (kept)</td><td>The canvas fits its view after it shows, as before</td></tr>
+</tbody></table></div>
+<h3 class="i-alert"><span class="key">App-wide states</span> 0 designed, 6 not applicable</h3>
+<div class="scroll"><table>
+<thead><tr><th scope="col">State</th><th scope="col">Here</th></tr></thead>
+<tbody>
+<tr><td>Not found</td><td>not applicable: this run changes no routes</td></tr>
+<tr><td>No access</td><td>not applicable: same roles as before</td></tr>
+<tr><td>Signed out</td><td>not applicable: unchanged</td></tr>
+<tr><td>Crash</td><td>not applicable: unchanged</td></tr>
+<tr><td>Offline</td><td>not applicable: unchanged</td></tr>
+<tr><td>First launch</td><td>Use existing is off when there are no saved workflows and no other jobs</td></tr>
+</tbody></table></div>
+<h3>Look notes</h3>
+<p>Seen in the browser at 1456 px: both wizard tabs, the footer pick and tab memory, and the Workflow tabs on a live job. check.py on components/job: 0 errors, 0 questions. check.py --inventory: the new label uses the dominant values (--t-sm, 600, ink tokens). The old near-duplicates (radius 8/9 px, padding 1/2/3/4 px) are from earlier work and stay open. A critique by a fresh reviewer and render_check.py are owed: this run did not install Playwright.</p>
+</article>
 <article class="session" id="session-2026-10-25-guides">
 <h2><span class="key">Session 2026-10-25 (guides)<span class="vh">:</span></span> Wizards set things up, help shows how they work, a tour shows where they live</h2>
 <p class="kicker">Existing, Revamp · flow scope · new job, first run, help on every page, tour</p>

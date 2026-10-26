@@ -15,7 +15,7 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{
   select: [key: string | null], add: [stageId: string, kind: 'auto' | 'people', item: PaletteItem], remove: [key: string]
-  rename: [id: string, name: string], move: [id: string, dir: -1 | 1], removeStage: [id: string], addStage: [at: number], canvas: []
+  rename: [id: string, name: string], move: [id: string, dir: -1 | 1], removeStage: [id: string], addStage: [at: number]
 }>()
 
 const node = (k: string) => props.graph.nodes.find(n => n.key === k)
@@ -295,11 +295,6 @@ function closedLine(c: StageView['closed'][number]) {
         </ol>
         <p class="sub">Each stage is a column on the Pipeline board.</p>
       </div>
-      <div class="panel box">
-        <h3>Diagram view</h3>
-        <p class="sub">Every step and branch on a canvas, for changes the stage list can’t make.</p>
-        <button type="button" class="btn btn-sm canvas-btn" @click="emit('canvas')"><Icon name="split" />Open canvas</button>
-      </div>
       <slot name="status" />
     </aside>
   </div>
@@ -397,7 +392,6 @@ button.rule:hover { background: var(--hover); }
 .mini-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mini b { font-size: var(--t-lg); font-variant-numeric: tabular-nums; }
 .mini-closed { background: none !important; box-shadow: inset 0 0 0 1px var(--line); }
-.canvas-btn { justify-self: start; }
 
 @media (prefers-reduced-motion: reduce) {
   .st, .act { transition: none; }
