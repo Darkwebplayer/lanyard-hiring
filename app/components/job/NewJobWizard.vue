@@ -56,7 +56,7 @@ const chosen = computed(() => {
   const t = form.from === 'template' ? TEMPLATE_CARDS.find(t => t.id === form.templateId) : undefined
   if (t) return { name: t.name, stages: t.stages, story: STORY[t.id] ?? t.description, ai: hasAi(t.workflow), aiLine: AI_LINE[t.id] }
   const p = form.from === 'preset' ? flowPresets.value?.find(p => p.id === form.presetId) : undefined
-  if (p) return { name: p.name, stages: stagesOf(p.workflow), story: p.description || 'Your saved flow, as you set it up.', ai: hasAi(p.workflow), aiLine: undefined }
+  if (p) return { name: p.name, stages: stagesOf(p.workflow), story: p.description || 'Your workflow template, as you set it up.', ai: hasAi(p.workflow), aiLine: undefined }
   if (form.from === 'describe') {
     return {
       name: 'Described in your words (AI drafts it next)', stages: ['Your step 1', 'Your step 2', 'Decision'].map(name => ({ name, ai: false })),
@@ -67,7 +67,7 @@ const chosen = computed(() => {
     const j = props.jobs.find(j => j.id === form.jobId)
     return { name: `A copy of ${j?.title ?? 'another job'}`, stages: [], story: 'Its form and stages come across. Its candidates don’t.', ai: false, aiLine: undefined }
   }
-  return { name: 'Start blank', stages: [], story: 'Only Applied to start. You add every step on the Stages tab.', ai: false, aiLine: undefined }
+  return { name: 'Start blank', stages: [], story: 'Only Applied to start. You add every step on the Workflow tab.', ai: false, aiLine: undefined }
 })
 
 // ---- about the job and must-haves (same shapes and checks as the Details tab) ----
@@ -103,7 +103,7 @@ const hint = computed(() => [
   'Use the title people search for. It’s the heading on your apply page.',
   'Pick the closest one. Every step can be changed later.',
   'Candidates read this on the apply page. You can skip it and write it later.',
-  chosen.value.ai ? 'The AI review scores each CV against these two things, and only these.' : 'What someone needs to do this job. Candidates see the skills on the apply page.',
+  chosen.value.ai ? 'The AI screening step scores each CV against these two things, and only these.' : 'What someone needs to do this job. Candidates see the skills on the apply page.',
   'This makes a draft. Nobody can apply until you publish it.',
 ][step.value - 1])
 function go(n: number) {
@@ -165,8 +165,8 @@ async function create() {
   finally { creating.value = false }
 }
 
-const TABS = ['Pipeline', 'Stages', 'Form', 'Details']
-const laterTab = computed(() => (step.value === 2 ? 'Stages' : 'Details'))
+const TABS = ['Pipeline', 'Workflow', 'Application form', 'Job details']
+const laterTab = computed(() => (step.value === 2 ? 'Workflow' : 'Job details'))
 const TAB_CAPS = ['Everyone who applied, by stage.', 'What happens to each applicant.', 'What you ask when they apply.', 'What candidates read about the job.']
 </script>
 
@@ -207,7 +207,7 @@ const TAB_CAPS = ['Everyone who applied, by stage.', 'What happens to each appli
           </template>
 
           <template v-else-if="step === 2">
-            <p v-if="presetGone" class="gone" role="status"><Icon name="alert" :size="14" />That saved flow was deleted, so pick another way to start.</p>
+            <p v-if="presetGone" class="gone" role="status"><Icon name="alert" :size="14" />That workflow template was deleted, so pick another way to start.</p>
             <div class="tpls">
               <label v-for="t in TEMPLATE_CARDS" :key="t.id" class="tpl">
                 <input v-model="choice" type="radio" name="nj-from" :value="`template:${t.id}`">
@@ -238,13 +238,13 @@ const TAB_CAPS = ['Everyone who applied, by stage.', 'What happens to each appli
               <span class="tpl-desc">Only “Applied”. You add every step yourself.</span>
             </label>
             <details class="other" :open="otherOpen" @toggle="otherOpen = ($event.target as HTMLDetailsElement).open">
-              <summary>Or reuse: a saved flow, or copy another job</summary>
+              <summary>Or reuse: a workflow template, or copy another job</summary>
               <div class="other-body">
                 <div v-if="flowPresets?.length" class="presets" role="group" aria-labelledby="nj-presets">
-                  <span id="nj-presets" class="eyebrow">Your saved flows</span>
+                  <span id="nj-presets" class="eyebrow">Your workflow templates</span>
                   <label v-for="p in flowPresets" :key="p.id" class="check"><input v-model="choice" type="radio" name="nj-from" :value="`preset:${p.id}`"><span><b>{{ p.name }} <span class="n">{{ counts(p) }}</span></b><span v-if="p.description" class="hint">{{ p.description }}</span></span></label>
                 </div>
-                <label class="check"><input v-model="choice" type="radio" name="nj-from" value="job" :disabled="!jobs.length"><span><b>Copy another job</b><span class="hint">Its form and flow, not its candidates.</span></span></label>
+                <label class="check"><input v-model="choice" type="radio" name="nj-from" value="job" :disabled="!jobs.length"><span><b>Copy another job</b><span class="hint">Its form and workflow, not its candidates.</span></span></label>
                 <select v-if="form.from === 'job'" v-model="form.jobId" aria-label="Job to copy" required class="copy-from">
                   <option v-for="j in jobs" :key="j.id" :value="j.id">{{ j.title }}</option>
                 </select>
@@ -364,19 +364,19 @@ const TAB_CAPS = ['Everyone who applied, by stage.', 'What happens to each appli
             <template v-if="chosen.ai">
               <p class="eyebrow">What the AI reads</p>
               <HelpAiReadsDiagram />
-              <p class="hint">{{ chosen.aiLine ?? 'What each score does is set in the AI review step, on the Stages tab.' }}</p>
+              <p class="hint">{{ chosen.aiLine ?? 'What each score does is set in the AI screening step, on the Workflow tab.' }}</p>
             </template>
             <template v-else>
               <p class="eyebrow">Who reads these</p>
-              <p class="hint">No step in this flow uses AI, so these are for you and for candidates: a plain list of what the job needs. If you add an AI review later, it scores each CV against them.</p>
+              <p class="hint">No step in this workflow uses AI, so these are for you and for candidates: a plain list of what the job needs. If you add AI screening later, it scores each CV against them.</p>
             </template>
           </template>
           <template v-else>
             <p class="eyebrow">After you create it</p>
             <div class="next">
               <i>1</i>
-              <span v-if="form.from === 'describe'"><b>Draft your stages.</b><span class="hint">You land on Stages with your words ready. AI drafts the steps for you to check.</span></span>
-              <span v-else><b>Read your stages.</b><span class="hint">You land on Stages. Each one says in words what happens.</span></span>
+              <span v-if="form.from === 'describe'"><b>Draft your stages.</b><span class="hint">You land on the Workflow tab with your words ready. AI drafts the steps for you to check.</span></span>
+              <span v-else><b>Read your stages.</b><span class="hint">You land on the Workflow tab. Each one says in words what happens.</span></span>
             </div>
             <div class="next"><i>2</i><span><b>Check the form.</b><span class="hint">Add a question if you need one.</span></span></div>
             <div class="next"><i>3</i><span><b>Publish.</b><span class="hint">You get the apply link to share.</span></span></div>

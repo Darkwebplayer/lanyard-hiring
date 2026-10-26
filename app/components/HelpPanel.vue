@@ -9,8 +9,8 @@ const { open: asking, floats } = useAsk()
 const route = useRoute()
 
 const TITLES = {
-  inbox: 'Inbox', hours: 'Interview hours', jobs: 'Jobs', pipeline: 'Pipeline', stages: 'Stages', form: 'Form', details: 'Details',
-  candidate: 'Candidate', library: 'Library', team: 'Team', settings: 'Settings', hires: 'Hires', import: 'Import', ai: 'AI', words: 'Words',
+  inbox: 'Inbox', hours: 'Interview availability', jobs: 'Jobs', pipeline: 'Pipeline', stages: 'Workflow', form: 'Application form', details: 'Job details',
+  candidate: 'Candidate', library: 'Templates', team: 'Team', settings: 'Settings', hires: 'Reports', import: 'Import', ai: 'AI', words: 'Glossary',
 } as const
 type Topic = keyof typeof TITLES
 

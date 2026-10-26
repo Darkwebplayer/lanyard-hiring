@@ -2,10 +2,10 @@
   <div class="topic-body">
     <h3>What the AI does</h3>
     <HelpAiReadsDiagram />
-    <p>An <b>AI review</b> step reads each application and scores it from 0 to 100 on each thing you list, like “Skills match” and “Experience”. The overall score is the average of those.</p>
+    <p>An <b>AI screening</b> step reads each application and scores it from 0 to 100 on each thing you list, like “Skills match” and “Experience”. The overall score is the average of those.</p>
     <h4>What it reads</h4>
     <ul>
-      <li>The job’s <b>requirements</b> from Details: must-have skills, minimum years, type and place of work.</li>
+      <li>The job’s <b>requirements</b> from Job details: must-have skills, minimum years, type and place of work.</li>
       <li>The job <b>description</b>, as background. The scores are against the requirements, so put hard rules there.</li>
       <li>The <b>CV text</b>, with the candidate’s name and contact details taken out.</li>
       <li>Their <b>form answers</b>, except protected ones and files.</li>
@@ -16,7 +16,7 @@
     <div class="bands" role="img" aria-label="Under 40 is a clear no, 40 to 69 goes to a person, 70 and up is a clear yes.">
       <span class="lo">0–39</span><span class="mid">40–69</span><span class="hi">70–100</span>
     </div>
-    <p>The AI screening flow moves 70 and up to Interview, closes under 40, and sends the middle to a person. A missing score always goes to a person. You set the numbers in the stage’s “Moves on when”.</p>
+    <p>The AI screening workflow moves 70 and up to Interview, closes under 40, and sends the middle to a person. A missing score always goes to a person. You set the numbers in the stage’s “Advancement rules”.</p>
 
     <h4>A person always decides</h4>
     <p>The AI only suggests. Nobody is hired without a person’s scorecard saying yes. Every score shows why on the candidate page, so you can check it.</p>

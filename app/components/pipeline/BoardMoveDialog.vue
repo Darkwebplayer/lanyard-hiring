@@ -227,7 +227,7 @@ async function submit() {
         <ul v-if="to" class="effects" aria-live="polite">
           <li v-for="(e, i) in effects" :key="i" :class="{ loud: e.kind !== 'close', final: e.kind === 'email' }"><Icon :name="ICON[e.kind] ?? 'move'" :size="16" />{{ e.text }}</li>
           <li v-if="whole && !checking && check && check.count !== drop.seen"><Icon name="clock" :size="16" />{{ check.count > drop.seen ? `${(check.count - drop.seen).toLocaleString()} more arrived` : `${(drop.seen - check.count).toLocaleString()} moved on` }} since the board loaded. All {{ check.count.toLocaleString() }} there now will move.</li>
-          <li v-if="check?.notInVersion"><Icon name="lock" :size="16" />{{ check.notInVersion.toLocaleString() }} are on an older version of the flow without {{ to.label }}. They stay where they are.</li>
+          <li v-if="check?.notInVersion"><Icon name="lock" :size="16" />{{ check.notInVersion.toLocaleString() }} are on an older version of the workflow without {{ to.label }}. They stay where they are.</li>
           <li v-if="skipped"><Icon name="lock" :size="16" />{{ plural(skipped, 'person is', 'people are') }} there already or closed, so they stay as they are.</li>
           <li v-if="whole && n > 1"><Icon name="move" :size="16" />Moves run in the background. The board updates as they land.</li>
           <li v-if="checking" class="faint"><span class="spinner" />Checking who can move…</li>
@@ -266,7 +266,7 @@ async function submit() {
           <textarea id="bmove-reason" v-model="reason" :required="reasonNeeded" maxlength="1000" rows="2" aria-describedby="bmove-reason-hint" :placeholder="rejecting ? 'e.g. Can’t do weekend shifts' : reasonNeeded ? 'e.g. Owner wants to meet them this week' : 'e.g. Spoke on the phone, keen to start'" />
           <span id="bmove-reason-hint" class="hint">
             <template v-if="rejecting">Only your team sees it, in {{ n === 1 ? 'the candidate’s' : 'each candidate’s' }} history.</template>
-            <template v-else-if="!reasonNeeded">Follows the flow, so no reason needed.</template>
+            <template v-else-if="!reasonNeeded">Follows the workflow, so no reason needed.</template>
             <template v-else>Kept in {{ n === 1 ? 'the candidate’s' : 'each candidate’s' }} history with your name.</template>
           </span>
         </div>

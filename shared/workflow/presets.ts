@@ -3,10 +3,10 @@ import { STANDARD_HIRE } from './templates'
 
 // Palette sections, by step type. Start has none (one per flow, never added).
 export const PRESET_SECTIONS = [
-  { key: 'system', label: 'System steps', types: ['cv_parse', 'ai_review', 'ai_check', 'send_email'] },
+  { key: 'system', label: 'Automated steps', types: ['cv_parse', 'ai_review', 'ai_check', 'send_email'] },
   { key: 'decisions', label: 'Decisions', types: ['condition', 'set_variable'] },
-  { key: 'person', label: 'Person steps', types: ['human_task', 'request_documents'] },
-  { key: 'endings', label: 'Endings', types: ['end'] },
+  { key: 'person', label: 'Assigned tasks', types: ['human_task', 'request_documents'] },
+  { key: 'endings', label: 'Outcomes', types: ['end'] },
 ] as const
 export const PRESET_TYPES: string[] = PRESET_SECTIONS.flatMap(s => [...s.types])
 

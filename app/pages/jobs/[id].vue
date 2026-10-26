@@ -58,9 +58,9 @@ const versionLine = computed(() => {
 const base = `/jobs/${id}`
 const tabs = computed(() => [
   { to: base, label: 'Pipeline', count: board.value?.counts.reduce((n, c) => n + c.n, 0) },
-  { to: `${base}/flow`, label: 'Stages' },
-  { to: `${base}/form`, label: 'Form' },
-  { to: `${base}/details`, label: 'Details' },
+  { to: `${base}/flow`, label: 'Workflow' },
+  { to: `${base}/form`, label: 'Application form' },
+  { to: `${base}/details`, label: 'Job details' },
 ])
 const isFlow = computed(() => route.path.startsWith(`${base}/flow`))
 // once per person: the hand-off from the New job wizard to the tabs
@@ -153,7 +153,7 @@ const issueGroups = computed(() => {
       g = { id: `n:${i.node}`, title: n ? nodeLabel(n) : i.node, key: i.node, to: `${base}/flow?node=${i.node}` }
     }
     else if (FORM_CODES.has(i.code) || i.message.startsWith('form')) g = { id: 'form', title: 'Application form', to: `${base}/form` }
-    else g = { id: 'flow', title: 'The flow as a whole', to: `${base}/flow` }
+    else g = { id: 'flow', title: 'The workflow as a whole', to: `${base}/flow` }
     if (!groups.has(g.id)) groups.set(g.id, { ...g, items: [] })
     groups.get(g.id)!.items.push(assigneeText(i) ?? issueText(i, { nodes, edges: [] }))
   }
@@ -285,7 +285,7 @@ function askArchive() {
       </nav>
 
       <aside v-if="coach && !archived" class="coach" aria-label="How a job works">
-        <p><b>Stages</b> = what happens to each person, <b>Form</b> = what you ask, <b>Details</b> = what candidates read and what the AI scores against. Nothing is live until you Publish.</p>
+        <p><b>Workflow</b> = what happens to each person, <b>Application form</b> = what you ask, <b>Job details</b> = what candidates read and what the AI scores against. Nothing is live until you Publish.</p>
         <button class="btn btn-icon btn-sm btn-quiet" aria-label="Got it, hide this" @click="dismissCoach"><Icon name="x" /></button>
       </aside>
 
@@ -326,7 +326,7 @@ function askArchive() {
     <dialog ref="archiveDlg" class="dialog" aria-labelledby="arch-h" @click.self="archiveDlg?.close()">
       <div class="dialog-body">
         <h2 id="arch-h">Archive “{{ job?.title }}”?</h2>
-        <p>It stops taking applications, and its form, flow and details can’t be changed again. This can’t be undone.</p>
+        <p>It stops taking applications, and its form, workflow and details can’t be changed again. This can’t be undone.</p>
       </div>
       <div class="dialog-foot">
         <button class="btn btn-quiet" @click="archiveDlg?.close()">Cancel</button>

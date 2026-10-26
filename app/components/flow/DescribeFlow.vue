@@ -23,7 +23,7 @@ const ready = computed(() => text.value.trim().length > 0 && !props.busy)
 
 <template>
   <form class="describe" :class="mode" :aria-labelledby="`${uid}-h`" @submit.prevent="ready && emit('draft')">
-    <h2 :id="`${uid}-h`">{{ isJob ? 'How do you hire for this job?' : 'How do you hire with this flow?' }}</h2>
+    <h2 :id="`${uid}-h`">{{ isJob ? 'How do you hire for this job?' : 'How do you hire with this workflow?' }}</h2>
     <p class="muted">Write it the way you would tell a new manager. We draft the steps, and you check them before you save.</p>
     <label :for="`${uid}-t`" class="sr-only">How you hire</label>
     <textarea
@@ -46,7 +46,7 @@ const ready = computed(() => text.value.trim().length > 0 && !props.busy)
     </div>
     <div class="foot">
       <template v-if="mode === 'inline'">
-        <button v-if="canPreset" type="button" class="btn btn-sm btn-quiet" :disabled="busy" @click="emit('preset')"><Icon name="library" />Use a preset</button>
+        <button v-if="canPreset" type="button" class="btn btn-sm btn-quiet" :disabled="busy" @click="emit('preset')"><Icon name="library" />Use a template</button>
         <button type="button" class="btn btn-sm btn-quiet" :disabled="busy" @click="emit('close')">Start empty</button>
       </template>
       <button v-else type="button" class="btn btn-sm btn-quiet push" @click="emit('close')">Cancel</button>

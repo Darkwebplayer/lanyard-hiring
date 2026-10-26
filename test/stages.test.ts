@@ -101,7 +101,7 @@ describe('stageView', () => {
   })
 
   it('refuses flows a stage list would misstate', () => {
-    expect(stageView({ ...G, stages: undefined })).toMatchObject({ fits: false, reason: 'This flow has no stages yet.' })
+    expect(stageView({ ...G, stages: undefined })).toMatchObject({ fits: false, reason: 'This workflow has no stages yet.' })
     const unstaged = stageView({ ...small, stages: [{ id: 's1', name: 'One', nodeKeys: ['a', 'b'] }] })
     expect(unstaged).toMatchObject({ fits: false, reason: '“c” isn’t in any stage.' })
     expect(unstaged.unstaged.map(s => s.key)).toEqual(['c'])

@@ -3,7 +3,7 @@ const route = useRoute()
 const id = route.params.id as string
 const { flowPresets, error, refresh } = useFlowPresets()
 const preset = computed(() => flowPresets.value?.find(p => p.id === id))
-useHead({ title: () => (preset.value ? `${preset.value.name} · Flows` : 'Flows') })
+useHead({ title: () => (preset.value ? `${preset.value.name} · Workflows` : 'Workflows') })
 
 // Standard hire comes with the app and can't change; its page in the list says to duplicate it.
 if (id === 'standard') navigateTo('/library/flows?flow=standard', { replace: true })
@@ -20,7 +20,7 @@ onMounted(() => { if (id !== 'standard') load() })
 const base = `/library/flows/${id}`
 const tabs = [
   { to: base, label: 'Flow' },
-  { to: `${base}/form`, label: 'Form' },
+  { to: `${base}/form`, label: 'Application form' },
 ]
 // the Flow tab is the index route, so it is the one that gets the full width
 const isFlow = computed(() => route.path === base)
@@ -28,13 +28,13 @@ const isFlow = computed(() => route.path === base)
 
 <template>
   <div class="page" :class="{ wide: isFlow }">
-    <NuxtLink :to="{ path: '/library/flows', query: { flow: id } }" class="crumb"><Icon name="chevron-left" :size="14" />Flows</NuxtLink>
+    <NuxtLink :to="{ path: '/library/flows', query: { flow: id } }" class="crumb"><Icon name="chevron-left" :size="14" />Workflows</NuxtLink>
 
-    <div v-if="!loaded" aria-busy="true" aria-label="Loading the flow preset">
+    <div v-if="!loaded" aria-busy="true" aria-label="Loading the workflow template">
       <header class="page-head">
         <div class="head">
           <span class="skeleton" style="display:block;width:320px;height:30px" />
-          <p class="sub">Flow preset · Jobs that already started from it keep their own copy.</p>
+          <p class="sub">Workflow template · Jobs that already started from it keep their own copy.</p>
         </div>
       </header>
       <nav class="tabs" aria-label="Flow preset">
@@ -48,22 +48,22 @@ const isFlow = computed(() => route.path === base)
     </div>
 
     <section v-else-if="error" class="panel empty" role="alert">
-      <h1>The flow presets didn’t load</h1>
+      <h1>The workflow templates didn’t load</h1>
       <p>{{ error.message }}</p>
       <button type="button" class="btn" @click="load">Retry</button>
     </section>
 
     <section v-else-if="!preset" class="panel empty">
-      <h1>This flow preset doesn’t exist</h1>
+      <h1>This workflow template doesn’t exist</h1>
       <p>It may have been deleted, or the link is wrong.</p>
-      <NuxtLink to="/library/flows" class="btn">Back to flows</NuxtLink>
+      <NuxtLink to="/library/flows" class="btn">Back to workflows</NuxtLink>
     </section>
 
     <template v-else>
       <header class="page-head">
         <div class="head">
           <h1>{{ preset.name }}</h1>
-          <p class="sub">Flow preset · Jobs that already started from it keep their own copy.</p>
+          <p class="sub">Workflow template · Jobs that already started from it keep their own copy.</p>
         </div>
       </header>
       <nav class="tabs" aria-label="Flow preset">

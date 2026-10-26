@@ -154,7 +154,7 @@ function onKey(e: KeyboardEvent) {
         <span class="r-name">{{ fullName(r.candidate) }}</span>
         <span class="r-flags">
           <span v-if="mixed" class="r-where">{{ where(r) }}</span>
-          <span v-if="r.runStatus === 'failed'" class="chip chip-bad"><Icon name="stop" />Stopped</span>
+          <span v-if="r.runStatus === 'failed'" class="chip chip-bad"><Icon name="stop" />Failed</span>
           <span v-else-if="late(r)" class="chip chip-warn"><Icon name="clock" />Late</span>
           <NuxtLink :to="`/candidates/${r.id}`" class="btn btn-quiet btn-icon btn-sm" tabindex="-1" :aria-label="`Open ${fullName(r.candidate)}`" title="Open candidate" @click.stop><Icon name="arrow-right" :size="14" /></NuxtLink>
         </span>

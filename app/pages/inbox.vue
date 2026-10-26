@@ -20,10 +20,10 @@ const selected = computed(() => route.params.runId as string | undefined)
 
 // failed and stuck steps are automatic ones: no scorecard to open, so they act inline
 const attention = computed(() => [
-  { key: 'failed', label: 'Stopped', rows: inbox.value?.failed ?? [], inline: true },
+  { key: 'failed', label: 'Failed', rows: inbox.value?.failed ?? [], inline: true },
   { key: 'blocked', label: 'Blocked', rows: inbox.value?.blocked ?? [], inline: false },
-  { key: 'overdue', label: 'Late', rows: inbox.value?.overdue ?? [], inline: false },
-  { key: 'stuck', label: 'Stuck', rows: inbox.value?.stuck ?? [], inline: true },
+  { key: 'overdue', label: 'Overdue', rows: inbox.value?.overdue ?? [], inline: false },
+  { key: 'stuck', label: 'Stalled', rows: inbox.value?.stuck ?? [], inline: true },
 ].filter(s => s.rows.length))
 const attentionCount = computed(() => attention.value.reduce((n, s) => n + s.rows.length, 0))
 
@@ -86,7 +86,7 @@ watch(selected, async (id) => {
       <header class="list-head">
         <div class="title-row">
           <h1>Inbox</h1>
-          <NuxtLink to="/inbox/hours" class="btn btn-sm btn-quiet hours-link" data-tour="hours" :aria-current="route.path === '/inbox/hours' ? 'page' : undefined"><Icon name="calendar" />Your interview hours</NuxtLink>
+          <NuxtLink to="/inbox/hours" class="btn btn-sm btn-quiet hours-link" data-tour="hours" :aria-current="route.path === '/inbox/hours' ? 'page' : undefined"><Icon name="calendar" />Interview availability</NuxtLink>
         </div>
         <div v-if="isManager && (inbox || loading)" class="seg" role="radiogroup" aria-label="Show">
           <label><input type="radio" name="list" :checked="view === 'mine'" @change="setView('mine')"><span>Yours <b v-if="inbox" class="n">{{ mine.length }}</b></span></label>
@@ -111,7 +111,7 @@ watch(selected, async (id) => {
           </ul>
         </section>
         <section v-if="inbox.calledOff?.length" aria-labelledby="sec-off">
-          <h2 id="sec-off" class="sec">Interviews called off <span class="faint">{{ inbox.calledOff.length }}</span></h2>
+          <h2 id="sec-off" class="sec">Cancelled interviews <span class="faint">{{ inbox.calledOff.length }}</span></h2>
           <ul class="rows">
             <li v-for="t in inbox.calledOff" :key="t.runId"><InboxTaskRow :task="t" :to="`/candidates/${t.applicationId}`" :current="false" /></li>
           </ul>

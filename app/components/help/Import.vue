@@ -6,11 +6,11 @@
         <span class="dia-item">{{ r[0] }}</span><Icon name="arrow-right" :size="12" /><span class="dia-item to">{{ r[1] }}</span>
       </div>
     </div>
-    <p>Bring in people who applied somewhere else, from a CSV file. The job must be published first, because they join its live flow.</p>
+    <p>Bring in people who applied somewhere else, from a CSV file. The job must be published first, because they join its live workflow.</p>
     <ul>
       <li><b>Match the columns</b>: for each column in your file, pick where it goes. Everyone needs a name and an email. A “Full name” column is split into first and last.</li>
       <li>Send a column to <b>Note on their timeline</b> to keep anything else.</li>
-      <li><b>Start everyone at</b> the start of the flow, or use a column to pick each person’s stage.</li>
+      <li><b>Start everyone at</b> the start of the workflow, or use a column to pick each person’s stage.</li>
       <li>People already in the job, and rows with problems, are skipped. The check shows them before you import.</li>
     </ul>
     <p>Imported people have no CV file, so a step that reads the CV can’t work for them. Lanyard warns you and suggests a later place to start. Consent wasn’t collected, and their page says so.</p>

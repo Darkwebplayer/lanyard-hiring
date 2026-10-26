@@ -109,7 +109,7 @@ export function issueText(i: Issue, g: Graph): string {
     case 'unreachable': return 'Nothing leads to this step'
     case 'end_outgoing': return 'An ending can’t lead anywhere'
     case 'trigger_incoming': return 'Nothing can lead back to the start'
-    case 'cycle': return 'The flow loops back on itself; loops aren’t supported'
+    case 'cycle': return 'The workflow loops back on itself; loops aren’t supported'
     case 'dangling_edge': return 'Points at a step that no longer exists'
     case 'self_loop': return 'Connects to itself'
     case 'unknown_branch': return 'Has a link that matches no branch'
@@ -209,8 +209,8 @@ export interface Preset { id: string, type: string, label: string, description: 
 export interface PaletteItem { id: string, type: string, label: string, icon: string, presetId?: string, config?: unknown }
 
 const BLANK_LABEL: Record<string, string> = {
-  cv_parse: 'Read CV', ai_review: 'AI review', ai_check: 'Check answers', send_email: 'Email', condition: 'Decision', set_variable: 'Set values',
-  human_task: 'Custom person step', request_documents: 'Request documents', end: 'Ending',
+  cv_parse: 'CV extraction', ai_review: 'AI screening', ai_check: 'Answer screening', send_email: 'Send email', condition: 'Decision', set_variable: 'Set fields',
+  human_task: 'Custom assigned task', request_documents: 'Document request', end: 'Outcome',
 }
 // The blank step's name inside a sentence: "an email", "an AI review", "a read CV" (acronyms keep their capitals)
 export const blankNoun = (type: string) => {

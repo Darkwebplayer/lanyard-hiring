@@ -28,7 +28,7 @@ function rename(s: Stage, e: Event) {
 
 <template>
   <div class="stages">
-    <p class="pal-hint">Stages are the columns of the pipeline board. They don’t change how the flow runs.</p>
+    <p class="pal-hint">Stages are the columns of the pipeline board. They don’t change how the workflow runs.</p>
     <p v-if="!stages.length" class="none">No stages yet. Without them, the board shows one column per step.</p>
     <p v-else-if="!active" class="pal-hint">Set a step’s stage on its card, or open a stage to add several steps.</p>
     <ol ref="list" class="list">

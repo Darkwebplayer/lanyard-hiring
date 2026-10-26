@@ -73,7 +73,7 @@ watch([() => route.query.new, jobs, () => flowPresets.value ?? presetsError.valu
     <section v-else-if="jobs && !jobs.length" class="panel empty">
       <Icon name="jobs" :size="28" />
       <h2>No jobs yet</h2>
-      <p>A job holds the role, its application form and the flow each candidate goes through. Publish it and share the apply link.</p>
+      <p>A job holds the role, its application form and the workflow each candidate goes through. Publish it and share the apply link.</p>
       <button class="btn btn-primary" data-tour="new-job" @click="wizard?.open()"><Icon name="plus" />New job</button>
     </section>
 

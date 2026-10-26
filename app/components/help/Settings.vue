@@ -9,12 +9,12 @@
     <p>Things that apply to every job. Only admins see this page.</p>
     <ul>
       <li><b>Company name</b> shows above every job, so candidates know who they’re applying to.</li>
-      <li><b>Reply-to email</b>: where candidates’ replies go, for every email your flows send.</li>
+      <li><b>Reply-to email</b>: where candidates’ replies go, for every email your workflows send.</li>
       <li><b>Consent text</b> adds a box candidates must tick before they send. Leave it empty for no box.</li>
-      <li><b>Use AI</b> turns on AI reviews, Ask and describe-your-flow. The <b>AI screening notice</b> tells candidates an automated review reads their application.</li>
+      <li><b>Use AI</b> turns on AI screening, Ask and describe-your-flow. The <b>AI screening notice</b> tells candidates an automated review reads their application.</li>
       <li><b>Careers page</b>: a line about you, and a job feed link for boards like Indeed.</li>
     </ul>
-    <h4>Reject reasons</h4>
+    <h4>Rejection reasons</h4>
     <p>Whoever rejects someone picks one of these, so you can see later why people were turned down. Keep between 1 and 20. Renaming or removing one never changes past decisions.</p>
     <p>Press <b>Save settings</b> when you’re done. Nothing saves by itself here.</p>
   </div>

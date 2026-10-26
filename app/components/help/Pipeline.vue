@@ -13,7 +13,7 @@
       <li>Hover over a place to see what the move sets off, like an email or a new task, before you let go.</li>
       <li>You confirm in a box. Skipping or going back asks why. Rejecting asks a reason from your list.</li>
     </ul>
-    <p>Moves follow the <b>published</b> flow, the one candidates are on. Click a card to open the candidate.</p>
+    <p>Moves follow the <b>published</b> workflow, the one candidates are on. Click a card to open the candidate.</p>
     <p>Have people from a spreadsheet? Use <b>Import candidates</b>.</p>
   </div>
 </template>

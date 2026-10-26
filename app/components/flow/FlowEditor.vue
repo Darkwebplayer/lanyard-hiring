@@ -294,7 +294,7 @@ function removeStage(id: string) {
   wf.value.stages = stages.value.filter(s => s.id !== id)
   record()
   if (activeStage.value?.id === id) setStage(null)
-  toast.show(`Deleted stage “${st.name}”. Its steps stay in the flow.`, { label: 'Undo', run: undo })
+  toast.show(`Deleted stage “${st.name}”. Its steps stay in the workflow.`, { label: 'Undo', run: undo })
 }
 function moveStage(id: string, dir: -1 | 1) {
   record()
@@ -668,8 +668,8 @@ const presetsMenu = ref<InstanceType<typeof FlowPresetsMenu>>()
 const drafting = ref<AbortController | null>(null)
 const draftError = ref<string | null>(null)
 const replacingNote = computed(() => aiDraft.value
-  ? 'A new draft replaces this one. Your saved flow stays as it is until you save.'
-  : 'The draft replaces the flow on the canvas until you save it. Discard brings this flow back.')
+  ? 'A new draft replaces this one. Your saved workflow stays as it is until you save.'
+  : 'The draft replaces the workflow on the canvas until you save it. Discard brings this workflow back.')
 function openDescribe() {
   draftError.value = null
   describeDlg.value?.showModal()
@@ -804,14 +804,14 @@ function goTo(key?: string) {
         </template>
         <div v-if="editing" class="pal-add">
           <button type="button" class="btn btn-sm btn-quiet" :popovertarget="`pal-add-${g.key}`" :style="{ anchorName: `--pal-add-${g.key}` }">
-            <Icon name="plus" />{{ hiddenIn(g.key).length ? `Show hidden (${hiddenIn(g.key).length})` : 'New preset…' }}
+            <Icon name="plus" />{{ hiddenIn(g.key).length ? `Show hidden (${hiddenIn(g.key).length})` : 'New template…' }}
           </button>
           <div :id="`pal-add-${g.key}`" popover class="menu pal-menu" :style="{ positionAnchor: `--pal-add-${g.key}` }">
             <button v-for="p in hiddenIn(g.key)" :key="p.id" type="button" @click="setShown(p, true)"><Icon :name="nodeMeta(p.type).icon" :size="16" />{{ p.label }}</button>
             <template v-if="hiddenIn(g.key).length"><hr></template>
-            <p v-else class="menu-note">Every {{ g.group.toLowerCase() }} preset is already in the palette. Make a new one in the step library:</p>
+            <p v-else class="menu-note">Every {{ g.group.toLowerCase() }} template is already in the palette. Make a new one in Templates:</p>
             <NuxtLink v-for="t in [...new Set(g.items.map(i => i.type))]" :key="t" :to="{ path: '/library', query: { new: t } }">
-              <Icon name="plus" :size="16" />New {{ blankNoun(t) }} preset
+              <Icon name="plus" :size="16" />New {{ blankNoun(t) }} template
             </NuxtLink>
           </div>
         </div>
@@ -873,7 +873,7 @@ function goTo(key?: string) {
       <div v-if="aiDraft" ref="draftBar" class="draft-bar" role="region" aria-label="Unsaved draft" tabindex="-1">
         <p :title="`${aiDraft.summary} · ${draftCheck}`">Draft from your description <span class="dim">· {{ aiDraft.summary }} · {{ draftCheck }}</span></p>
         <button type="button" class="btn btn-sm btn-quiet" @click="discardDraft">Discard</button>
-        <button type="button" class="btn btn-sm btn-primary" @click="saveDraftFlow">Save flow</button>
+        <button type="button" class="btn btn-sm btn-primary" @click="saveDraftFlow">Save workflow</button>
       </div>
       <section v-if="aiDraft" class="card your-words" aria-labelledby="your-words-h">
         <h3 id="your-words-h" class="eyebrow">Your description</h3>

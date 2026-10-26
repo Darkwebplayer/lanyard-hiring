@@ -42,7 +42,7 @@ function flow() {
   </button>
   <div id="next-moves" ref="menu" popover class="menu next-menu">
     <template v-if="moves.length">
-      <p class="mh">Next in the flow</p>
+      <p class="mh">Next in the workflow</p>
       <button v-for="m in moves" :key="'node' in m.to ? m.to.node : m.to.closed" type="button" @click="choose(m.to)">
         <span class="dot" :class="{ end: 'closed' in m.to }" aria-hidden="true"><Icon name="arrow-right" :size="12" /></span>
         <span class="txt">
@@ -66,7 +66,7 @@ function flow() {
       <span class="txt"><span>Close as withdrawn</span></span>
     </button>
     <hr>
-    <button type="button" class="view" @click="flow"><Icon name="branch" :size="16" />View flow</button>
+    <button type="button" class="view" @click="flow"><Icon name="branch" :size="16" />View workflow</button>
   </div>
 </template>
 

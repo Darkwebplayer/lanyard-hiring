@@ -1,6 +1,6 @@
 <template>
   <div class="topic-body">
-    <h3>Your interview hours</h3>
+    <h3>Interview availability</h3>
     <div class="dia" role="img" aria-label="The candidate gets a link and picks one free slot inside your hours.">
       <b class="cap">What the candidate sees</b>
       <div class="week" aria-hidden="true">
@@ -11,7 +11,7 @@
       </div>
       <span class="faint">Booked: Wed 10:00. It shows in your inbox.</span>
     </div>
-    <p>When a person step lets the candidate book, they get a link and pick a free time <b>inside these hours</b>. Without hours, nobody can book you.</p>
+    <p>When an assigned task lets the candidate book, they get a link and pick a free time <b>inside these hours</b>. Without hours, nobody can book you.</p>
     <ul>
       <li>Turn on the days you interview. Add more than one range on a day for a lunch break.</li>
       <li>Pick your time zone. Candidates see times in their own.</li>

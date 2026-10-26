@@ -26,7 +26,7 @@ const counts = (f: Flow) => `${plural(steps(f.workflow), 'step')} · ${plural(f.
 const loadDlg = ref<HTMLDialogElement>()
 const pick = ref('') // a question, not a setting: nothing replaces the draft by accident
 const choices = computed(() => [
-  { id: 'standard', name: 'Standard hire', counts: counts(STANDARD_HIRE), hint: 'Built in. CV read, AI review, shortlist, interview, offer.', flow: STANDARD_HIRE as Flow },
+  { id: 'standard', name: 'Standard hire', counts: counts(STANDARD_HIRE), hint: 'Built in. CV extraction, AI screening, shortlist, interview, offer.', flow: STANDARD_HIRE as Flow },
   ...(flowPresets.value ?? []).map(p => ({ id: p.id, name: p.name, counts: counts(p), hint: p.description, flow: p as Flow })),
 ])
 function openLoad() {
@@ -73,7 +73,7 @@ async function save() {
       ? await create({ name: draft.name.trim(), description: draft.description.trim(), ...flow })
       : await update(draft.target, { description: draft.description.trim(), ...flow })
     saveDlg.value?.close()
-    toast.show(draft.mode === 'new' ? `Saved “${p.name}” as a flow preset` : `Replaced “${p.name}”. Jobs that started from it keep their flows.`,
+    toast.show(draft.mode === 'new' ? `Saved “${p.name}” as a workflow template` : `Replaced “${p.name}”. Jobs that started from it keep their workflows.`,
       { label: 'Open', run: () => navigateTo({ path: '/library/flows', query: { flow: p.id } }) }, 8000)
   }
   catch (e) { saveError.value = toApiError(e).message }
@@ -83,33 +83,33 @@ async function save() {
 
 <template>
   <button v-if="saveOnly" type="button" class="btn btn-quiet btn-sm presets-btn" @click="openSave">
-    <Icon name="library" />Save as flow preset…
+    <Icon name="library" />Save as workflow template…
   </button>
   <button v-else type="button" class="btn btn-quiet btn-sm presets-btn" popovertarget="flow-presets-menu">
-    <Icon name="library" />Flow presets<Icon name="chevron-down" :size="14" />
+    <Icon name="library" />Workflow templates<Icon name="chevron-down" :size="14" />
   </button>
   <div v-if="!saveOnly" id="flow-presets-menu" ref="menu" popover class="menu presets-menu">
-    <button type="button" @click="openLoad"><Icon name="reopen" :size="16" />Start from a preset…</button>
-    <button type="button" @click="openSave"><Icon name="library" :size="16" />Save as flow preset…</button>
+    <button type="button" @click="openLoad"><Icon name="reopen" :size="16" />Start from a template…</button>
+    <button type="button" @click="openSave"><Icon name="library" :size="16" />Save as workflow template…</button>
   </div>
 
   <dialog ref="loadDlg" class="dialog" aria-labelledby="load-h" @click.self="loadDlg?.close()">
     <form @submit.prevent="load">
       <div class="dialog-body">
-        <h2 id="load-h">Start from a preset</h2>
+        <h2 id="load-h">Start from a template</h2>
         <fieldset class="field">
-          <legend class="sr-only">Flow preset</legend>
+          <legend class="sr-only">Workflow template</legend>
           <div class="choices">
             <label v-for="c in choices" :key="c.id" class="check">
               <input v-model="pick" type="radio" name="load-preset" :value="c.id">
               <span><b>{{ c.name }} <span class="n">{{ c.counts }}</span></b><span v-if="c.hint" class="hint">{{ c.hint }}</span></span>
             </label>
           </div>
-          <p v-if="!flowPresets && !error" class="hint"><span class="spinner" />Loading your flow presets…</p>
-          <p v-else-if="error && !flowPresets" class="hint">Your flow presets didn’t load. <button type="button" class="linkish" @click="refresh">Try again</button></p>
+          <p v-if="!flowPresets && !error" class="hint"><span class="spinner" />Loading your workflow templates…</p>
+          <p v-else-if="error && !flowPresets" class="hint">Your workflow templates didn’t load. <button type="button" class="linkish" @click="refresh">Try again</button></p>
         </fieldset>
         <p class="reach">
-          Replaces this draft’s form ({{ plural(form.length, 'field') }}) and flow ({{ plural(steps(workflow), 'step') }}).
+          Replaces this draft’s form ({{ plural(form.length, 'field') }}) and workflow ({{ plural(steps(workflow), 'step') }}).
           <template v-if="liveVersion">The live version v{{ liveVersion }} keeps taking applications until you publish.</template>
           You can undo it right after.
         </p>
@@ -124,9 +124,9 @@ async function save() {
   <dialog ref="saveDlg" class="dialog" aria-labelledby="save-h" @click.self="saveDlg?.close()">
     <form @submit.prevent="save">
       <div class="dialog-body">
-        <h2 id="save-h">Save as flow preset</h2>
+        <h2 id="save-h">Save as workflow template</h2>
         <div class="seg" role="radiogroup" aria-label="Save as">
-          <label><input v-model="draft.mode" type="radio" name="save-mode" value="new"><span>New preset</span></label>
+          <label><input v-model="draft.mode" type="radio" name="save-mode" value="new"><span>New template</span></label>
           <label><input v-model="draft.mode" type="radio" name="save-mode" value="replace" :disabled="!flowPresets?.length"><span>Replace an existing one</span></label>
         </div>
         <div v-if="draft.mode === 'new'" class="field">
@@ -138,7 +138,7 @@ async function save() {
           <select id="sp-target" v-model="draft.target" required>
             <option v-for="p in flowPresets" :key="p.id" :value="p.id">{{ p.name }}</option>
           </select>
-          <span v-if="target" class="hint">Its {{ plural(steps(target.workflow), 'step') }} and {{ plural(target.form.length, 'field') }} become this flow’s {{ plural(steps(workflow), 'step') }} and {{ plural(form.length, 'field') }}.</span>
+          <span v-if="target" class="hint">Its {{ plural(steps(target.workflow), 'step') }} and {{ plural(target.form.length, 'field') }} become this workflow’s {{ plural(steps(workflow), 'step') }} and {{ plural(form.length, 'field') }}.</span>
         </div>
         <div class="field">
           <label for="sp-desc">Description <span class="faint">(optional)</span></label>
@@ -156,7 +156,7 @@ async function save() {
       </div>
       <div class="dialog-foot">
         <button type="button" class="btn btn-quiet" @click="saveDlg?.close()">Cancel</button>
-        <button class="btn btn-primary" :disabled="saving" :aria-busy="saving"><span v-if="saving" class="spinner" />{{ draft.mode === 'new' ? 'Save preset' : 'Replace preset' }}</button>
+        <button class="btn btn-primary" :disabled="saving" :aria-busy="saving"><span v-if="saving" class="spinner" />{{ draft.mode === 'new' ? 'Save template' : 'Replace template' }}</button>
       </div>
     </form>
   </dialog>

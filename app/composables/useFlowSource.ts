@@ -52,7 +52,7 @@ export const useFlowPresetSource = (id: string): FlowSource => {
     // the server takes a preset's form and flow together, never one half
     async save(p) {
       const base = preset.value
-      if (!base) throw { status: 404, code: 'not_found', message: 'This flow preset was deleted.', issues: [] } satisfies ApiError
+      if (!base) throw { status: 404, code: 'not_found', message: 'This workflow template was deleted.', issues: [] } satisfies ApiError
       try {
         return await update(id, { form: p.form ?? base.form, workflow: p.workflow ?? base.workflow })
       }

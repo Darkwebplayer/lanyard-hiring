@@ -140,7 +140,7 @@ const formCount = computed(() => props.form.length)
 function closedLine(c: StageView['closed'][number]) {
   const emails = [...new Set(props.graph.edges.filter(e => c.ends.includes(e.to)).map(e => node(e.from)).filter(n => n?.type === 'send_email').map(n => `“${titleOf(n!)}”`))]
   if (!c.ends.length) return 'Only when you close someone by hand'
-  return emails.length ? `Sends ${emails.join(' or ')} on the way` : 'The flow can end here'
+  return emails.length ? `Sends ${emails.join(' or ')} on the way` : 'The workflow can end here'
 }
 </script>
 
@@ -193,7 +193,7 @@ function closedLine(c: StageView['closed'][number]) {
 
           <div v-if="s.auto.length" class="blk">
             <div class="lbl-row">
-              <h4 class="lbl">When someone arrives</h4>
+              <h4 class="lbl">Automated actions <span class="lbl-hint">· when someone arrives</span></h4>
               <button v-if="twoEmails(s)" type="button" class="what" aria-label="What’s this? Why only one of these emails is sent" @click="showHelp('stages')">What’s this?</button>
             </div>
             <p v-if="oneWay(i)" class="sub">Goes <b>one</b> way, depending on what happened in {{ view.stages[i - 1]!.name }}:</p>
@@ -215,8 +215,8 @@ function closedLine(c: StageView['closed'][number]) {
 
           <div v-if="s.people.length" class="blk">
             <div class="lbl-row">
-              <h4 class="lbl">Who works here</h4>
-              <button type="button" class="what" aria-label="What’s this? Who reaches the person steps" @click="showHelp('stages')">What’s this?</button>
+              <h4 class="lbl">Assigned tasks <span class="lbl-hint">· who works here</span></h4>
+              <button type="button" class="what" aria-label="What’s this? Who reaches the assigned tasks" @click="showHelp('stages')">What’s this?</button>
             </div>
             <div v-for="st in s.people" :key="st.key" class="row-wrap">
               <div class="act" :class="{ sel: st.key === selectedKey, bad: issuesBy.has(st.key) }">
@@ -238,7 +238,7 @@ function closedLine(c: StageView['closed'][number]) {
           <div v-if="!readOnly" class="adds">
             <template v-for="kind in (['auto', 'people'] as const)" :key="kind">
               <button type="button" class="add" :popovertarget="`add-${s.id}-${kind}`" :style="{ anchorName: `--add-${s.id}-${kind}` }">
-                <Icon name="plus" :size="14" />{{ kind === 'auto' ? 'Add an action' : 'Add a person step' }}
+                <Icon name="plus" :size="14" />{{ kind === 'auto' ? 'Add an action' : 'Add an assigned task' }}
               </button>
               <div :id="`add-${s.id}-${kind}`" popover class="menu add-menu" :style="{ positionAnchor: `--add-${s.id}-${kind}` }">
                 <button v-for="item in paletteFor(kind)" :key="item.id" type="button" @click="($event.target as HTMLElement).closest<HTMLElement>('[popover]')?.hidePopover(); emit('add', s.id, kind, item)">
@@ -249,7 +249,7 @@ function closedLine(c: StageView['closed'][number]) {
           </div>
 
           <div v-if="exitsOf(s).length || conditionIssues(s).length" class="blk">
-            <h4 class="lbl">Moves on when</h4>
+            <h4 class="lbl">Advancement rules <span class="lbl-hint">· where they go next</span></h4>
             <component
               :is="x.condition ? 'button' : 'div'" v-for="(x, n) in exitsOf(s)" :key="n" :type="x.condition ? 'button' : undefined"
               class="rule" :class="{ sel: x.condition && x.condition === selectedKey, quiet: !x.rule }" :data-step="x.condition"
@@ -263,7 +263,7 @@ function closedLine(c: StageView['closed'][number]) {
           </div>
 
           <details class="blk ask-blk" :open="!!askOf(s.id).length">
-            <summary class="lbl">When someone is moved here by hand, ask<span v-if="askOf(s.id).length" class="n">{{ askOf(s.id).length }}</span></summary>
+            <summary class="lbl">Questions for manual moves <span class="lbl-hint">· asked when someone is moved here by hand</span><span v-if="askOf(s.id).length" class="n">{{ askOf(s.id).length }}</span></summary>
             <AskFields :model-value="askOf(s.id)" :stage-name="s.name" :read-only="readOnly" @update:model-value="setAsk(s.id, $event)" />
           </details>
         </section>
@@ -288,7 +288,7 @@ function closedLine(c: StageView['closed'][number]) {
 
     <aside v-if="!selectedKey" class="side" aria-label="Board and diagram">
       <div class="panel box">
-        <h3>Your board</h3>
+        <h3>Pipeline preview</h3>
         <ol class="mini">
           <li v-for="s in view.stages" :key="s.id"><span class="mini-name">{{ s.name }}</span><b v-if="hereIn(s.id) !== undefined">{{ hereIn(s.id) }}</b></li>
           <li class="mini-closed"><span class="mini-name">Closed</span><b v-if="closedCount !== undefined">{{ closedCount }}</b></li>
@@ -335,6 +335,7 @@ function closedLine(c: StageView['closed'][number]) {
 
 .blk { display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: var(--r-panel); background: var(--sunk); }
 .lbl { font-size: var(--t-xs); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-2); }
+.lbl-hint { text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--ink-3); }
 .lbl-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 .what { padding: 0; border: 0; background: none; font: 500 var(--t-xs) var(--font); color: var(--accent-ink); text-decoration: underline; text-underline-offset: 0.18em; cursor: pointer; }
 .what:hover { color: var(--ink); }

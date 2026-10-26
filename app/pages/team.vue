@@ -7,7 +7,7 @@ interface User { id: string, name: string, email: string, image: string | null, 
 interface Invite { email: string, roleId: string, roleName: string, createdAt: string }
 
 const LEVELS: { value: RoleLevel, label: string }[] = [
-  { value: 'manager', label: 'Manager: jobs, flows, all candidates' },
+  { value: 'manager', label: 'Manager: jobs, workflows, all candidates' },
   { value: 'employee', label: 'Employee: only their own tasks' },
 ]
 
@@ -163,7 +163,7 @@ async function addRole() {
 
     <template v-else>
       <section class="block" aria-labelledby="people" :aria-busy="!users" :inert="!users">
-        <h2 id="people">People</h2>
+        <h2 id="people">Members</h2>
 
         <form class="panel invite" @submit.prevent="sendInvite">
           <div class="field">
@@ -253,7 +253,7 @@ async function addRole() {
 
       <section class="block" aria-labelledby="roles-h" :aria-busy="!users" :inert="!users">
         <div>
-          <h2 id="roles-h">Roles</h2>
+          <h2 id="roles-h">Roles &amp; permissions</h2>
           <p class="muted sub">The name is yours to choose; the level decides what people can see.</p>
         </div>
         <div class="panel table-wrap">
@@ -296,12 +296,12 @@ async function addRole() {
     <dialog ref="confirmDlg" class="dialog" aria-labelledby="dl-t" @click="backdropClose" @close="toDeactivate = null">
       <form v-if="toDeactivate" method="dialog" @submit.prevent="confirmDeactivate">
         <div class="dialog-body">
-          <h2 id="dl-t">Switch off {{ toDeactivate.name }}?</h2>
+          <h2 id="dl-t">Deactivate {{ toDeactivate.name }}?</h2>
           <p class="muted">They’re signed out at once and can’t sign in until you switch them back on. Their scorecards and history stay. Tasks waiting on them stay assigned, so reassign those from the inbox.</p>
         </div>
         <div class="dialog-foot">
           <button type="button" class="btn" autofocus @click="confirmDlg?.close()">Keep access</button>
-          <button class="btn btn-danger">Switch off and sign out</button>
+          <button class="btn btn-danger">Deactivate and sign out</button>
         </div>
       </form>
     </dialog>

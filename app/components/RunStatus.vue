@@ -2,7 +2,7 @@
 // A run's status as a word with an icon; colour never carries it alone.
 const props = defineProps<{ status: string, overdue?: boolean }>()
 const s = computed(() => props.overdue && props.status === 'waiting_on_human'
-  ? { text: 'Late', chip: 'chip-bad', icon: 'clock' }
+  ? { text: 'Overdue', chip: 'chip-bad', icon: 'clock' }
   : RUN_STATUS[props.status] ?? { text: props.status, chip: '', icon: 'more' })
 </script>
 

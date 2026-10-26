@@ -18,7 +18,7 @@ const error = ref('')
 const LABELS = ['Company', 'Team', 'Your hours', 'First job']
 const ROLE_VIEW = [
   { name: 'Admin', sees: ['Everything', 'Team', 'Settings'] },
-  { name: 'Manager', sees: ['Jobs', 'Candidates', 'Hires'] },
+  { name: 'Manager', sees: ['Jobs', 'Candidates', 'Reports'] },
   { name: 'Employee', sees: ['Their tasks', 'Their hours'] },
 ]
 
@@ -251,7 +251,7 @@ function tour() {
             </span></li>
             <li><i :class="{ no: !done.hours && !hadHours }">{{ done.hours || hadHours ? '✓' : 3 }}</i><span>
               <b>Your hours</b><br>
-              <span class="faint">{{ done.hours ? `${daysText}, ${nineToFive}, ${timezone.replaceAll('_', ' ')} time` : hadHours ? 'Already set' : 'Skipped. Set them from Inbox → Your interview hours.' }}</span>
+              <span class="faint">{{ done.hours ? `${daysText}, ${nineToFive}, ${timezone.replaceAll('_', ' ')} time` : hadHours ? 'Already set' : 'Skipped. Set them from Inbox → Interview availability.' }}</span>
             </span></li>
             <li><i class="no">4</i><span><b>Your first job</b><br><span class="faint">Two minutes, step by step</span></span></li>
           </ul>
@@ -293,15 +293,15 @@ function tour() {
             </div>
             <span class="faint">Booked: Wed 10:00 AM. It goes into your inbox.</span>
           </div>
-          <div class="later"><p class="eyebrow">Later, change it in</p><span class="faint"><b>Inbox → Your interview hours</b></span></div>
+          <div class="later"><p class="eyebrow">Later, change it in</p><span class="faint"><b>Inbox → Interview availability</b></span></div>
         </template>
         <template v-else>
           <p class="eyebrow">Where things live</p>
           <div class="panel places">
             <span><b>Inbox</b> · your tasks, like scorecards</span>
             <span><b>Jobs</b> · each job and its candidates</span>
-            <span><b>Library</b> · steps and flows you reuse</span>
-            <span><b>Hires</b> · who you hired, and from where</span>
+            <span><b>Templates</b> · steps, workflows and letters you reuse</span>
+            <span><b>Reports</b> · who you hired, and from where</span>
           </div>
           <p class="faint">Press <span class="kbd">?</span> on any page to see how it works.</p>
         </template>

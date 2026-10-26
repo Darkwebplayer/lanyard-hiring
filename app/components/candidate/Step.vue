@@ -77,7 +77,7 @@ const scoreRows = (v: Record<string, unknown>) => Object.entries(v).filter(([k])
         <p v-if="run.status === 'cancelled'" class="muted">Skipped: replaced by a move.</p>
 
         <div v-else-if="run.status === 'failed'" class="failed">
-          <p><b>Stopped: {{ err.what.charAt(0).toLowerCase() + err.what.slice(1) }}.</b><template v-if="latest">{{ ` ${err.fix}` }}</template></p>
+          <p><b>Failed: {{ err.what.charAt(0).toLowerCase() + err.what.slice(1) }}.</b><template v-if="latest">{{ ` ${err.fix}` }}</template></p>
           <button v-if="canRetry" class="btn btn-sm" :aria-busy="retrying" :disabled="retrying" @click="emit('retry')">
             <span v-if="retrying" class="spinner" /><Icon v-else name="retry" />Retry {{ name }}
           </button>

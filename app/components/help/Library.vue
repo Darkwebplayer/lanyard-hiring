@@ -1,17 +1,17 @@
 <template>
   <div class="topic-body">
-    <h3>The library</h3>
-    <div class="dia copy" role="img" aria-label="A preset is copied into each flow that uses it. Changing the preset later doesn't change those flows.">
-      <div class="dia-item src">Phone screen<span class="chip chip-accent">Preset</span></div>
-      <div class="flows"><span class="dia-item c1">Barista flow</span><span class="dia-item c2">Driver flow</span></div>
+    <h3>Templates</h3>
+    <div class="dia copy" role="img" aria-label="A template is copied into each workflow that uses it. Changing the template later doesn't change those workflows.">
+      <div class="dia-item src">Phone screen<span class="chip chip-accent">Template</span></div>
+      <div class="flows"><span class="dia-item c1">Barista workflow</span><span class="dia-item c2">Driver workflow</span></div>
     </div>
     <p>Things you set up once and reuse in many jobs.</p>
     <ul>
-      <li><b>Steps</b>: presets for the steps you add to stages, like a phone screen with its scorecard. The ones marked <b>In palette</b> show in every flow’s palette.</li>
-      <li><b>Flow presets</b>: whole flows with their form. Start a new job from one, or save a job’s flow as a preset. Built-in ones can’t change: duplicate one to make your own.</li>
+      <li><b>Steps</b>: templates for the steps you add to stages, like a phone screen with its scorecard. The ones marked <b>In palette</b> show in every workflow’s palette.</li>
+      <li><b>Workflows</b>: whole workflows with their application form. Start a new job from one, or save a job’s workflow as a template. Built-in ones can’t change: duplicate one to make your own.</li>
       <li><b>Offer letters</b>: the letters you send with an offer, with details filled in when you make it.</li>
     </ul>
-    <p>Everything is <b>copied</b> where it’s used. Changing a preset or a letter never changes flows, jobs or offers that already use it.</p>
+    <p>Everything is <b>copied</b> where it’s used. Changing a template or a letter never changes workflows, jobs or offers that already use it.</p>
   </div>
 </template>
 

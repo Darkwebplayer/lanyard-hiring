@@ -21,7 +21,7 @@ const emit = defineEmits<{ rename: [key: string], connect: [branch: string | und
 const meta = computed(() => nodeMeta(props.node.type))
 const { canAsk } = useMe()
 const { ask } = useAsk()
-const explain = () => ask(`What does ${titleOf(props.node)} do in this flow?`, `node:${props.node.key}`)
+const explain = () => ask(`What does ${titleOf(props.node)} do in this workflow?`, `node:${props.node.key}`)
 const refHint = computed(() => `{{nodes.${props.node.key}.…}}`)
 const c = computed(() => props.node.config as any)
 const fields = computed(() => fieldsAvailableAt(props.graph, props.node.key, props.form))
@@ -212,7 +212,7 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
       <h3>{{ titleOf(node) }}</h3>
       <div class="head-actions">
         <button v-if="!preset && canAsk" type="button" class="btn btn-quiet btn-sm" @click="explain">Explain</button>
-        <button v-if="!preset && node.type !== 'application_received'" type="button" class="btn btn-quiet btn-icon btn-sm" aria-label="Save as a preset in the step library" title="Save as preset (adds it to every job’s palette)" @click="emit('savePreset')">
+        <button v-if="!preset && node.type !== 'application_received'" type="button" class="btn btn-quiet btn-icon btn-sm" aria-label="Save as a step template" title="Save as template (adds it to every job’s palette)" @click="emit('savePreset')">
           <Icon name="library" />
         </button>
         <button v-if="!preset && node.type !== 'application_received' && !readOnly" type="button" class="btn btn-quiet btn-icon btn-sm" aria-label="Delete step" title="Delete step" @click="emit('remove')">
@@ -232,9 +232,9 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
     <fieldset :disabled="readOnly" class="body">
       <section class="sec">
         <div class="field">
-          <label :for="`name-${node.key}`">{{ preset ? 'Preset name' : 'Step name' }}</label>
+          <label :for="`name-${node.key}`">{{ preset ? 'Template name' : 'Step name' }}</label>
           <input :id="`name-${node.key}`" v-model="label" :placeholder="derivedName" :required="preset">
-          <p v-if="preset" class="hint">Steps added from this preset start with this name.</p>
+          <p v-if="preset" class="hint">Steps added from this template start with this name.</p>
         </div>
         <slot name="extra" />
         <details v-if="!preset" class="adv">
@@ -245,7 +245,7 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
               :id="`key-${node.key}`" v-model.trim="keyDraft" class="mono" :disabled="keyLocked || readOnly"
               :aria-invalid="!!keyError" spellcheck="false" @change="commitKey" @keydown.enter="commitKey"
             >
-            <p v-if="keyLocked" class="hint"><Icon name="lock" :size="12" class="inl" />Locked: this step is in the live flow, so a new key would count as removing it.</p>
+            <p v-if="keyLocked" class="hint"><Icon name="lock" :size="12" class="inl" />Locked: this step is in the live workflow, so a new key would count as removing it.</p>
             <p v-else-if="keyError" class="error">{{ keyError }}</p>
             <p v-else class="hint">Other steps read this step’s answers as <code v-text="refHint" /></p>
           </div>
@@ -261,11 +261,11 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
       <template v-else-if="node.type === 'cv_parse'">
       <section class="sec">
         <div class="field">
-          <label :for="`ff-${node.key}`">Read the file from</label>
+          <label :for="`ff-${node.key}`">CV file field</label>
           <select v-if="fileFields.length" :id="`ff-${node.key}`" v-model="c.file_field">
             <option v-for="f in fileFields" :key="f.key" :value="f.key">{{ f.label }}</option>
           </select>
-          <p v-else class="hint">The form has no file field. <NuxtLink :to="formHref">Add a file field in the Form tab</NuxtLink></p>
+          <p v-else class="hint">The form has no file field. <NuxtLink :to="formHref">Add a file field in the Application form tab</NuxtLink></p>
         </div>
       </section>
       <section class="sec">
@@ -304,7 +304,7 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
           </details>
         </div>
         <button v-if="(c.extract?.length ?? 0) < 10" type="button" class="btn btn-sm add" @click="addExtract"><Icon name="plus" />Add a fact</button>
-        <p class="hint">If the CV does not say, the fact stays empty. Read CV never guesses.</p>
+        <p class="hint">If the CV does not say, the fact stays empty. CV extraction never guesses.</p>
       </section>
       </template>
 
@@ -321,7 +321,7 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
             <input :id="`cl-${node.key}-${i}`" :value="cr.label" placeholder="e.g. Customer service" @input="relabel(cr, ($event.target as HTMLInputElement).value, 'criterion')">
           </div>
           <div class="field">
-            <label :for="`cd-${node.key}-${i}`">What to look for</label>
+            <label :for="`cd-${node.key}-${i}`">Scoring criteria</label>
             <textarea :id="`cd-${node.key}-${i}`" v-model="cr.description" rows="2" placeholder="e.g. Has served customers in a shop, café or call centre" />
           </div>
           <details class="adv">
@@ -334,7 +334,7 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
         </div>
         <button v-if="c.criteria.length < 10" type="button" class="btn btn-sm add" @click="c.criteria.push({ key: '', label: '', description: '' })"><Icon name="plus" />Add a criterion</button>
         <div class="field">
-          <label :for="`cv-${node.key}`">CV text from</label>
+          <label :for="`cv-${node.key}`">CV source</label>
           <select :id="`cv-${node.key}`" v-model="cvTextRef">
             <option value="">None: score from the form answers only</option>
             <option v-for="f in cvTextOptions" :key="f.path" :value="f.path">{{ f.label }}</option>
@@ -350,14 +350,14 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
       <!-- Check answers -->
       <template v-else-if="node.type === 'ai_check'">
       <section class="sec">
-        <div class="legend">What to check <span class="faint">(up to 10)</span></div>
+        <div class="legend">Screening questions <span class="faint">(up to 10)</span></div>
         <div v-for="(q, i) in c.questions" :key="i" class="row-card">
           <div class="rc-head">
             <span class="legend">Question {{ Number(i) + 1 }}</span>
             <button v-if="c.questions.length > 1" type="button" class="btn btn-quiet btn-icon btn-sm" :aria-label="`Remove ${q.label || 'question'}`" title="Remove question" @click="c.questions.splice(i, 1)"><Icon name="x" /></button>
           </div>
           <div class="field">
-            <label :for="`qq-${node.key}-${i}`">Ask</label>
+            <label :for="`qq-${node.key}-${i}`">Screening question</label>
             <textarea :id="`qq-${node.key}-${i}`" v-model="q.question" rows="2" maxlength="500" placeholder="Can they work Saturdays and Sundays?" />
           </div>
           <div class="field">
@@ -391,7 +391,7 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
       </section>
       <section class="sec">
         <div class="field">
-          <label :for="`cv-${node.key}`">CV text from</label>
+          <label :for="`cv-${node.key}`">CV source</label>
           <select :id="`cv-${node.key}`" v-model="cvTextRef">
             <option value="">None: check the form answers only</option>
             <option v-for="f in cvTextOptions" :key="f.path" :value="f.path">{{ f.label }}</option>
@@ -472,7 +472,7 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
         <TemplateField v-model="ht.title" label="Task title" :fields="fields" :graph="graph" hide-protected placeholder="e.g. Call {{candidate.first_name}} about shifts" hint="What people see in their inbox." />
         <TemplateField v-model="ht.instructions" label="Instructions (optional)" multiline :fields="fields" :graph="graph" hide-protected placeholder="e.g. Ask which days they can work and when they can start." />
         <fieldset class="field">
-          <legend class="legend">Who does it</legend>
+          <legend class="legend">Assigned to</legend>
           <label class="check"><input v-model="ht.assignees.job_owner" type="checkbox">Job owner</label>
           <label v-for="r in roles" :key="r.id" class="check">
             <input type="checkbox" :checked="ht.assignees.roles.includes(r.id)" @change="toggle(ht.assignees.roles, r.id, ($event.target as HTMLInputElement).checked)">
@@ -534,11 +534,12 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
         </template>
         <div class="row-2 two">
           <div class="field">
-            <label :for="`ms-${node.key}`">Scorecards needed</label>
-            <input :id="`ms-${node.key}`" v-model.number="ht.min_submissions" type="number" min="1" max="20">
+            <label :for="`ms-${node.key}`">Scorecards required</label>
+            <input :id="`ms-${node.key}`" v-model.number="ht.min_submissions" type="number" min="1" max="20" :aria-describedby="`ms-h-${node.key}`">
+            <span :id="`ms-h-${node.key}`" class="hint">Before the candidate moves on</span>
           </div>
           <div class="field">
-            <label :for="`dd-${node.key}`">Due after (days)</label>
+            <label :for="`dd-${node.key}`">Due within (days)</label>
             <input :id="`dd-${node.key}`" type="number" min="0" max="90" :value="ht.due_days" placeholder="No due date" @input="optNumber(ht, 'due_days', ($event.target as HTMLInputElement).value)">
           </div>
         </div>
@@ -546,14 +547,14 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
         <div v-if="!ht.offer" class="row-card">
           <label class="check">
             <input type="checkbox" role="switch" :checked="!!booking" @change="setBooking(($event.target as HTMLInputElement).checked)">
-            <span><b>Let the candidate book a time</b><br><span class="hint">They get a link to pick a slot when the people above are free. Interviewers set their hours in their inbox, under <NuxtLink to="/inbox/hours">Your interview hours</NuxtLink>.</span></span>
+            <span><b>Let the candidate book a time</b><br><span class="hint">They get a link to pick a slot when the people above are free. Interviewers set their availability in their inbox, under <NuxtLink to="/inbox/hours">Interview availability</NuxtLink>.</span></span>
           </label>
           <div v-if="booking" class="field dur">
-            <label :for="`book-${node.key}`">Length (minutes)</label>
+            <label :for="`book-${node.key}`">Duration (minutes)</label>
             <input :id="`book-${node.key}`" type="number" min="15" max="240" step="15" :value="booking.duration_min" @change="setDuration(($event.target as HTMLInputElement).value)">
           </div>
           <div v-if="booking" class="field">
-            <label :for="`where-${node.key}`">Where <span class="faint">optional</span></label>
+            <label :for="`where-${node.key}`">Location <span class="faint">optional</span></label>
             <input :id="`where-${node.key}`" :value="booking.where ?? ''" maxlength="300" placeholder="e.g. Tuas warehouse, 12 Tuas Ave 3. Ask for Priya at the front desk." @input="setWhere(($event.target as HTMLInputElement).value)">
             <span class="hint">Shown on the booking page, in the emails and in the calendar invite.</span>
           </div>
@@ -570,7 +571,7 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
         </div>
         <button v-if="c.documents.length < 20" type="button" class="btn btn-sm add" @click="c.documents.push({ label: '', required: true })"><Icon name="plus" />Add a document</button>
         <fieldset class="field">
-          <legend class="legend">Who follows up</legend>
+          <legend class="legend">Assigned to</legend>
           <label class="check"><input v-model="c.assignees.job_owner" type="checkbox">Job owner</label>
           <label v-for="r in roles" :key="r.id" class="check">
             <input type="checkbox" :checked="c.assignees.roles.includes(r.id)" @change="toggle(c.assignees.roles, r.id, ($event.target as HTMLInputElement).checked)">
@@ -647,7 +648,7 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
       <!-- end -->
       <section v-else-if="node.type === 'end'" class="sec">
         <fieldset class="field">
-          <legend class="legend">The application ends as</legend>
+          <legend class="legend">Final outcome</legend>
           <div class="seg">
             <label v-for="[v, l] in OUTCOMES" :key="v"><input v-model="c.outcome" type="radio" :name="`out-${node.key}`" :value="v"><span>{{ l }}</span></label>
           </div>

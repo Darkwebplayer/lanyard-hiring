@@ -22,8 +22,8 @@ if (!inbox.value) refresh()
 const places = computed(() => [
   { to: '/inbox', label: 'Inbox', icon: 'inbox', count: inbox.value?.mine.length ?? 0, show: true },
   { to: '/jobs', label: 'Jobs', icon: 'jobs', show: isManager.value },
-  { to: '/library', label: 'Library', icon: 'library', show: isManager.value },
-  { to: '/hires', label: 'Hires', icon: 'hires', show: isManager.value },
+  { to: '/library', label: 'Templates', icon: 'library', show: isManager.value },
+  { to: '/hires', label: 'Reports', icon: 'hires', show: isManager.value },
   { to: '/team', label: 'Team', icon: 'team', show: isAdmin.value },
   { to: '/settings', label: 'Settings', icon: 'settings', show: isAdmin.value },
 ].filter(p => p.show))

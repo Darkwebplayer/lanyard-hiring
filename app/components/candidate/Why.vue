@@ -55,7 +55,7 @@ const ai = computed(() => {
 
 <template>
   <section v-if="mode" class="card why" :data-slot="mode === 'manual' ? 'accent' : cond?.branchTaken === 'missing' ? 'warn' : 'ink'" aria-labelledby="why-h">
-    <h2 id="why-h" class="eyebrow">Why</h2>
+    <h2 id="why-h" class="eyebrow">Score rationale</h2>
     <p class="headline">{{ headline }}</p>
 
     <template v-if="mode === 'manual'">

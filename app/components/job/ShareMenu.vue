@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Every way to get a job in front of people, in one menu on the job header. Each link carries ?src=… so the
-// applicant's source shows on their profile and in the Hires report.
+// applicant's source shows on their profile and in Reports.
 import type { JobStatus } from '~/composables/useJob'
 
 const props = defineProps<{ jobId: string, title: string, status: JobStatus, published: boolean }>()
@@ -81,7 +81,7 @@ function copyTagged() {
           </button>
         </div>
         <p v-if="whereError" id="share-where-h" class="error">{{ whereError }}</p>
-        <p v-else id="share-where-h" class="hint">{{ slug ? `Applicants from it show the source “${slug}”.` : 'Applicants show where they came from in the Hires report.' }}</p>
+        <p v-else id="share-where-h" class="hint">{{ slug ? `Applicants from it show the source “${slug}”.` : 'Applicants show where they came from in Reports.' }}</p>
       </form>
     </template>
   </div>

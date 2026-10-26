@@ -8,7 +8,7 @@
       <div class="outs"><span>Interview</span><span>Decision</span></div>
       <span class="dot" aria-hidden="true" />
     </div>
-    <p>Each stage is a column on your board. Everyone who reaches it goes through its steps, top to bottom: <b>When someone arrives</b>, then <b>Who works here</b>, then <b>Moves on when</b>.</p>
+    <p>Each stage is a column on your board. Everyone who reaches it goes through its steps, top to bottom: <b>Automated actions</b>, then <b>Assigned tasks</b>, then <b>Advancement rules</b>.</p>
 
     <h4 id="manual">Why “Manual review” doesn’t get everyone</h4>
     <div class="bands" role="img" aria-label="A score under 40 goes to Decision, 40 to 69 goes to a person for manual review, 70 and up goes to Interview.">
@@ -16,7 +16,7 @@
       <span class="mid">40–69 · you</span>
       <span class="hi">70+ · interview</span>
     </div>
-    <p>A person step only gets the people a rule sends to it. In the AI screening flow, the AI review moves clear yeses and clear nos on by itself. <b>Only the middle band waits for you.</b> Change the numbers in “Moves on when”.</p>
+    <p>An assigned task only gets the people a rule sends to it. In the AI screening workflow, the AI screening step moves clear yeses and clear nos on by itself. <b>Only the middle band waits for you.</b> Change the numbers in “Advancement rules”.</p>
 
     <h4 id="decision">Decision sends one email, not both</h4>
     <p>The Decision stage lists the offer email and the rejection email, but a candidate gets <b>one or the other</b>, depending on the path that brought them there. Closing someone by hand sends no email at all.</p>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Your interview hours. In the inbox, not Settings, because Settings is for admins and interviewers
 // (level employee) only have the inbox; everyone who can be booked needs this page.
-useHead({ title: 'Your interview hours' })
+useHead({ title: 'Interview availability' })
 
 type Day = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
 interface Availability { timezone: string | null, hours: Partial<Record<Day, [string, string][]>> }
@@ -78,18 +78,18 @@ async function save() {
   catch (e) { saveError.value = toApiError(e).message }
   finally { saving.value = false }
 }
-onBeforeRouteLeave(() => !dirty.value || firstTime.value || confirm('Leave without saving your interview hours?'))
+onBeforeRouteLeave(() => !dirty.value || firstTime.value || confirm('Leave without saving your interview availability?'))
 </script>
 
 <template>
   <div class="hours">
     <header class="top">
-      <h2>Your interview hours</h2>
+      <h2>Interview availability</h2>
       <p class="muted">Candidates can only book an interview with you inside these hours.</p>
     </header>
 
     <div v-if="loadError" class="empty" role="alert">
-      <h2>Your hours didn’t load</h2>
+      <h2>Your availability didn’t load</h2>
       <p>{{ loadError }}</p>
       <button type="button" class="btn" @click="load"><Icon name="retry" />Try again</button>
     </div>

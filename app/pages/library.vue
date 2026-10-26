@@ -2,7 +2,7 @@
 const route = useRoute()
 const tabs = [
   { to: '/library', label: 'Steps' },
-  { to: '/library/flows', label: 'Flows' },
+  { to: '/library/flows', label: 'Workflows' },
   { to: '/library/offers', label: 'Offer letters' },
 ]
 </script>
@@ -13,9 +13,9 @@ const tabs = [
   <NuxtPage v-if="route.params.id" />
   <div v-else class="page">
     <header class="page-head">
-      <h1>Library</h1>
+      <h1>Templates</h1>
     </header>
-    <nav class="tabs" aria-label="Library">
+    <nav class="tabs" aria-label="Templates">
       <NuxtLink v-for="t in tabs" :key="t.to" :to="t.to" :aria-current="route.path === t.to ? 'page' : undefined">{{ t.label }}</NuxtLink>
     </nav>
     <div class="tab-body">

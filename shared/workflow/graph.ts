@@ -227,7 +227,7 @@ export function aiWarnings(graph: Graph, form: FormField[], requirements: { must
     const name = nodeLabel(n)
     // cv_text_ref is the only way CV text reaches the AI (a Read CV output, or a pasted-CV text field)
     const cv = !!(n.config as { cv_text_ref?: string } | undefined)?.cv_text_ref
-    if (n.type === 'ai_review' && !cv) out.push({ node: n.key, code: 'ai_no_cv', message: `${name} has no CV to read, so it scores the form answers only. Add a CV file field and a Read CV step, then pick it under “CV text from”.` })
+    if (n.type === 'ai_review' && !cv) out.push({ node: n.key, code: 'ai_no_cv', message: `${name} has no CV to read, so it scores the form answers only. Add a CV file field and a CV extraction step, then pick it under “CV text from”.` })
     if (n.type === 'ai_check' && !cv && !answers) out.push({ node: n.key, code: 'ai_nothing_to_read', message: `${name} has nothing to read: no CV text and no form answers.` })
     if (n.type === 'ai_review' && noReqs) out.push({ node: n.key, code: 'ai_no_requirements', message: `${name} has nothing to score against. Add must-have skills or minimum years in Details.` })
   }

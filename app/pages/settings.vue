@@ -122,7 +122,7 @@ async function save() {
     <form v-else class="layout" @submit.prevent="save">
       <div class="col">
         <section class="panel fields" aria-labelledby="h-apply">
-          <h2 id="h-apply" class="sect-h">Company and apply form</h2>
+          <h2 id="h-apply" class="sect-h">Company profile &amp; application form</h2>
           <div class="field">
             <label for="s-company">Company name</label>
             <input id="s-company" v-model="form.companyName" maxlength="200" autocomplete="organization" placeholder="Northwind Logistics" aria-describedby="s-company-h">
@@ -131,7 +131,7 @@ async function save() {
           <div class="field">
             <label for="s-reply">Reply-to email</label>
             <input id="s-reply" v-model="form.replyToEmail" type="email" placeholder="talent@company.com" aria-describedby="s-reply-h">
-            <p id="s-reply-h" class="hint">Candidates’ replies and appeals go here. Every email the flows send uses it.</p>
+            <p id="s-reply-h" class="hint">Candidates’ replies and appeals go here. Every email the workflows send uses it.</p>
           </div>
           <div class="field">
             <label for="s-consent">Consent text</label>
@@ -140,7 +140,7 @@ async function save() {
           </div>
           <div class="field">
             <label class="check" for="s-ai-on"><input id="s-ai-on" v-model="form.aiEnabled" type="checkbox" aria-describedby="s-ai-on-h">Use AI</label>
-            <p id="s-ai-on-h" class="hint">AI reads CVs, scores answers, explains what is on screen and drafts flows. When off, AI steps stop until you turn it on and retry them, and nobody sees Ask.</p>
+            <p id="s-ai-on-h" class="hint">AI reads CVs, scores answers, explains what is on screen and drafts workflows. When off, AI steps stop until you turn it on and retry them, and nobody sees Ask.</p>
           </div>
           <div class="field">
             <label for="s-ai">AI screening notice</label>
@@ -173,7 +173,7 @@ async function save() {
 
         <section class="panel fields" aria-labelledby="h-reasons">
           <div>
-            <h2 id="h-reasons" class="sect-h">Reject reasons</h2>
+            <h2 id="h-reasons" class="sect-h">Rejection reasons</h2>
             <p class="hint">Whoever rejects someone picks one of these. Renaming or removing a reason never changes past decisions: they keep the words they were made with.</p>
           </div>
           <ol ref="reasonList" class="reasons">
@@ -210,7 +210,7 @@ async function save() {
           <p v-if="!orNull(form.consentText) && !orNull(form.aiNoticeText)" class="faint none">Nothing extra shows above the button.</p>
           <span class="fake-send">Send application</span>
         </div>
-        <p class="faint aside-note">Your own interview hours are in your <NuxtLink to="/inbox/hours">Inbox</NuxtLink>.</p>
+        <p class="faint aside-note">Your own interview availability is in your <NuxtLink to="/inbox/hours">Inbox</NuxtLink>.</p>
       </aside>
     </form>
   </div>

@@ -177,11 +177,11 @@ const ownerLabel = computed(() => job.value?.ownerId === me.value?.id ? `${me.va
             <h2>Requirements</h2>
             <button type="button" class="btn btn-sm btn-quiet" @click="useHelp().show('ai')">What does the AI read?</button>
           </div>
-          <p class="muted note">Changes reach the flow when you next publish.</p>
+          <p class="muted note">Changes reach the workflow when you next publish.</p>
         </div>
         <p v-if="emptyRead.length && !archived" class="reads" role="status">
           <Icon name="alert" :size="16" />
-          <span>Your flow reads {{ listOf(emptyRead.map(x => x.label)) }}, which {{ emptyRead.length === 1 ? 'is' : 'are' }} empty here.<template v-if="aiReads.length"> AI review scores the CV against {{ listOf(aiReads) }}.</template></span>
+          <span>Your workflow reads {{ listOf(emptyRead.map(x => x.label)) }}, which {{ emptyRead.length === 1 ? 'is' : 'are' }} empty here.<template v-if="aiReads.length"> AI screening scores the CV against {{ listOf(aiReads) }}.</template></span>
         </p>
         <div class="row">
           <div class="field">

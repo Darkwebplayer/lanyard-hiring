@@ -263,8 +263,8 @@ const skipped = (s: Summary) => s.duplicates.length + s.invalid.length
 
     <div v-else-if="!published" class="empty">
       <h2>Publish this job first</h2>
-      <p>Imported people join the published flow, and this job doesn’t have one yet.</p>
-      <NuxtLink :to="`/jobs/${id}/flow`" class="btn">Go to the flow<Icon name="arrow-right" /></NuxtLink>
+      <p>Imported people join the published workflow, and this job doesn’t have one yet.</p>
+      <NuxtLink :to="`/jobs/${id}/flow`" class="btn">Go to the workflow<Icon name="arrow-right" /></NuxtLink>
     </div>
 
     <template v-else>
@@ -335,13 +335,13 @@ const skipped = (s: Summary) => s.duplicates.length + s.invalid.length
             <div class="field">
               <label for="imp-start">Start everyone at</label>
               <select id="imp-start" v-model="start" aria-describedby="imp-start-h">
-                <option :value="null">The start of the flow</option>
+                <option :value="null">The start of the workflow</option>
                 <optgroup v-for="g in groups" :key="g.label" :label="g.label">
                   <option v-for="n in g.nodes" :key="n.key" :value="n.key">{{ nodeLabel(n) }}</option>
                 </optgroup>
               </select>
               <p v-if="startCv" id="imp-start-h" class="warn"><Icon name="alert" :size="14" />{{ startCv.type === 'cv_parse' ? `${nodeLabel(startCv)} is on their way from here. Imported people have no CV file, so that step stops for each of them until someone moves them on.` : `${nodeLabel(startCv)} reads the CV and is on their way from here. Imported people have no CV, so it would score them on nothing and may reject them.` }} Start after it to avoid that.</p>
-              <p v-else id="imp-start-h" class="hint">Their flow runs from here, as if they had just arrived at {{ where(start) }}.</p>
+              <p v-else id="imp-start-h" class="hint">Their workflow runs from here, as if they had just arrived at {{ where(start) }}.</p>
             </div>
 
             <div v-if="stageCol >= 0" class="values">

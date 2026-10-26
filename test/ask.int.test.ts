@@ -117,8 +117,8 @@ describe('context', () => {
 
   it('focus marks pointing_at and relabels the chip', async () => {
     const c = await ctx(owner, 'candidates-id', { id: appId }, 'node:ai')
-    expect(c.label).toBe('AI review step · Barista')
-    expect(c.data!.pointing_at).toMatchObject({ id: 'node:ai', label: 'AI review', step: { key: 'ai' }, runs: [{ step: 'ai', output: { experience: 62 } }] })
+    expect(c.label).toBe('AI screening step · Barista')
+    expect(c.data!.pointing_at).toMatchObject({ id: 'node:ai', label: 'AI screening', step: { key: 'ai' }, runs: [{ step: 'ai', output: { experience: 62 } }] })
     const p = await ctx(owner, 'jobs-id', { id: jobId }, 'stage:interview')
     expect(p.label).toBe('Interview stage · Barista')
     expect(p.data!.pointing_at).toMatchObject({ id: 'stage:interview', people: [{ name: 'Ben Okafor' }] })
@@ -133,7 +133,7 @@ describe('context', () => {
     const f = await ctx(owner, 'jobs-id-flow', { id: jobId })
     expect(f.suggestions[0]).toBe('What happens if someone fails Screen?')
     const lib = await ctx(owner, 'library-flows-id', { id: 'standard' })
-    expect(lib.label).toBe('Standard hire · Flow preset')
+    expect(lib.label).toBe('Standard hire · Workflow template')
     const task = await ctx(emp('i2'), 'inbox-runId', { runId })
     expect(task.suggestions[0]).toBe('What should I ask Ben?')
     const other = await ctx(emp('i2'), 'settings', {})

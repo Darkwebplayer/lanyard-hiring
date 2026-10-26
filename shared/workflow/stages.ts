@@ -82,7 +82,7 @@ function stepEffects(n: GraphNode): Effect[] {
   const name = nodeLabel(n)
   switch (n.type) {
     case 'cv_parse': return [{ kind: 'auto', text: 'Reads their CV', nodeKey }]
-    case 'ai_review': return [{ kind: 'auto', text: 'Runs an AI review', nodeKey }]
+    case 'ai_review': return [{ kind: 'auto', text: 'Runs AI screening', nodeKey }]
     case 'ai_check': return [{ kind: 'auto', text: 'Checks their answers with AI', nodeKey }]
     case 'send_email': return [{ kind: 'email', text: `Sends them “${name}”`, nodeKey }]
     case 'request_documents': // assignees and due_days read the same as a person step's
@@ -236,7 +236,7 @@ export function stageView(graph: Graph): StageView {
 
   const unstaged = flowOrder(graph).map(k => nodes.get(k)!).filter(n => resting(n.type) && !stageOf.has(n.key))
   for (const n of unstaged) problems.push(`“${nodeLabel(n)}” isn’t in any stage.`)
-  if (!stages.length) problems.unshift('This flow has no stages yet.')
+  if (!stages.length) problems.unshift('This workflow has no stages yet.')
   const trigger = graph.nodes.find(n => REGISTRY[n.type]?.kind === 'trigger')
 
   return {

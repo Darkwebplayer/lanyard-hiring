@@ -7,7 +7,7 @@ import StepPanel from '~/components/flow/StepPanel.vue'
 import { SAMPLE_JOB } from '~/composables/useFlowSource'
 import { type Person, type Preset, type Role, blankConfig, blankItem, blankNoun, summaryOf } from '~/lib/flow'
 
-useHead({ title: 'Steps · Library' })
+useHead({ title: 'Steps · Templates' })
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
@@ -84,7 +84,7 @@ async function save() {
   const d = draft.value
   if (!d || saving.value) return
   const label = (d.node.label ?? '').trim()
-  if (!label) return toast.show('Give the preset a name first.')
+  if (!label) return toast.show('Give the template a name first.')
   if (shapeIssues.value.length) return
   saving.value = true
   serverIssues.value = []
@@ -92,7 +92,7 @@ async function save() {
     if (selected.value) {
       await update(selected.value.id, { label, description: d.description.trim(), config: d.node.config })
       pristine.value = snapshot()
-      toast.show(`Saved “${label}”. New steps start from it; steps already in flows keep theirs.`)
+      toast.show(`Saved “${label}”. New steps start from it; steps already in workflows keep theirs.`)
     }
     else {
       const p = await create({ type: d.node.type, label, description: d.description.trim(), config: d.node.config })
@@ -110,11 +110,11 @@ async function save() {
 }
 
 function choose(query: Record<string, string>) {
-  if (dirty.value && !confirm('Discard the unsaved changes to this preset?')) return
+  if (dirty.value && !confirm('Discard the unsaved changes to this template?')) return
   pristine.value = snapshot() // so the route guard doesn't ask twice
   router.replace({ query })
 }
-onBeforeRouteLeave(() => !dirty.value || confirm('Discard the unsaved changes to this preset?'))
+onBeforeRouteLeave(() => !dirty.value || confirm('Discard the unsaved changes to this template?'))
 
 async function toggleShown(p: Preset) {
   try { await update(p.id, { inPalette: !p.inPalette }) }
@@ -142,10 +142,10 @@ async function confirmDelete() {
 
 <template>
   <div class="lib">
-    <p class="lede">The steps every job’s flow can start from. The palette on the canvas shows the ones marked “In palette”, in this order; reorder them from the palette’s Edit.</p>
+    <p class="lede">The steps every job’s workflow can start from. The palette on the canvas shows the ones marked “In palette”, in this order; reorder them from the palette’s Edit.</p>
 
     <div v-if="error && !presets" class="empty" role="alert">
-      <h2>The step library didn’t load</h2>
+      <h2>The step templates didn’t load</h2>
       <p>{{ error.message }}</p>
       <button class="btn" @click="refresh">Try again</button>
     </div>
@@ -155,9 +155,9 @@ async function confirmDelete() {
         <section v-for="s in sections" :key="s.key" class="panel sect" :aria-labelledby="`sec-${s.key}`">
           <header class="sect-head">
             <h2 :id="`sec-${s.key}`">{{ s.label }} <span v-if="presets" class="faint">{{ s.presets.length }}</span></h2>
-            <button v-if="s.types.length === 1" type="button" class="btn btn-sm btn-quiet" @click="choose({ new: s.types[0] })"><Icon name="plus" />New preset</button>
+            <button v-if="s.types.length === 1" type="button" class="btn btn-sm btn-quiet" @click="choose({ new: s.types[0] })"><Icon name="plus" />New template</button>
             <template v-else>
-              <button type="button" class="btn btn-sm btn-quiet" :popovertarget="`new-${s.key}`" :style="{ anchorName: `--new-${s.key}` }"><Icon name="plus" />New preset<Icon name="chevron-down" :size="14" /></button>
+              <button type="button" class="btn btn-sm btn-quiet" :popovertarget="`new-${s.key}`" :style="{ anchorName: `--new-${s.key}` }"><Icon name="plus" />New template<Icon name="chevron-down" :size="14" /></button>
               <div :id="`new-${s.key}`" popover class="menu new-menu" :style="{ positionAnchor: `--new-${s.key}` }">
                 <button v-for="t in s.types" :key="t" type="button" @click="($event.currentTarget as HTMLElement).closest<HTMLElement>('[popover]')?.hidePopover(); choose({ new: t })">
                   <Icon :name="nodeMeta(t).icon" :size="16" />{{ blankItem(t).label }}
@@ -181,7 +181,7 @@ async function confirmDelete() {
               </label>
             </li>
           </ul>
-          <p v-else class="none">No presets yet.</p>
+          <p v-else class="none">No templates yet.</p>
           <p class="blanks"><span>Always in the palette too, as blank steps:</span> {{ s.types.map(t => blankItem(t).label).join(', ') }}</p>
         </section>
       </div>
@@ -203,15 +203,15 @@ async function confirmDelete() {
           </StepPanel>
           <footer class="foot">
             <button v-if="selected" type="button" class="btn btn-danger btn-sm" @click="dlg?.showModal()"><Icon name="trash" />Delete</button>
-            <span class="status" aria-live="polite">{{ shapeIssues.length ? `Fix ${shapeIssues.length === 1 ? 'the problem' : 'the problems'} at the top to ${selected ? 'save' : 'add'} it.` : dirty ? (selected ? 'Unsaved. Saving changes new steps in every job; flows keep their copy.' : 'New presets go into every job’s palette.') : selected ? 'Saved' : '' }}</span>
+            <span class="status" aria-live="polite">{{ shapeIssues.length ? `Fix ${shapeIssues.length === 1 ? 'the problem' : 'the problems'} at the top to ${selected ? 'save' : 'add'} it.` : dirty ? (selected ? 'Unsaved. Saving changes new steps in every job; workflows keep their copy.' : 'New templates go into every job’s palette.') : selected ? 'Saved' : '' }}</span>
             <button type="button" class="btn btn-primary" :disabled="saving || (!dirty && !!selected) || shapeIssues.length > 0" :aria-busy="saving" @click="save">
-              <span v-if="saving" class="spinner" />{{ selected ? 'Save preset' : 'Add preset' }}
+              <span v-if="saving" class="spinner" />{{ selected ? 'Save template' : 'Add template' }}
             </button>
           </footer>
         </div>
         <div v-else-if="presets" class="pick-hint">
-          <p>Choose a preset to edit it, or add a new one to a section.</p>
-          <p class="faint">Changing a preset never changes flows that already use it: each step keeps its own copy.</p>
+          <p>Choose a template to edit it, or add a new one to a section.</p>
+          <p class="faint">Changing a template never changes workflows that already use it: each step keeps its own copy.</p>
         </div>
       </div>
     </div>
@@ -219,11 +219,11 @@ async function confirmDelete() {
     <dialog ref="dlg" class="dialog" closedby="any" aria-labelledby="del-h">
       <div class="dialog-body">
         <h2 id="del-h">Delete “{{ selected?.label }}”?</h2>
-        <p class="muted">It leaves the library and every palette. Steps already in flows keep their settings. You can’t undo this.</p>
+        <p class="muted">It leaves Templates and every palette. Steps already in workflows keep their settings. You can’t undo this.</p>
       </div>
       <div class="dialog-foot">
         <button type="button" class="btn" @click="dlg?.close()">Keep it</button>
-        <button type="button" class="btn btn-danger" :disabled="deleting" :aria-busy="deleting" @click="confirmDelete">Delete preset</button>
+        <button type="button" class="btn btn-danger" :disabled="deleting" :aria-busy="deleting" @click="confirmDelete">Delete template</button>
       </div>
     </dialog>
   </div>

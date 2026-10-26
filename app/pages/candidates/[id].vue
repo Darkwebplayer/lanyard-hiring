@@ -197,7 +197,7 @@ const isUrl = (v: unknown) => typeof v === 'string' && /^https?:\/\/\S+$/.test(v
           <h1>{{ name }}</h1>
           <p class="meta">
             <NuxtLink v-if="isManager" :to="`/jobs/${tl.job.id}`">{{ tl.job.title }}</NuxtLink><span v-else>{{ tl.job.title }}</span>
-            <span class="sep">·</span>Applied {{ fmtDate(app.createdAt) }}<span class="sep">·</span>flow v{{ tl.version }}
+            <span class="sep">·</span>Applied {{ fmtDate(app.createdAt) }}<span class="sep">·</span>workflow v{{ tl.version }}
           </p>
           <p class="contact">
             <a :href="`mailto:${tl.candidate.email}`">{{ tl.candidate.email }}</a>
@@ -243,7 +243,7 @@ const isUrl = (v: unknown) => typeof v === 'string' && /^https?:\/\/\S+$/.test(v
                 <a :href="`mailto:${tl.candidate.email}`">{{ tl.candidate.email }}</a>
                 <a v-if="tl.candidate.phone" :href="`tel:${tl.candidate.phone}`">{{ tl.candidate.phone }}</a>
               </p>
-              <p class="faint bmeta">Applied {{ fmtDate(app.createdAt) }} · flow v{{ tl.version }}</p>
+              <p class="faint bmeta">Applied {{ fmtDate(app.createdAt) }} · workflow v{{ tl.version }}</p>
               <button v-if="isManager" class="btn btn-quiet btn-sm" @click="moveDlg?.open()"><Icon name="reopen" />Reopen…</button>
             </header>
             <CandidateWhy v-if="isManager" :tl="tl" class="why" />
@@ -252,7 +252,7 @@ const isUrl = (v: unknown) => typeof v === 'string' && /^https?:\/\/\S+$/.test(v
           <CandidateOffer v-if="isManager" ref="offerRef" :tl="tl" @changed="load" />
 
           <section aria-labelledby="steps-h">
-            <h2 id="steps-h" class="sec">Steps</h2>
+            <h2 id="steps-h" class="sec">Hiring progress</h2>
             <ol class="timeline">
               <template v-for="it in items" :key="it.key">
                 <CandidateStep
@@ -283,7 +283,7 @@ const isUrl = (v: unknown) => typeof v === 'string' && /^https?:\/\/\S+$/.test(v
           <CandidateEmails :tl="tl" />
           <CandidateFlowPanel v-if="isManager && tl.graph" ref="flowRef" :tl="tl" :graph="tl.graph" />
           <section class="panel answers" aria-labelledby="ans-h">
-            <h2 id="ans-h" class="sec">Application</h2>
+            <h2 id="ans-h" class="sec">Application answers</h2>
             <dl v-if="answers.length">
               <div v-for="f in answers" :key="f.key" :data-ask="`field:${f.key}`">
                 <dt>{{ f.label }}</dt>

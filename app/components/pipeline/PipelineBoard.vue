@@ -21,7 +21,7 @@ const CARDS = 30
 // ---------- columns: stages (with what each does by itself), then steps no stage claims, then Closed ----------
 const columns = computed(() => boardColumns(props.board).map(c => ({
   ...c,
-  hint: c.stage && !c.rows.length ? 'No steps in this stage yet. Add them on the Flow tab.' : undefined,
+  hint: c.stage && !c.rows.length ? 'No steps in this stage yet. Add them on the Workflow tab.' : undefined,
   bolt: c.stage ? boltLine(props.graph, c.id, props.nameOf) : '',
 })))
 const rowLabel = (pos: Pos) => columns.value.flatMap(c => c.rows).find(r => r.id === posId(pos))?.label
@@ -48,8 +48,8 @@ const finder = ref<InstanceType<typeof BoardFindDialog>>()
 const scopes = computed<FindScope[]>(() => {
   const sum = (f: (c: Board['counts'][number]) => boolean) => props.board.counts.filter(f).reduce((n, c) => n + c.n, 0)
   const out: FindScope[] = [
-    { id: 'all', label: 'Everyone', n: sum(() => true), show: 'all' },
-    { id: 'active', label: 'Everyone in progress', n: sum(c => c.status === 'active'), show: 'active' },
+    { id: 'all', label: 'All candidates', n: sum(() => true), show: 'all' },
+    { id: 'active', label: 'Active candidates', n: sum(c => c.status === 'active'), show: 'active' },
   ]
   for (const c of columns.value) {
     if (c.id === 'closed') {
@@ -106,7 +106,7 @@ const tipLines = computed(() => {
   const rejecting = effects.some(e => e.outcome === 'rejected')
   return {
     effects,
-    after: rejecting ? 'Asks you for a reason from your list.' : tag.kind === 'next' ? 'Follows the flow, so no reason needed.' : 'Asks you why, for their history.',
+    after: rejecting ? 'Asks you for a reason from your list.' : tag.kind === 'next' ? 'Follows the workflow, so no reason needed.' : 'Asks you why, for their history.',
   }
 })
 // Where it floats: beside the row (right, then left), else inside the row under its own tag, never over
@@ -253,7 +253,7 @@ const movingLeft = computed(() => moving.value ? Math.max(0, countAt(moving.valu
                 <div class="pc-meta">
                   <span v-if="p.source" class="src">{{ sourceLabel(p.source) }}</span>
                   <span v-if="p.since">{{ inStep(p.since) }}</span>
-                  <span v-if="p.runStatus === 'failed'" class="chip chip-bad"><Icon name="stop" />Stopped</span>
+                  <span v-if="p.runStatus === 'failed'" class="chip chip-bad"><Icon name="stop" />Failed</span>
                   <span v-else-if="late(p)" class="chip chip-warn"><Icon name="clock" />Late</span>
                   <button v-if="isManager" type="button" class="btn btn-quiet btn-icon btn-sm pc-move" :aria-label="`Move ${fullName(p.candidate)}…`" title="Move…" @click="ask({ kind: 'person', person: personOf(p) })"><Icon name="move" /></button>
                 </div>

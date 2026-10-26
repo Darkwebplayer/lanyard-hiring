@@ -156,7 +156,7 @@ async function submit() {
       <div class="dialog-body">
         <div>
           <h2 id="move-h">{{ title }}</h2>
-          <p v-if="picking" class="muted sub">{{ closed ? 'The flow starts again from the step you pick.' : 'Whatever is in progress now is skipped, and the flow carries on from the step you pick.' }}</p>
+          <p v-if="picking" class="muted sub">{{ closed ? 'The workflow starts again from the step you pick.' : 'Whatever is in progress now is skipped, and the workflow carries on from the step you pick.' }}</p>
           <p v-else-if="!closed && tl.application.currentNodeKey" class="muted sub">
             From {{ stepName(tl, tl.application.currentNodeKey) }}.
             <button type="button" class="linkish" @click="picking = true">Pick another step</button>
@@ -238,7 +238,7 @@ async function submit() {
         <div class="field">
           <label for="move-reason">{{ needReason ? 'Reason' : 'Note' }}<span v-if="!needReason" class="faint"> (optional)</span></label>
           <textarea id="move-reason" v-model="reason" :required="needReason" maxlength="1000" rows="2" :placeholder="rejecting ? 'e.g. Can’t do weekend shifts' : needReason ? 'e.g. Owner wants to meet them this week' : 'e.g. Spoke on the phone, keen to start'" />
-          <span class="hint">{{ rejecting ? 'Only your team sees it, in the candidate’s history.' : needReason && target ? 'This skips the flow’s own path, so say why. Kept in the history with your name.' : 'Follows the flow, so no reason needed.' }}</span>
+          <span class="hint">{{ rejecting ? 'Only your team sees it, in the candidate’s history.' : needReason && target ? 'This skips the workflow’s own path, so say why. Kept in the history with your name.' : 'Follows the workflow, so no reason needed.' }}</span>
         </div>
       </div>
       <div class="dialog-foot">

@@ -40,7 +40,7 @@ const next = computed(() => here.value ? nextMoves(props.tl, props.graph, here.v
 <template>
   <section class="panel flow" aria-labelledby="flow-h">
     <div class="fhead">
-      <h2 id="flow-h" ref="heading" class="sec" tabindex="-1">Flow</h2>
+      <h2 id="flow-h" ref="heading" class="sec" tabindex="-1">Workflow</h2>
       <span class="faint ver">v{{ tl.version }}, the version {{ tl.candidate.firstName }} started on</span>
     </div>
     <ol class="path">
@@ -49,7 +49,7 @@ const next = computed(() => here.value ? nextMoves(props.tl, props.graph, here.v
         <span class="pname">{{ p.name }}</span>
         <span v-if="p.state === 'here'" class="tag here-tag">Here now</span>
         <span v-else-if="p.state === 'skipped'" class="tag">Skipped</span>
-        <span v-else-if="p.state === 'stopped'" class="tag">Stopped</span>
+        <span v-else-if="p.state === 'stopped'" class="tag">Failed</span>
         <span v-else-if="p.note" class="chip">{{ p.note }}</span>
       </li>
       <li v-if="app.status === 'closed'" class="done end">
@@ -65,7 +65,7 @@ const next = computed(() => here.value ? nextMoves(props.tl, props.graph, here.v
         </li>
       </ul>
     </template>
-    <NuxtLink :to="`/jobs/${tl.job.id}/flow`" class="full">Open the full flow</NuxtLink>
+    <NuxtLink :to="`/jobs/${tl.job.id}/flow`" class="full">Open the full workflow</NuxtLink>
   </section>
 </template>
 

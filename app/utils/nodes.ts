@@ -1,16 +1,16 @@
 // One face per step type, everywhere it appears: canvas, timeline, inbox, pipeline.
 // slot: who acts. accent = a person, ink = the system, ok/bad = how it ended.
 export const NODE_META: Record<string, { icon: string, noun: string, slot: 'accent' | 'ink' | 'ok' | 'line' }> = {
-  application_received: { icon: 'enter', noun: 'Start', slot: 'line' },
-  cv_parse: { icon: 'scan', noun: 'Read CV', slot: 'ink' },
-  ai_review: { icon: 'ai', noun: 'AI review', slot: 'ink' },
-  ai_check: { icon: 'check', noun: 'Check answers', slot: 'ink' },
-  set_variable: { icon: 'braces', noun: 'Set values', slot: 'line' },
+  application_received: { icon: 'enter', noun: 'Application received', slot: 'line' },
+  cv_parse: { icon: 'scan', noun: 'CV extraction', slot: 'ink' },
+  ai_review: { icon: 'ai', noun: 'AI screening', slot: 'ink' },
+  ai_check: { icon: 'check', noun: 'Answer screening', slot: 'ink' },
+  set_variable: { icon: 'braces', noun: 'Set fields', slot: 'line' },
   condition: { icon: 'split', noun: 'Decision', slot: 'line' },
-  human_task: { icon: 'person', noun: 'Person', slot: 'accent' },
-  request_documents: { icon: 'file', noun: 'Documents', slot: 'accent' },
-  send_email: { icon: 'mail', noun: 'Email', slot: 'ink' },
-  end: { icon: 'flag', noun: 'End', slot: 'line' },
+  human_task: { icon: 'person', noun: 'Assigned task', slot: 'accent' },
+  request_documents: { icon: 'file', noun: 'Document request', slot: 'accent' },
+  send_email: { icon: 'mail', noun: 'Send email', slot: 'ink' },
+  end: { icon: 'flag', noun: 'Outcome', slot: 'line' },
 }
 
 export const nodeMeta = (type: string) => NODE_META[type] ?? { icon: 'more', noun: type, slot: 'line' as const }
@@ -31,7 +31,7 @@ export const RUN_STATUS: Record<string, { text: string, chip: string, icon: stri
   running: { text: 'Running', chip: '', icon: 'clock' },
   waiting_on_human: { text: 'With a person', chip: '', icon: 'person' },
   completed: { text: 'Done', chip: 'chip-ok', icon: 'check' },
-  failed: { text: 'Stopped', chip: 'chip-bad', icon: 'stop' },
+  failed: { text: 'Failed', chip: 'chip-bad', icon: 'stop' },
   cancelled: { text: 'Skipped', chip: '', icon: 'x' },
 }
 

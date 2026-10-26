@@ -128,7 +128,7 @@ const fallback = computed(() => props.run.branchTaken === 'missing' || props.run
         <b>{{ run.branchTaken === 'missing' ? 'Missing data' : 'Otherwise' }}</b>
         <span class="chip chip-ink">Taken<template v-if="dest"> → {{ dest }}</template></span>
       </div>
-      <p class="muted">{{ run.branchTaken === 'missing' ? 'Some data the rules need wasn’t there, so the flow didn’t decide on its own.' : 'No rule above matched.' }}</p>
+      <p class="muted">{{ run.branchTaken === 'missing' ? 'Some data the rules need wasn’t there, so the workflow didn’t decide on its own.' : 'No rule above matched.' }}</p>
     </li>
   </ol>
 </template>

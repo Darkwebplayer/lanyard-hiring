@@ -11,7 +11,7 @@
     <ul>
       <li>The preview beside the list shows what candidates see.</li>
       <li>Mark a question <b>Protected</b> to hide it from the AI and from interviewers, such as date of birth.</li>
-      <li>A Decision later in the flow can use any answer, like “Notice period is at most 4 weeks”.</li>
+      <li>A Decision later in the workflow can use any answer, like “Notice period is at most 4 weeks”.</li>
       <li>A question already in a published version is <b>locked</b> to its type. To ask it differently, add a new question.</li>
     </ul>
     <p>Changes reach the apply page when you <b>Publish</b>.</p>

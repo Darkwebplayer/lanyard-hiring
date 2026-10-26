@@ -1,5 +1,5 @@
 <script setup lang="ts">
-useHead({ title: 'Hires' })
+useHead({ title: 'Reports' })
 
 interface Row { id: string, title: string, status: 'draft' | 'open' | 'closed' | 'archived', openings: number, applications: number, hired: number, fillRate: number }
 interface Hire {
@@ -48,7 +48,7 @@ const applications = computed(() => (report.value?.jobs ?? []).reduce((s, j) => 
 
 <template>
   <div class="page">
-    <header class="page-head"><h1>Hires</h1></header>
+    <header class="page-head"><h1>Reports</h1></header>
 
     <div v-if="error" class="empty" role="alert">
       <h2>The report didn’t load</h2>
@@ -125,7 +125,7 @@ const applications = computed(() => (report.value?.jobs ?? []).reduce((s, j) => 
 
       <section v-if="sources.length" class="panel table-wrap src" aria-labelledby="by-src">
         <header class="src-head">
-          <h2 id="by-src">Where hires came from</h2>
+          <h2 id="by-src">Hires by source</h2>
           <p class="muted">From the tag on each apply link, across every job. Links without a tag show as “No source tag”.</p>
         </header>
         <table class="table">
@@ -150,7 +150,7 @@ const applications = computed(() => (report.value?.jobs ?? []).reduce((s, j) => 
 
       <section v-if="report.hired?.length" class="panel table-wrap src" aria-labelledby="who">
         <header class="src-head">
-          <h2 id="who">Who was hired</h2>
+          <h2 id="who">Hired candidates</h2>
           <p class="muted">Last 90 days. The start date comes from their accepted offer.</p>
         </header>
         <table class="table">

@@ -217,7 +217,7 @@ const maxLabel = (t: FieldType) => t === 'number' ? 'Highest value' : t === 'lis
       </fieldset>
 
       <section v-if="flowIssues.length" class="panel flow-issues" role="alert">
-        <h2 class="eyebrow">This breaks the flow</h2>
+        <h2 class="eyebrow">This breaks the workflow</h2>
         <ul>
           <li v-for="is in flowIssues" :key="is.message">
             <NuxtLink :to="source.flowHref(is.node)"><code>{{ is.node }}</code></NuxtLink> {{ is.message }}

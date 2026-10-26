@@ -1,5 +1,5 @@
 <script setup lang="ts">
-useHead({ title: 'Offer letters · Library' })
+useHead({ title: 'Offer letters · Templates' })
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
@@ -151,7 +151,7 @@ async function confirmDelete() {
     <div v-else class="cols">
       <section class="panel list" aria-labelledby="ol-h">
         <header class="list-head">
-          <h2 id="ol-h">Letters <span v-if="list" class="faint">{{ list.filter(t => !t.builtIn).length }}</span></h2>
+          <h2 id="ol-h">Templates <span v-if="list" class="faint">{{ list.filter(t => !t.builtIn).length }}</span></h2>
           <button type="button" class="btn btn-sm btn-quiet" @click="choose('new')"><Icon name="plus" />New letter</button>
         </header>
         <ul class="rows">
@@ -248,7 +248,7 @@ async function confirmDelete() {
     <dialog ref="dlg" class="dialog" closedby="any" aria-labelledby="ol-del-h">
       <div class="dialog-body">
         <h2 id="ol-del-h">Delete “{{ selected?.name }}”?</h2>
-        <p class="muted">It leaves the library. Offers already made with it keep their words. You can’t undo this.</p>
+        <p class="muted">It leaves Templates. Offers already made with it keep their words. You can’t undo this.</p>
       </div>
       <div class="dialog-foot">
         <button type="button" class="btn" @click="dlg?.close()">Keep it</button>

@@ -9,7 +9,7 @@ const id = computed(() => String(route.params.id))
 const { detail, editable, error, refresh, saveDraft } = useJob(id.value)
 const source = useJobFlowSource(id.value)
 if (!detail.value) refresh()
-useHead({ title: () => (detail.value ? `Stages · ${detail.value.job.title}` : 'Stages') })
+useHead({ title: () => (detail.value ? `Workflow · ${detail.value.job.title}` : 'Workflow') })
 
 // ---------- replacing the draft with a preset: remount the editor on the new draft, with Undo ----------
 type Flow = { form: FormField[], workflow: Graph }
@@ -33,7 +33,7 @@ async function replace(next: Flow, name: string) {
     await put(next)
     toast.show(hadDraft || !live ? `Loaded “${name}” into the draft` : `Loaded “${name}” into a new draft. v${live} is unchanged.`, {
       label: 'Undo',
-      run: () => put(prev).then(() => toast.show('Brought back the flow you had')).catch(e => toast.show(toApiError(e).message)),
+      run: () => put(prev).then(() => toast.show('Brought back the workflow you had')).catch(e => toast.show(toApiError(e).message)),
     }, 10000)
     undoToast = toast.queue.value.at(-1)?.id ?? null
   }
@@ -49,15 +49,15 @@ function onEdit() {
 
 <template>
   <div class="flow-page">
-    <h2 class="sr-only">Stages</h2>
+    <h2 class="sr-only">Workflow</h2>
     <FlowEditor v-if="editable" ref="editor" :key="`${id}:${rev}`" :source="source" stages-first @edit="onEdit" @replace="replace" />
     <div v-else-if="error" class="empty" role="alert">
-      <h3>The flow didn’t load</h3>
+      <h3>The workflow didn’t load</h3>
       <p>{{ error.message }}</p>
       <button type="button" class="btn" @click="refresh">Retry</button>
     </div>
     <div v-else-if="detail" class="empty">
-      <h3>This job has no flow yet</h3>
+      <h3>This job has no workflow yet</h3>
     </div>
     <div v-else class="loading" aria-busy="true" aria-label="Loading the flow">
       <div class="skeleton pal" />

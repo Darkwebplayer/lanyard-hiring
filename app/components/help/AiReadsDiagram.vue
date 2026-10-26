@@ -5,7 +5,7 @@
       <span class="in">CV</span><span class="in">Must-have skills</span><span class="in">Minimum years</span><span class="in">Description</span><span class="in no">Name and contact</span>
     </div>
     <span class="arrow" aria-hidden="true" />
-    <div class="engine" aria-hidden="true">AI review<b>78</b><span>score</span></div>
+    <div class="engine" aria-hidden="true">AI screening<b>78</b><span>score</span></div>
   </div>
 </template>
 

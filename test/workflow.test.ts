@@ -244,7 +244,7 @@ describe('graph validation', () => {
     expect(paths('start')).not.toContain('nodes.cv.text')
     // step outputs read under the step's name, never its key
     const label = (k: string, path: string) => fieldsAvailableAt(STANDARD_HIRE.workflow, k, STANDARD_HIRE.form).find(f => f.path === path)?.label
-    expect(label('screen', 'nodes.ai.overall')).toMatch(/^AI review: /)
+    expect(label('screen', 'nodes.ai.overall')).toMatch(/^AI screening: /)
   })
 })
 

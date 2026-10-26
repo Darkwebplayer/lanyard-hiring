@@ -5,7 +5,7 @@ import { STANDARD_HIRE } from '~~/shared/workflow/templates'
 import type { FormField, Graph } from '~~/shared/workflow/types'
 import { type Person, issueText } from '~/lib/flow'
 
-useHead({ title: 'Flows · Library' })
+useHead({ title: 'Workflows · Templates' })
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
@@ -16,7 +16,7 @@ const people = ref<Person[] | null>(null)
 api<Person[]>('/api/users/assignable').then(r => (people.value = r)).catch(() => {})
 
 interface Row { id: string, name: string, description: string, form: FormField[], workflow: Graph, builtIn: boolean }
-const STANDARD: Row = { id: 'standard', name: 'Standard hire', description: 'CV read, AI review, shortlist, interview, offer.', ...STANDARD_HIRE, builtIn: true }
+const STANDARD: Row = { id: 'standard', name: 'Standard hire', description: 'CV extraction, AI screening, shortlist, interview, offer.', ...STANDARD_HIRE, builtIn: true }
 const rows = computed<Row[]>(() => [STANDARD, ...(flowPresets.value ?? []).map(p => ({ ...p, builtIn: false }))])
 
 const steps = (g: Graph) => g.nodes.filter(n => n.type !== 'application_received').length
@@ -114,7 +114,7 @@ const saving = ref(false)
 async function save() {
   const r = selected.value
   if (!r || r.builtIn || !dirty.value || saving.value) return
-  if (!draft.name.trim()) return toast.show('Give the flow preset a name first.')
+  if (!draft.name.trim()) return toast.show('Give the workflow template a name first.')
   saving.value = true
   try {
     await update(r.id, { name: draft.name.trim(), description: draft.description.trim() })
@@ -124,7 +124,7 @@ async function save() {
   finally { saving.value = false }
 }
 
-const discard = () => confirm('Discard the unsaved changes to this flow preset?')
+const discard = () => confirm('Discard the unsaved changes to this workflow template?')
 function choose(flow?: string) {
   if (dirty.value && !discard()) return
   renaming.value = false // so the route guard doesn't ask twice
@@ -152,17 +152,17 @@ async function confirmDelete() {
 
 <template>
   <div class="flows">
-    <p class="lede">Whole flows, with their form, that a new job or a draft can start from. A job copies the flow, so changing or deleting a preset never changes jobs that already use it.</p>
+    <p class="lede">Whole workflows, with their form, that a new job or a draft can start from. A job copies the workflow, so changing or deleting a template never changes jobs that already use it.</p>
 
     <div v-if="error && !flowPresets" class="empty" role="alert">
-      <h2>The flow presets didn’t load</h2>
+      <h2>The workflow templates didn’t load</h2>
       <p>{{ error.message }}</p>
       <button type="button" class="btn" @click="refresh">Load again</button>
     </div>
 
     <div v-else class="cols">
       <section class="panel list" aria-labelledby="flows-h">
-        <h2 id="flows-h" class="sr-only">Flow presets</h2>
+        <h2 id="flows-h" class="sr-only">Workflow templates</h2>
         <ul class="rows">
           <li v-for="r in rows" :key="r.id" class="row" :class="{ current: r.id === selectedId }">
             <button type="button" class="pick" :aria-current="r.id === selectedId ? 'true' : undefined" @click="choose(r.id)">
@@ -179,10 +179,10 @@ async function confirmDelete() {
           </template>
         </ul>
         <p v-if="flowPresets && !flowPresets.length" class="none">
-          No flow presets yet. Start a new one here, or open a job’s Flow tab and choose <b>Flow presets › Save as flow preset…</b>
+          No workflow templates yet. Start a new one here, or open a job’s Workflow tab and choose <b>Workflow templates › Save as workflow template…</b>
         </p>
         <div class="new-row">
-          <button type="button" class="btn btn-sm btn-quiet" :disabled="making" :aria-busy="making" @click="newFlow"><span v-if="making" class="spinner" /><Icon v-else name="plus" />New flow</button>
+          <button type="button" class="btn btn-sm btn-quiet" :disabled="making" :aria-busy="making" @click="newFlow"><span v-if="making" class="spinner" /><Icon v-else name="plus" />New workflow</button>
         </div>
       </section>
 
@@ -209,7 +209,7 @@ async function confirmDelete() {
                 <h2 id="flow-h">{{ selected.name }}</h2>
                 <span v-if="selected.builtIn" class="chip">Built in</span>
                 <template v-else>
-                  <NuxtLink :to="`/library/flows/${selected.id}`" class="btn btn-sm edit-flow"><Icon name="branch" />Edit flow and form</NuxtLink>
+                  <NuxtLink :to="`/library/flows/${selected.id}`" class="btn btn-sm edit-flow"><Icon name="branch" />Edit workflow and form</NuxtLink>
                   <button type="button" class="btn btn-quiet btn-sm rename" @click="startRename"><Icon name="edit" />Rename…</button>
                 </template>
               </div>
@@ -233,7 +233,7 @@ async function confirmDelete() {
                   <span><NuxtLink v-if="p.node && !selected.builtIn" :to="`/library/flows/${selected.id}?node=${p.node}`" class="fix"><b>{{ p.where }}</b></NuxtLink><b v-else>{{ p.where }}</b>: {{ p.text }}. A job that starts from it fixes this before it can publish.</span>
                 </li>
               </ul>
-              <p v-if="facts.named.length" class="small">Every job that starts from this preset gets the same people until you reassign them in its flow.</p>
+              <p v-if="facts.named.length" class="small">Every job that starts from this template gets the same people until you reassign them in its workflow.</p>
             </section>
 
             <section class="block" aria-labelledby="steps-h">
@@ -255,7 +255,7 @@ async function confirmDelete() {
               <h3 id="reads-h" class="eyebrow">Reads from each job</h3>
               <template v-if="facts.reads.length">
                 <p class="chips"><span v-for="l in facts.reads" :key="l" class="chip">{{ l }}</span></p>
-                <p class="faint small">Fill these in on each job’s Details tab. The job says which are empty.</p>
+                <p class="faint small">Fill these in on each job’s Job details tab. The job says which are empty.</p>
               </template>
               <p v-else class="muted">Only the title and openings, which every job has.</p>
             </section>
@@ -264,12 +264,12 @@ async function confirmDelete() {
           <footer class="foot">
             <button v-if="!selected.builtIn" type="button" class="btn btn-danger btn-sm" @click="dlg?.showModal()"><Icon name="trash" />Delete…</button>
             <button type="button" class="btn btn-sm" :disabled="duplicating" :aria-busy="duplicating" @click="duplicate"><Icon name="copy" />Duplicate</button>
-            <NuxtLink :to="{ path: '/jobs', query: { new: selected.id } }" class="btn btn-primary"><Icon name="plus" />New job from this flow</NuxtLink>
+            <NuxtLink :to="{ path: '/jobs', query: { new: selected.id } }" class="btn btn-primary"><Icon name="plus" />New job from this workflow</NuxtLink>
           </footer>
         </article>
 
         <div v-else-if="gone" class="pick-hint" role="status">
-          <p>This flow preset was deleted. Jobs that started from it keep their flows.</p>
+          <p>This workflow template was deleted. Jobs that started from it keep their workflows.</p>
           <p><button type="button" class="btn btn-sm" @click="choose()">Back to the list</button></p>
         </div>
       </div>
@@ -278,11 +278,11 @@ async function confirmDelete() {
     <dialog ref="dlg" class="dialog" closedby="any" aria-labelledby="del-h">
       <div class="dialog-body">
         <h2 id="del-h">Delete “{{ selected?.name }}”?</h2>
-        <p class="muted">It leaves the library and the New job list. Jobs already started from it keep their flows. You can’t undo this.</p>
+        <p class="muted">It leaves Templates and the New job list. Jobs already started from it keep their workflows. You can’t undo this.</p>
       </div>
       <div class="dialog-foot">
         <button type="button" class="btn" @click="dlg?.close()">Keep it</button>
-        <button type="button" class="btn btn-danger" :disabled="deleting" :aria-busy="deleting" @click="confirmDelete">Delete flow preset</button>
+        <button type="button" class="btn btn-danger" :disabled="deleting" :aria-busy="deleting" @click="confirmDelete">Delete workflow template</button>
       </div>
     </dialog>
   </div>

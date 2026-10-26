@@ -9,21 +9,21 @@
     </div>
     <p>Everyone who helps you hire. Each person has a <b>role</b>, and each role has a <b>level</b> that decides what they see.</p>
     <ul>
-      <li><b>Manager</b>: jobs, flows and all candidates.</li>
-      <li><b>Employee</b>: only their own tasks and their interview hours. An interviewer sees just the people they’re asked to score.</li>
+      <li><b>Manager</b>: jobs, workflows and all candidates.</li>
+      <li><b>Employee</b>: only their own tasks and their interview availability. An interviewer sees just the people they’re asked to score.</li>
       <li><b>Admin</b>: everything, plus Team and Settings. The admin is set on the server, not here.</li>
     </ul>
     <h4>Inviting people</h4>
     <p>Add their email and a role. They sign in with Google using that address and join the list at once. To change an invite’s role, invite the same address again.</p>
-    <h4>Roles</h4>
-    <p>Name roles the way you talk, like “Shift lead”. A person step can go to a role, so anyone with it can pick up the task. Switching someone off signs them out at once. Their history stays, but tasks waiting on them stay too, so reassign those.</p>
+    <h4>Roles &amp; permissions</h4>
+    <p>Name roles the way you talk, like “Shift lead”. An assigned task can go to a role, so anyone with it can pick up the task. Deactivating someone signs them out at once. Their history stays, but tasks waiting on them stay too, so reassign those.</p>
   </div>
 </template>
 
 <script setup lang="ts">
 const ROLES = [
   { name: 'Admin', sees: ['Everything', 'Team', 'Settings'] },
-  { name: 'Manager', sees: ['Jobs', 'Candidates', 'Hires'] },
+  { name: 'Manager', sees: ['Jobs', 'Candidates', 'Reports'] },
   { name: 'Employee', sees: ['Their tasks', 'Their hours'] },
 ]
 </script>

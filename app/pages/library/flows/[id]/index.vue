@@ -6,7 +6,7 @@ const source = useFlowPresetSource(useRoute().params.id as string)
 
 <template>
   <div class="flow-page">
-    <h2 class="sr-only">Flow</h2>
+    <h2 class="sr-only">Workflow</h2>
     <FlowEditor v-if="source.workflow.value" :source="source" />
   </div>
 </template>

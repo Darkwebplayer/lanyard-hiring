@@ -45,11 +45,11 @@ describe('onlySome', () => {
   const g = t.workflow
   const at = (k: string) => fieldsAvailableAt(g, k, t.form)
   it('reads the range an Otherwise branch leaves between the other bounds', () => {
-    expect(onlySome(g, 'manual_review', at('screen'))).toBe('Only AI review: Overall score 40–69 or no score')
+    expect(onlySome(g, 'manual_review', at('screen'))).toBe('Only AI screening: Overall score 40–69 or no score')
   })
   it('names the rule of a single branch, and says nothing when everyone gets there', () => {
     const one = { ...g, edges: g.edges.filter(e => !(e.from === 'screen' && e.to === 'manual_review')).concat({ from: 'screen', to: 'manual_review', branch: 'shortlist' }) }
-    expect(onlySome(one, 'manual_review', at('screen'))).toBe('Only AI review: Overall score is at least 70')
+    expect(onlySome(one, 'manual_review', at('screen'))).toBe('Only AI screening: Overall score is at least 70')
     expect(onlySome(g, 'ai', at('cv'))).toBeNull()
   })
   it('falls back to plain words when the rest is not a simple range', () => {

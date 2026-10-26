@@ -15,17 +15,17 @@ const EMPLOYEE: Step[] = [
   { target: 'inbox', title: 'Your inbox is home', body: 'Everything someone asks you to do lands here. The number shows how many are waiting.' },
   { route: '/inbox', target: 'tasks', title: 'Your tasks', body: 'Click one to open it. Press j and k to move to the next and previous task.' },
   { route: '/inbox', target: 'task', title: 'Fill it in, send it, done', body: 'A task opens here with its scorecard. When you submit one, the next task opens by itself.' },
-  { route: '/inbox', target: 'hours', title: 'Set your interview hours', body: 'Candidates can only book an interview with you inside these hours. Without them, nobody can book you.' },
+  { route: '/inbox', target: 'hours', title: 'Set your interview availability', body: 'Candidates can only book an interview with you inside these hours. Without them, nobody can book you.' },
 ]
 const MANAGER: Step[] = [
   { target: 'jobs', title: 'Your jobs', body: 'Every role you’re hiring for, with its candidates and where each one is.' },
-  { route: '/jobs', target: 'new-job', title: 'Start a new job', body: 'Name the role, pick how you want to hire, and you get a flow of steps to adjust.' },
-  { target: 'library', title: 'Reuse what works', body: 'Steps and whole flows you’ve saved, so the next job starts from them.' },
+  { route: '/jobs', target: 'new-job', title: 'Start a new job', body: 'Name the role, pick how you want to hire, and you get a workflow of steps to adjust.' },
+  { target: 'library', title: 'Reuse what works', body: 'Step and workflow templates you’ve saved, so the next job starts from them.' },
   { target: 'hires', title: 'See who you hired', body: 'Fill rate per job, and where your applications came from.' },
 ]
 const ADMIN: Step[] = [
   { target: 'team', title: 'Bring your team in', body: 'Invite people and choose their level. The level decides what they can see.' },
-  { target: 'settings', title: 'Your company details', body: 'Your apply form, careers page and reject reasons live here.' },
+  { target: 'settings', title: 'Your company details', body: 'Your apply form, careers page and rejection reasons live here.' },
 ]
 const HELP: Step = { target: 'help', title: 'Stuck? Press ? or click Help', body: 'Every page has a help panel with short guides to how things work.' }
 

@@ -12,11 +12,11 @@ const { isManager } = useMe()
 
 // ---------- filters live in the URL, so a link to "under 40 in Screening" opens just that ----------
 const STATUS = [
-  { value: 'active', label: 'In progress' },
+  { value: 'active', label: 'Active' },
   { value: 'hired', label: 'Hired' },
   { value: 'rejected', label: 'Rejected' },
   { value: 'withdrawn', label: 'Withdrawn' },
-  { value: 'all', label: 'Everyone' },
+  { value: 'all', label: 'All candidates' },
 ] as const
 type Show = typeof STATUS[number]['value']
 const str = (k: string) => (route.query[k] as string | undefined) ?? ''
@@ -261,7 +261,7 @@ const resetFilters = () => setQuery({ q: undefined, stage: undefined, step: unde
                     <span class="names">{{ holders(r) }}</span>
                     <DueChip v-if="r.dueAt" :due="r.dueAt" />
                   </template>
-                  <span v-else-if="r.runStatus === 'failed'" class="chip chip-bad"><Icon name="stop" />Stopped</span>
+                  <span v-else-if="r.runStatus === 'failed'" class="chip chip-bad"><Icon name="stop" />Failed</span>
                   <span v-else-if="late(r)" class="chip chip-warn"><Icon name="clock" />Late</span>
                 </span>
               </template>

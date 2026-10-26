@@ -347,7 +347,7 @@ defineExpose({ open: openDialog })
           <span>Email {{ first }} to confirm<br><span class="optional">{{ ans.accepted ? '“Welcome to the team”, the same email as when they accept on the link' : 'A short thank-you, the same as when they decline on the link' }}</span></span>
         </label>
         <p class="note">
-          <template v-if="ans.accepted">Marks {{ first }} as accepted, and the flow moves them on.<template v-if="booked"> The interview booked for {{ fmtBooked(booked.at) }} is cancelled<template v-if="booked.who.length"> and {{ booked.who.join(' and ') }} see it in their inbox</template>.</template></template>
+          <template v-if="ans.accepted">Marks {{ first }} as accepted, and the workflow moves them on.<template v-if="booked"> The interview booked for {{ fmtBooked(booked.at) }} is cancelled<template v-if="booked.who.length"> and {{ booked.who.join(' and ') }} see it in their inbox</template>.</template></template>
           <template v-else>Closes {{ first }} as withdrawn.</template>
         </p>
       </div>

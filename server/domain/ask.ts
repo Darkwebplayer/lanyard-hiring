@@ -96,7 +96,7 @@ function flowSuggestions(graph: Graph) {
   return [
     decision && `What happens if someone fails ${nodeLabel(decision)}?`,
     task && `Who does ${nodeLabel(task)}?`,
-    graph.nodes.some(n => n.type === 'ai_review') && 'What does the AI review look at?',
+    graph.nodes.some(n => n.type === 'ai_review') && 'What does AI screening look at?',
   ]
 }
 
@@ -225,7 +225,7 @@ async function build(db: Db, viewer: Viewer, where: z.output<typeof askWhere>, a
       }
       const graph = v.workflow as Graph
       const data = { job: { title: job.title, showing: draft ? 'unpublished draft' : 'published flow' }, ...flowData(v.form as FormField[], graph) }
-      return { ...base(`Flow · ${job.title}`, scope, flowSuggestions(graph), data, 'Ask about this flow'), title: job.title }
+      return { ...base(`Flow · ${job.title}`, scope, flowSuggestions(graph), data, 'Ask about this workflow'), title: job.title }
     }
     case 'library-flows-id': {
       managersOnly()
@@ -235,7 +235,7 @@ async function build(db: Db, viewer: Viewer, where: z.output<typeof askWhere>, a
       if (!preset) throw notFound()
       const graph = preset.workflow as Graph
       const data = { preset: { name: preset.name, description: preset.description }, ...flowData(preset.form as FormField[], graph) }
-      return { ...base(`${preset.name} · Flow preset`, scope, flowSuggestions(graph), data, 'Ask about this flow'), title: preset.name }
+      return { ...base(`${preset.name} · Workflow template`, scope, flowSuggestions(graph), data, 'Ask about this workflow'), title: preset.name }
     }
     case 'hires':
     case 'jobs': {
@@ -243,7 +243,7 @@ async function build(db: Db, viewer: Viewer, where: z.output<typeof askWhere>, a
       // ponytail: the jobs list reuses the hire report, so jobs never published are left out; give it its own reader if asked about drafts
       const r = await hireReport(db)
       const lagging = r.jobs.filter(j => j.status === 'open').sort((a, b) => a.fillRate - b.fillRate)[0]
-      return base(route === 'hires' ? 'Hires' : 'Jobs', scope, [
+      return base(route === 'hires' ? 'Reports' : 'Jobs', scope, [
         lagging && `Why is ${lagging.title} at ${lagging.hired} of ${lagging.openings}?`,
         r.bySource.length && 'Which source brings the most hires?',
         route === 'jobs' ? 'Which job needs attention first?' : 'How are we doing against openings?',
