@@ -175,7 +175,7 @@ export async function documentsReminder(db: Db, viewer: Viewer, requestId: strin
   const key = `documents-reminder:${req.id}:${now.toISOString().slice(0, 10)}`
   const email = documentsEmail(firstName, jobTitle, req.items.filter(i => !i.received), `${appUrl}/documents/${req.token}`, true)
   const queued = await db.transaction(async (tx) => {
-    if (!(await queueEmail(tx, { applicationId: app.id, kind: 'documents_reminder', key, ...email }))) return false
+    if (!(await queueEmail(tx, { applicationId: app.id, kind: 'documents_reminder', key, ...email }, appUrl))) return false
     await tx.insert(applicationEvents).values({ applicationId: app.id, type: 'documents_reminded', actorId: viewer.userId, data: { runId: req.runId } })
     return true
   })

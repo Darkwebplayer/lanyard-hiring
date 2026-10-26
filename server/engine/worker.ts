@@ -21,7 +21,7 @@ export function engineDeps(env: AppEnv, db: Db): EngineDeps {
       ai: createAi(env),
       // outside any transaction: record it, then send it (a retry finds the row and sends the same key)
       sendEmail: async (key, email, log) => {
-        await queueEmail(db, { ...log, key, subject: email.subject, text: email.text })
+        await queueEmail(db, { ...log, key, subject: email.subject, text: email.text }, env.BETTER_AUTH_URL)
         await deliver(db, mailer(env), { key })
       },
       replyTo: async () => (await db.select({ r: settings.replyToEmail }).from(settings))[0]?.r ?? null,

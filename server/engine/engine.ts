@@ -204,7 +204,7 @@ async function activateHumanTask(w: Walk, node: GraphNode, config: HumanTaskConf
         first: w.ctx.candidate.first_name, job: w.ctx.job.title, company: (await getSettings(tx)).companyName,
         url: `${w.deps.appUrl ?? ''}/book/${b!.token}`, durationMin: b!.durationMin, interviewers: names.map(n => n.name), location: b!.location,
       }),
-    })
+    }, w.deps.appUrl ?? '')
   }
   await event(tx, app.id, 'task_assigned', { node: node.key, runId: run!.id, assignees })
 }
@@ -504,7 +504,7 @@ export function checkMove(graph: Graph, at: MoveFrom | null, target: MoveTarget,
 }
 
 // The flow's own rejection email when it has one (its words, rendered now), else a plain one.
-async function queueRejection(tx: Tx, app: Application, graph: Graph, key: string) {
+async function queueRejection(tx: Tx, app: Application, graph: Graph, key: string, appUrl: string) {
   const ctx = await buildContext(tx, app.id)
   const node = rejectionEmailNode(graph)
   const own = node && configOf(node) as { subject: string, body: string }
@@ -513,7 +513,7 @@ async function queueRejection(tx: Tx, app: Application, graph: Graph, key: strin
     ...(own
       ? { subject: render(own.subject, ctx), text: render(own.body, ctx) }
       : words.rejection({ first: ctx.candidate.first_name, job: ctx.job.title, company: (await getSettings(tx)).companyName })),
-  })
+  }, appUrl)
 }
 
 // Manual override: cancel whatever is active, then jump to any node (or close). Also reopens.
@@ -546,7 +546,7 @@ export async function moveApplication(deps: EngineDeps, applicationId: string, t
       await tx.update(applications).set({ status: 'closed', outcome: target.close }).where(eq(applications.id, app.id))
       await withdrawOffers(tx, app.id, actorId)
       await event(tx, app.id, 'closed', { outcome: target.close, manual: true }, actorId)
-      if (target.close === 'rejected' && input.notify) await queueRejection(tx, app, graph, `rejection:${app.id}:${t.getTime()}`)
+      if (target.close === 'rejected' && input.notify) await queueRejection(tx, app, graph, `rejection:${app.id}:${t.getTime()}`, deps.appUrl ?? '')
       return true
     }
     if (app.status === 'closed') {

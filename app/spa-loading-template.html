@@ -36,8 +36,11 @@
     .boot-sk { animation: none; }
   }
   /* sign-in and candidate pages have no rail and no check-in */
-  .boot.bare { display: block; }
-  .boot.bare .boot-rail, .boot.bare .boot-stage { display: none; }
+  .boot.bare { display: block; min-width: 0; }
+  .boot.bare .boot-rail, .boot.bare .boot-stage, .boot.bare.status .boot-title { display: none; }
+  /* the candidate's status page: no rail, but the badge, since the wait is us finding their applications */
+  .boot.bare.status .boot-main { min-height: 100dvh; }
+  .boot.bare.status .boot-stage { display: grid; }
 </style>
 <div class="boot">
   <div class="boot-rail" aria-hidden="true">
@@ -54,5 +57,10 @@
   </div>
 </div>
 <script>
-  if (/^\/(login|book\/|offer\/)/.test(location.pathname)) document.querySelector('.boot').classList.add('bare')
+  var boot = document.querySelector('.boot')
+  if (/^\/(login|book\/|offer\/|documents\/|status\/)/.test(location.pathname)) boot.classList.add('bare')
+  if (/^\/status\//.test(location.pathname)) {
+    boot.classList.add('status')
+    boot.querySelector('.boot-say').textContent = 'Finding your applications…'
+  }
 </script>

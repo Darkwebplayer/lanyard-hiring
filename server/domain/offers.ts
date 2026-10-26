@@ -97,7 +97,7 @@ async function queueOfferEmail(tx: Db | Tx, o: Offer, key: string, appUrl: strin
   await queueEmail(tx, {
     applicationId: o.applicationId, kind: 'offer', key,
     ...words.offer({ first: ctx.candidate.first_name, job: ctx.job.title, company: await companyName(tx) || null, url: `${appUrl}/offer/${o.token}`, expiresAt: o.expiresAt }),
-  })
+  }, appUrl)
 }
 
 // Renders the letter once, replaces any live offer, emails the candidate the link, and logs it. Only for active applications.
@@ -236,7 +236,7 @@ async function answerOffer(deps: EngineDeps, where: { token: string } | { id: st
       await queueEmail(tx, {
         applicationId: app.id, kind: a.accepted ? 'offer_accepted' : 'offer_declined', key: `offer:${offer.id}:answer`,
         ...(a.accepted ? words.accepted({ ...who, url: `${appUrl}/offer/${offer.token}` }) : words.declined(who)),
-      })
+      }, appUrl)
     }
     if (a.accepted) await cancelBookings(tx, app.id, t, actor)
     const nested = { ...deps, db: tx as unknown as Db, sendEmail: undefined } // emails go after the outer commit

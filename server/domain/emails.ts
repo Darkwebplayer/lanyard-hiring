@@ -13,11 +13,13 @@ import { getSettings } from './settings'
 export type Send = (idempotencyKey: string, email: Email) => Promise<unknown>
 export interface CandidateEmail { applicationId: string, kind: string, key: string, subject: string, text: string }
 
-// false when the key was already queued (the same email, asked for again)
-export async function queueEmail(tx: Db | Tx, e: CandidateEmail) {
-  const [c] = await tx.select({ to: candidates.email }).from(applications)
+// false when the key was already queued (the same email, asked for again). Every email ends with the link to
+// their status page, and records where the application was, so the page moves only as the emails do.
+export async function queueEmail(tx: Db | Tx, e: CandidateEmail, appUrl: string) {
+  const [c] = await tx.select({ to: candidates.email, token: candidates.statusToken, nodeKey: applications.currentNodeKey }).from(applications)
     .innerJoin(candidates, eq(candidates.id, applications.candidateId)).where(eq(applications.id, e.applicationId))
-  const inserted = await tx.insert(candidateEmails).values({ applicationId: e.applicationId, kind: e.kind, key: e.key, to: c!.to, subject: e.subject, body: e.text })
+  const body = `${e.text}\n\n${words.statusFooter((await getSettings(tx)).companyName, `${appUrl}/status/${c!.token}`)}`
+  const inserted = await tx.insert(candidateEmails).values({ applicationId: e.applicationId, kind: e.kind, key: e.key, to: c!.to, subject: e.subject, body, nodeKey: c!.nodeKey })
     .onConflictDoNothing().returning({ id: candidateEmails.id })
   return inserted.length > 0
 }
@@ -118,6 +120,15 @@ export const words = {
     subject: `Your offer for ${w.job}`,
     text: `Hi ${w.first},\n\nThank you for letting us know you won’t be taking the ${w.job} role. We’re sorry it didn’t work out this time, and we wish you all the best.`,
   }),
+  received: (w: Who) => ({
+    subject: 'We got your application',
+    text: `Hi ${w.first},\n\nThanks for applying for ${w.job}${at(w.company)}. We read every application and will email you when there’s news.`,
+  }),
+  statusLink: (first: string) => ({
+    subject: 'Your link to follow your applications',
+    text: `Hi ${first},\n\nYou asked for your link. It shows where each of your applications is.`,
+  }),
+  statusFooter: (company: string | null, url: string) => `Follow your applications${company ? ` with ${company}` : ''}:\n${url}`,
   rejection: (w: Who) => ({
     subject: `Your application for ${w.job}`,
     text: `Hi ${w.first},\n\nThank you for applying for ${w.job}${at(w.company)}. We have decided not to move forward this time. We wish you all the best with your search.`,

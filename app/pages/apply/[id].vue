@@ -260,7 +260,7 @@ function focusFirst() {
     <div v-else-if="sentTo" class="ending" aria-live="polite">
       <p class="eyebrow">{{ [job?.companyName, job?.title].filter(Boolean).join(' · ') }}</p>
       <h1>Application sent</h1>
-      <p>We’ll email you at <b class="addr">{{ sentTo }}</b> about next steps. Reply to any of our emails to reach {{ job?.companyName ? `the ${job.companyName} team` : 'the team' }}<template v-if="job?.contactEmail">, or write to <a :href="`mailto:${job.contactEmail}`">{{ job.contactEmail }}</a></template>.</p>
+      <p>We’ve emailed <b class="addr">{{ sentTo }}</b> a link where you can follow your application, and we’ll write there about next steps. Reply to any of our emails to reach {{ job?.companyName ? `the ${job.companyName} team` : 'the team' }}<template v-if="job?.contactEmail">, or write to <a :href="`mailto:${job.contactEmail}`">{{ job.contactEmail }}</a></template>.</p>
       <p class="muted">You can close this page.</p>
     </div>
 

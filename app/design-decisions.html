@@ -663,6 +663,54 @@ tr.group th{text-align:left;font-weight:600;padding-top:1.25rem;border-bottom:1p
 </section>
 
 <section id="sessions">
+<article class="session" id="session-2026-10-26-status">
+<h2><span class="key">Session 2026-10-26 (candidate status)<span class="vh">:</span></span> One private link per candidate; the page shows only what we already emailed</h2>
+<p class="kicker">Existing, Revamp · screen scope · new public page /status/[token], built after the owner approved the mock (canvas: claude.ai/artifact/BLCY538FZweRb456dMSGKW)</p>
+<p class="lede">The owner approved the mock and asked for the signature loading screen. The page waits with the same lanyard badge as the boot screen, from the same moment, with “Finding your applications…”.</p>
+<h3><span class="key">Brief</span> A job seeker who waits for news, on a phone, from an email</h3>
+<p>For: a person who applied to a small business. Job: know where each application is and if they must do something. Moment: they open a link from an email and feel unsure. Feel: calm and honest; the business looks organised. Signature moment: the “Your turn” card. Ending: hired gets a welcome card; not selected gets a quiet grey card. Screens: 360 px to desktop, same 560 px column as the other public pages (source: book, documents and offer pages).</p>
+<h3 class="i-list"><span class="key">Decisions</span> 6</h3>
+<div class="scroll"><table>
+<thead><tr><th scope="col">Element</th><th scope="col">Decision</th><th scope="col">Because</th><th scope="col">Rejected default</th></tr></thead>
+<tbody>
+<tr><td>Access</td><td>A private link per candidate, sent only by email, never shown on screen</td><td>Apply does not verify the email. The inbox proves who owns it</td><td>Google sign-in; the link on the thank-you screen</td></tr>
+<tr><td>What shows</td><td>Progress and outcome move only when the email for that step is sent</td><td>The owner’s rule: the page never says more than we told them</td><td>Live stage from the pipeline</td></tr>
+<tr><td>“Your turn” card</td><td>One card at the top, accent ring, one primary button</td><td>The one thing that waits on them comes first</td><td>An action link inside each application card</td></tr>
+<tr><td>Progress</td><td>Bar of segments with the stage name each candidate sees. Empty name shows “In review”</td><td>Internal names like “AI screen” must not reach candidates</td><td>Internal stage names</td></tr>
+<tr><td>Not selected</td><td>Grey card, no red, no half bar, below active ones</td><td>A rejection is not an error; the email already said it</td><td>Red “Rejected” chip</td></tr>
+<tr><td>Loading</td><td>The boot screen shows the badge on /status (no rail); the page carries the same badge on, timed from the first byte, so there is one wait, not two</td><td>The owner asked for the signature loading screen; one moving thing per wait</td><td>Skeleton cards</td></tr>
+<tr><td>Stage names</td><td>“Candidates see” field on each stage card; a stage that only closes says candidates don’t see it</td><td>The name lives where the stage is edited</td><td>A separate table (the mock)</td></tr>
+<tr><td>Notifications</td><td>The emails are the notifications; a “New” chip marks emails since the last visit</td><td>The email and the page never disagree; no new channel to run</td><td>Push or SMS</td></tr>
+</tbody></table></div>
+<h3 class="i-list" id="chunks-2026-10-26-status"><span class="key">Chunks</span> 1 chunk, mock only</h3>
+<div class="scroll"><table>
+<thead><tr><th scope="col">Chunk</th><th scope="col">Files it owns</th><th scope="col">Behaviour contract (baseline)</th><th scope="col">Checks</th><th scope="col">Parity</th></tr></thead>
+<tbody>
+<tr><td>C-1 Status page mock</td><td>none in the repo (canvas artifact only)</td><td>No status page exists; candidates get only step emails</td><td>check.py, check.py --inventory</td><td>not applicable: no app code changed. Compared at build: apply, book, documents and offer pages must act the same</td></tr>
+</tbody></table></div>
+<h3 class="i-motion"><span class="key">Motion map</span> Little motion: a page people open, read and leave</h3>
+<div class="scroll"><table>
+<thead><tr><th scope="col">Moment</th><th scope="col">Tier</th><th scope="col">Why</th></tr></thead>
+<tbody>
+<tr><td>Page loads</td><td>none</td><td>Frame paints at once; only the cards wait, with skeletons like the documents page</td></tr>
+<tr><td>Update opens (details)</td><td>none</td><td>Native disclosure; the text is the content</td></tr>
+<tr><td>“New” chip clears</td><td>none</td><td>Clears on the next visit, not while they read</td></tr>
+<tr><td>“Email me a link” sent</td><td>micro</td><td>Button busy spinner, then the same “Check your inbox” card for any address</td></tr>
+</tbody></table></div>
+<h3 class="i-alert"><span class="key">App-wide states</span> 3 designed, 3 not applicable</h3>
+<div class="scroll"><table>
+<thead><tr><th scope="col">State</th><th scope="col">Here</th></tr></thead>
+<tbody>
+<tr><td>Not found</td><td>Bad or old link: “This link doesn’t work” with an email-me-a-link form (artboard 5)</td></tr>
+<tr><td>No access</td><td>not applicable: the token is the access</td></tr>
+<tr><td>Signed out</td><td>not applicable: no sign-in</td></tr>
+<tr><td>Crash</td><td>“This page didn’t load” with Try again, as the documents page</td></tr>
+<tr><td>Offline</td><td>Same as crash</td></tr>
+<tr><td>First launch</td><td>Right after applying: one card at Applied and one update, “We got your application”</td></tr>
+</tbody></table></div>
+<h3>Look notes</h3>
+<p>check.py on the mock: 0 errors, 2 questions. Both flag “Welcome to Kopi &amp; Co”. We keep it: it is the ending greeting for a hired person and the real subject of the welcome email, not a line about the screen. check.py --inventory on app/: the mock uses the dominant tokens (ink, line, accent, 20 px card radius, pill buttons, --t-sm/--t-xs); the old drift it lists (31 literal colours, radius near-duplicates) is from earlier work and stays open. Build: seen in headless Chromium at 390 and 1280 px with the API answer replaced: the to-do card, progress bars, ended and hired cards, updates, the 404 email-me-a-link form and the badge wait. No horizontal scroll. This found one bug: the sign-in guard sent /status to /login; fixed. check.py on the page: 0 errors, 1 question (reduced motion): kept, because the badge slot still breathes, so the wait still looks busy. A fresh-reviewer critique is owed.</p>
+</article>
 <article class="session" id="session-2026-10-26-cleanup">
 <h2><span class="key">Session 2026-10-26 (cleanup)<span class="vh">:</span></span> Reuse is a tab, the canvas is a tab, and the pick is always in view</h2>
 <p class="kicker">Existing, Minimal · component scope · new job wizard step 2, Workflow tab, Pipeline board</p>

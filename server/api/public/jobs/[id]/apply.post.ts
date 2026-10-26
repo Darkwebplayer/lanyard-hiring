@@ -1,8 +1,9 @@
 import { z } from 'zod'
 import { submitApplication, type Submission } from '../../../../domain/apply'
 import { verifyTurnstile } from '../../../../domain/turnstile'
+import { deliverLater } from '../../../../domain/emails'
 import { startApplication } from '../../../../engine/engine'
-import { engineDeps } from '../../../../engine/worker'
+import { engineDeps, mailer } from '../../../../engine/worker'
 
 const MAX_BODY = 25 * 1024 * 1024 // a few 10 MB files plus fields
 
@@ -34,7 +35,8 @@ export default defineEventHandler(async (event) => {
   }
 
   const db = useDb(event)
-  const applicationId = await domain(submitApplication(db, env.CV_BUCKET, id, sub, new Date()))
+  const applicationId = await domain(submitApplication(db, env.CV_BUCKET, id, sub, new Date(), env.BETTER_AUTH_URL))
+  await deliverLater(db, mailer(env), applicationId)
   try {
     await startApplication(engineDeps(env, db), applicationId)
   }

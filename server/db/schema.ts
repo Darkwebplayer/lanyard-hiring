@@ -171,6 +171,8 @@ export const candidates = pgTable('candidates', {
   firstName: text('first_name').notNull(),
   lastName: text('last_name').notNull(),
   phone: text('phone'),
+  // the key to their status page (/status/<token>); only ever emailed, since apply doesn't verify the address
+  statusToken: text('status_token').notNull().unique().$defaultFn(() => btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(24)))).replace(/\+/g, '-').replace(/\//g, '_')),
   createdAt: createdAt(),
 })
 
@@ -319,6 +321,7 @@ export const candidateEmails = pgTable('candidate_emails', {
   sentAt: ts('sent_at'),
   attempts: integer('attempts').notNull().default(0), // failed sends so far
   failedAt: ts('failed_at'), // given up: too many attempts or a permanent error; the sweeper skips it
+  nodeKey: text('node_key'), // where the application was when queued: the status page shows progress as of the last email sent
 }, t => [index('candidate_emails_app_idx').on(t.applicationId, t.seq)])
 
 export const reminderLog = pgTable('reminder_log', {

@@ -196,7 +196,7 @@ describe('offers', () => {
 
   it('deliver moves past a failed send, gives up after 5 tries or a permanent error, and leaves run emails to their run', async () => {
     const id = await apply()
-    const q = (kind: string, key: string) => queueEmail(db, { applicationId: id, kind, key, subject: key, text: 'x' })
+    const q = (kind: string, key: string) => queueEmail(db, { applicationId: id, kind, key, subject: key, text: 'x' }, '')
     await q('flow', 'run-1'); await q('rejection', 'down'); await q('rejection', 'ok'); await q('rejection', 'bad')
     const out: string[] = []
     const send = async (k: string) => {

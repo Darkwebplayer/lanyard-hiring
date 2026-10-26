@@ -181,7 +181,7 @@ export async function book(db: Db, token: string, startsAt: Date, now: Date, tim
         timeZone: (timezone && validZone(timezone) ? timezone : people.find(p => p.timezone)?.timezone) ?? 'UTC',
         url: `${appUrl}/book/${b.token}`, icsUrl: `${appUrl}/api/public/bookings/${b.token}/invite.ics`,
       }),
-    })
+    }, appUrl)
     return { startsAt, applicationId: b.applicationId }
   })
 }

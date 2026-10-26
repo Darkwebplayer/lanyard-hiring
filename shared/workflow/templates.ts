@@ -123,9 +123,9 @@ export const STANDARD_HIRE: { form: FormField[], workflow: Graph } = {
     ],
     stages: [
       { id: 'screening', name: 'Screening', nodeKeys: ['cv', 'ai', 'manual_review'] },
-      { id: 'interview', name: 'Interview', nodeKeys: ['interview'] },
+      { id: 'interview', name: 'Interview', nodeKeys: ['interview'], candidateName: 'Interview' },
       // hires go on to Offer; only a no lands here, so the column says so
-      { id: 'offer', name: 'Offer', nodeKeys: ['make_offer', 'documents'] },
+      { id: 'offer', name: 'Offer', nodeKeys: ['make_offer', 'documents'], candidateName: 'Offer' },
       { id: 'decision', name: 'Not moving on', nodeKeys: ['rejection_email'] },
     ],
   },
@@ -181,7 +181,7 @@ const SIMPLE: Template = {
     ],
     stages: [
       { id: 'review', name: 'Review', nodeKeys: ['review'] },
-      { id: 'interview', name: 'Interview', nodeKeys: ['interview'] },
+      { id: 'interview', name: 'Interview', nodeKeys: ['interview'], candidateName: 'Interview' },
       ...ENDING_STAGES,
     ],
   },
@@ -232,7 +232,7 @@ const HIGH_VOLUME: Template = {
     ],
     stages: [
       { id: 'screening', name: 'Screening', nodeKeys: ['cv', 'ai'] },
-      { id: 'call', name: 'Call', nodeKeys: ['call'] },
+      { id: 'call', name: 'Call', nodeKeys: ['call'], candidateName: 'Phone call' },
       ...ENDING_STAGES,
     ],
   },

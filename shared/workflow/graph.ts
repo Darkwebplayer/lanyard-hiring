@@ -21,6 +21,7 @@ export const graphSchema = z.object({
     name: z.string().trim().min(1).max(40),
     nodeKeys: z.array(z.string()).max(200),
     ask: z.array(formFieldSchema).max(10).optional(),
+    candidateName: z.string().trim().max(40).optional(),
   })).max(30).optional(),
 }) satisfies z.ZodType<Graph>
 

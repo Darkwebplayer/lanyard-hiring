@@ -44,6 +44,7 @@ export interface Stage {
   name: string
   nodeKeys: string[]
   ask?: FormField[] // asked in the move dialog when someone is moved into this stage by hand; answers go on the move event
+  candidateName?: string // what candidates see on their status page; empty shows "In review", so internal names never reach them
 }
 
 export interface Graph {

@@ -293,3 +293,28 @@ export function removeStep(graph: Graph, key: string): Graph | null {
     ...(graph.stages && { stages: graph.stages.map(s => ({ ...s, nodeKeys: s.nodeKeys.filter(k => k !== key) })) }),
   }
 }
+
+// Candidate status page. A flow email sent right before an End closes them (the flow's own rejection or welcome email).
+export const endsFlow = (graph: Graph, nodeKey: string | null) =>
+  !!nodeKey && graph.edges.some(e => e.from === nodeKey && graph.nodes.find(n => n.key === e.to)?.type === 'end')
+
+// "Applied", then each stage's candidate name; neighbours with the same name merge into one step. A stage that only
+// closes (Standard hire's "Not moving on") is no step on the way, so it isn't shown.
+export function candidateSteps(graph: Graph) {
+  const hidden = new Set<string>()
+  const steps = ['Applied']
+  const at = new Map<string, number>() // stage id → step index
+  for (const s of graph.stages ?? []) {
+    if (s.nodeKeys.length && s.nodeKeys.every(k => endsFlow(graph, k))) {
+      hidden.add(s.id)
+      continue
+    }
+    const name = s.candidateName?.trim() || 'In review'
+    if (steps.at(-1) !== name) steps.push(name)
+    at.set(s.id, steps.length - 1)
+  }
+  return { steps, hidden, stepOf: (nodeKey: string | null) => {
+    const s = nodeKey ? graph.stages?.find(x => x.nodeKeys.includes(nodeKey)) : undefined
+    return s ? at.get(s.id) : undefined
+  } }
+}

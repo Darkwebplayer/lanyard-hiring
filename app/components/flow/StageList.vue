@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { fieldsAvailableAt } from '~~/shared/workflow/graph'
 import type { HumanTaskConfig } from '~~/shared/workflow/registry'
-import { type StageExit, type StageInfo, type StageStep, type StageView, removeStep, stageView } from '~~/shared/workflow/stages'
+import { type StageExit, type StageInfo, type StageStep, type StageView, candidateSteps, removeStep, stageView } from '~~/shared/workflow/stages'
 import type { FormField, Graph, Issue } from '~~/shared/workflow/types'
 import { type PaletteItem, type Person, type Role, issueText, onlySome, ruleWords, summaryOf, titleOf } from '~/lib/flow'
 import type { PipelineState } from '~/pages/jobs/[id].vue'
@@ -102,6 +102,15 @@ function rename(id: string, e: Event) {
   if (v && v !== stageName(id)) emit('rename', id, v)
   else input.value = stageName(id)
 }
+// what candidates see on their status page; empty reads "In review", so internal names never reach them
+const candidateNameOf = (id: string) => stages.value.find(s => s.id === id)?.candidateName ?? ''
+const hiddenFromCandidates = computed(() => candidateSteps(props.graph).hidden)
+function setCandidateName(id: string, e: Event) {
+  const st = stages.value.find(s => s.id === id)!
+  const v = (e.target as HTMLInputElement).value.trim()
+  if (v) st.candidateName = v
+  else delete st.candidateName
+}
 const askOf = (id: string) => stages.value.find(s => s.id === id)?.ask ?? []
 function setAsk(id: string, v: FormField[]) {
   const st = stages.value.find(s => s.id === id)!
@@ -188,6 +197,12 @@ function closedLine(c: StageView['closed'][number]) {
               ><Icon name="trash" :size="14" /></button>
             </span>
           </div>
+
+          <label v-if="!hiddenFromCandidates.has(s.id)" class="cand">
+            <span>Candidates see</span>
+            <input :value="candidateNameOf(s.id)" placeholder="In review" maxlength="40" :disabled="readOnly" @change="setCandidateName(s.id, $event)" @keydown.enter.prevent="($event.target as HTMLInputElement).blur()">
+          </label>
+          <p v-else class="cand-off">Candidates don’t see this stage. They hear about it by email.</p>
 
           <p v-if="!s.auto.length && !s.people.length" class="empty-stage">Nobody stops here yet. Add a step, or delete the stage.</p>
 
@@ -326,6 +341,10 @@ function closedLine(c: StageView['closed'][number]) {
 .here { font-size: var(--t-sm); color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .st-tools { display: flex; gap: 2px; }
 .btn[aria-disabled="true"] { opacity: 0.4; cursor: not-allowed; }
+.cand { display: flex; align-items: center; gap: 10px; padding-left: 36px; font-size: var(--t-sm); color: var(--ink-2); }
+.cand span { flex: none; }
+.cand input { min-height: var(--h-sm); max-width: 240px; }
+.cand-off { padding-left: 36px; font-size: var(--t-sm); color: var(--ink-3); }
 .empty-stage { padding: 10px 12px; border-radius: var(--r-panel); background: var(--sunk); color: var(--ink-2); font-size: var(--t-sm); }
 
 .blk { display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: var(--r-panel); background: var(--sunk); }

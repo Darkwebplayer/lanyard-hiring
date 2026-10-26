@@ -7,6 +7,7 @@ import type { FormField, Issue } from '../../shared/workflow/types'
 import type { Db } from '../db/client'
 import { applications, candidates, jobs, jobVersions, settings } from '../db/schema'
 import { sha256Hex, sniffCv } from '../engine/handlers/extract'
+import { queueEmail, words } from './emails'
 import { DomainError, pgCode } from './errors'
 
 export interface Bucket {
@@ -110,8 +111,8 @@ export interface Submission {
 const issue = (field: string, message: string): Issue => ({ code: 'invalid_field', message: `${field}: ${message}` })
 
 // Validates everything before writing anything; then files to R2, then one transaction.
-// Returns the new application id; the caller starts the workflow.
-export async function submitApplication(db: Db, bucket: Bucket, jobId: string, sub: Submission, now: Date) {
+// Returns the new application id; the caller starts the workflow and delivers the "we got it" email.
+export async function submitApplication(db: Db, bucket: Bucket, jobId: string, sub: Submission, now: Date, appUrl = '') {
   const { job, version } = await openJob(db, jobId, now)
   const form = version.form as FormField[]
   const applicationId = crypto.randomUUID()
@@ -174,6 +175,9 @@ export async function submitApplication(db: Db, bucket: Bucket, jobId: string, s
       await tx.insert(applications).values({
         id: applicationId, jobId: job.id, candidateId: candidate!.id, jobVersionId: version.id, answers: answers.data, source, consent,
       })
+      // the status link goes only to the inbox: the address isn't verified, so it is never shown on screen
+      const [s] = await tx.select({ companyName: settings.companyName }).from(settings)
+      await queueEmail(tx, { applicationId, kind: 'received', key: `received:${applicationId}`, ...words.received({ first: candidate!.firstName, job: job.title, company: s?.companyName ?? null }) }, appUrl)
     })
   }
   catch (e) {
