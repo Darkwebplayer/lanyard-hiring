@@ -253,7 +253,10 @@ export const applicationEvents = pgTable('application_events', {
   actorId: text('actor_id').references(() => user.id),
   data: jsonb('data').notNull().default({}),
   createdAt: createdAt(),
-}, t => [index('application_events_app_idx').on(t.applicationId, t.seq)])
+}, t => [
+  index('application_events_app_idx').on(t.applicationId, t.seq),
+  index('application_events_seq_idx').on(t.seq), // the notices tray reads recent events across every application
+])
 
 // A candidate's link to pick a time for one human-task run. starts_at null until they book.
 export const bookings = pgTable('bookings', {
@@ -332,3 +335,20 @@ export const reminderLog = pgTable('reminder_log', {
   userId: text('user_id').notNull().references(() => user.id),
   day: date('day').notNull(),
 }, t => [primaryKey({ columns: [t.runId, t.userId, t.day] })])
+
+// ---------- notices (the Updates tray; items are read from application_events) ----------
+
+// Per person: everything up to seen_seq has been looked at (the count starts after it); up to cleared_seq is gone.
+export const noticeState = pgTable('notice_state', {
+  userId: text('user_id').primaryKey().references(() => user.id, { onDelete: 'cascade' }),
+  seenSeq: bigint('seen_seq', { mode: 'number' }).notNull().default(0),
+  clearedSeq: bigint('cleared_seq', { mode: 'number' }).notNull().default(0),
+})
+
+// One item by its head event: opened (read), or dismissed from the tray.
+// ponytail: never pruned; delete rows older than the 30-day window if the table grows
+export const noticeMarks = pgTable('notice_marks', {
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  seq: bigint('seq', { mode: 'number' }).notNull(),
+  dismissed: boolean('dismissed').notNull().default(false),
+}, t => [primaryKey({ columns: [t.userId, t.seq] })])

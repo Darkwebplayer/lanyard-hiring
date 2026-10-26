@@ -91,24 +91,19 @@ watch(streaming, (s) => {
 })
 
 // a source chip takes you to that part of the page and outlines it in ink for 2 seconds
-function point(id: string) {
-  const el = document.querySelector<HTMLElement>(`[data-ask="${CSS.escape(id)}"]`)
-  if (!el) return toast.show('That part isn’t on this page.')
-  const still = matchMedia('(prefers-reduced-motion: reduce)').matches
-  el.scrollIntoView({ block: 'center', behavior: still ? 'auto' : 'smooth' })
-  el.classList.add('ask-hl')
-  setTimeout(() => el.classList.remove('ask-hl'), 2000)
-}
+const pointTo = (id: string) => point(id) || toast.show('That part isn’t on this page.')
 </script>
 
 <template>
   <template v-if="show && me">
-    <!-- hidden while Help is open, so it doesn't sit on the help header -->
-    <button v-if="!open && !helping" ref="corner" type="button" class="btn btn-sm corner" :aria-keyshortcuts="mac ? 'Meta+J' : 'Control+J'" @click="open = true">
-      <Icon name="ask" :size="16" />Ask<span class="kbd">{{ keys }}</span>
-    </button>
+    <!-- in the layout's top-right corner, beside Updates; hidden while Help is open, so it doesn't sit on the help header -->
+    <Teleport to="#corner" defer>
+      <button v-if="!open && !helping" ref="corner" type="button" class="btn btn-sm corner" :aria-keyshortcuts="mac ? 'Meta+J' : 'Control+J'" @click="open = true">
+        <Icon name="ask" :size="16" />Ask<span class="kbd">{{ keys }}</span>
+      </button>
+    </Teleport>
 
-    <aside v-else-if="open" ref="panel" class="ask" :class="{ over: floats, working: streaming }" aria-label="Ask" @keydown.esc.stop="open = false">
+    <aside v-if="open" ref="panel" class="ask" :class="{ over: floats, working: streaming }" aria-label="Ask" @keydown.esc.stop="open = false">
       <header class="head">
         <div class="title">
           <h2>Ask</h2><span class="kbd" aria-hidden="true">{{ keys }}</span>
@@ -159,7 +154,7 @@ function point(id: string) {
               <Transition name="turn">
                 <ul v-if="t.done && views[i]!.cites.length" class="srcs" aria-label="Sources">
                   <li v-for="c in views[i]!.cites" :key="c.id">
-                    <button type="button" class="src" @click="point(c.id)">{{ c.label }}</button>
+                    <button type="button" class="src" @click="pointTo(c.id)">{{ c.label }}</button>
                   </li>
                 </ul>
               </Transition>
@@ -200,8 +195,8 @@ function point(id: string) {
 </template>
 
 <style scoped>
-/* the corner pill: fixed top right, above each page's own actions, so "Share job" and "Publish" keep their place */
-.corner { position: fixed; top: 14px; right: 16px; z-index: 30; box-shadow: inset 0 0 0 1px var(--line-2), var(--shadow-1); }
+/* the corner pill: in the layout's fixed top-right corner, above each page's own actions */
+.corner { box-shadow: inset 0 0 0 1px var(--line-2), var(--shadow-1); }
 .corner .kbd { margin-left: 2px; }
 
 /* docked beside <main> from 1280 px (the shell gives it a column); below that it lies over the right edge, with no backdrop */

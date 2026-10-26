@@ -663,6 +663,52 @@ tr.group th{text-align:left;font-weight:600;padding-top:1.25rem;border-bottom:1p
 </section>
 
 <section id="sessions">
+<article class="session" id="session-2026-10-26-updates">
+<h2><span class="key">Session 2026-10-26 (updates)<span class="vh">:</span></span> A bell beside Ask tells you what changed; only what you would act on counts</h2>
+<p class="kicker">Existing, Minimal · component scope · Updates bell and tray · mock app/design-mocks/notices-mocks.html approved by the owner on 2026-10-26, then built</p>
+<p class="lede">The owner asked for one place that tells managers what changed: an interviewer who passes, an offer answered, a step that stopped. The items come from the events we already keep, so the tray and the candidate page always agree.</p>
+<h3><span class="key">Brief</span> A manager back from the floor, asking “did anything happen?”</h3>
+<p>For: managers (all jobs) and interviewers (their own tasks). Job: see what changed since the last look, and go to it. Moment: a short look between real work. Feel: calm; the number is small and it means something. Signature moment: open the tray, the red or magenta slots first, one click to the right place. Ending: “You’re up to date”. Screens: 960 px to 2560 px, as the rest of the recruiter app.</p>
+<h3 class="i-list"><span class="key">Decisions</span> 8</h3>
+<div class="scroll"><table>
+<thead><tr><th scope="col">Element</th><th scope="col">Decision</th><th scope="col">Because</th><th scope="col">Rejected default</th></tr></thead>
+<tbody>
+<tr><td>Place</td><td>A round bell left of the Ask pill, in the same fixed corner; it moves left of a docked panel</td><td>The owner asked for it beside Ask; one corner keeps the page actions where they are</td><td>A top bar (rejected before); a rail item</td></tr>
+<tr><td>Rail count</td><td>Not changed: it still counts Yours only</td><td>The owner agreed it means “waits on you”; the bell carries “what changed”</td><td>Add Needs attention to the rail count</td></tr>
+<tr><td>Count</td><td>Counts only urgent and important items, since the tray was last opened; opening clears it</td><td>No spam for small changes; a number that always grows teaches people to ignore it</td><td>Count every event; unread per item</td></tr>
+<tr><td>Count colour</td><td>The rail’s magenta bubble; red while a step has stopped</td><td>The bubble already means “for you” here; red is kept for stopped</td><td>Always red</td></tr>
+<tr><td>Row marker</td><td>The badge slot at the left: red stopped, magenta counted, grey listed only; grey after you open it</td><td>The slot already says who acts in Lanyard; a tier shows without a chip on every row</td><td>A chip per row; a coloured dot</td></tr>
+<tr><td>Grouping</td><td>New and Earlier, split where you last looked; new applications are one line per job per day</td><td>The first question is “what is new”; ten “applied” lines push out the one that matters</td><td>One flat list; a line per applicant</td></tr>
+<tr><td>Filter</td><td>All · Problems · Candidates · Tasks · Offers; only kinds that have items; none for interviewers</td><td>Managers sort by what they will do; interviewers see only their tasks</td><td>A filter menu; read and unread tabs</td></tr>
+<tr><td>Clearing</td><td>× on hover or focus hides one line; Clear all hides all; no confirm</td><td>Hiding loses nothing: the candidate page keeps the full record</td><td>A confirm dialog</td></tr>
+</tbody></table></div>
+<h3 class="i-alert"><span class="key">App-wide states</span> In the bell and the tray</h3>
+<div class="scroll"><table>
+<thead><tr><th scope="col">State</th><th scope="col">Here</th></tr></thead>
+<tbody>
+<tr><td>Not found</td><td>An item whose candidate or task is gone opens that page’s own “doesn’t exist” message; the tray never links to a page you can’t see (interviewers get /inbox links)</td></tr>
+<tr><td>No access</td><td>Each person gets only their own items; interviewers never see other runs</td></tr>
+<tr><td>Signed out</td><td>The poll gets a 401 and the app shell sends you to sign-in, as now</td></tr>
+<tr><td>Crash</td><td>A failed poll keeps the last count, quietly; a failed tray load shows “Updates didn’t load” with Retry</td></tr>
+<tr><td>Offline</td><td>Same as crash; polling stops while the tab is hidden and runs again when you come back</td></tr>
+<tr><td>First launch</td><td>“You’re up to date” with one line on what will show here</td></tr>
+</tbody></table></div>
+<h3 class="i-list" id="chunks-2026-10-26-updates"><span class="key">Chunks</span> 1 chunk, mock only</h3>
+<div class="scroll"><table>
+<thead><tr><th scope="col">Chunk</th><th scope="col">Files it owns</th><th scope="col">Behaviour contract (baseline)</th><th scope="col">Checks</th><th scope="col">Parity</th></tr></thead>
+<tbody>
+<tr><td>C-1 Updates mock</td><td>app/design-mocks/notices-mocks.html (the API under server/api/notices is new and has its own tests)</td><td>No bell exists; the Ask pill sits alone in the corner; the rail count is Yours only</td><td>check.py, check.py --inventory</td><td>not applicable: no app UI changed. Compared at build: the Ask pill keeps its place, shortcut and hide rules; the rail count stays the same</td></tr>
+</tbody></table></div>
+<h3 class="i-motion"><span class="key">Motion map</span> One thing moves</h3>
+<div class="scroll"><table>
+<thead><tr><th scope="col">Moment</th><th scope="col">Tier</th><th scope="col">Why</th></tr></thead>
+<tbody>
+<tr><td>Tray opens</td><td>Micro: 220 ms fade and 4 px drop from the bell; none with reduced motion</td><td>It shows where the tray came from</td></tr>
+<tr><td>Count changes, row hidden, filter</td><td>None</td><td>Frequent; the result is the feedback</td></tr>
+</tbody></table></div>
+<h3>Look notes</h3>
+<p>Looked at the manager, filter, interviewer, empty and docked frames at 1440 px (captures in the scratchpad). The first capture showed the page through the tray: the entry animation had not run in the headless browser. Captured again with reduced motion; the tray is solid. check.py on the mock: 0 errors, 3 questions. check.py --inventory on app/: the mock uses only existing tokens; one new value, z-index 31 for the tray, goes away in the build (a native popover sits in the top layer). The other drift it lists is from earlier sessions. Fixed: the loading rows now pulse slower with reduced motion instead of stopping. Kept: the tray entry stops with reduced motion (it does not show progress); the middle dot in “4 min ago · Barista” (read once per row as one phrase, not compared down the list). Build: looked at the real app at 1456 px with live data. Fixed after the look: (1) stopped steps were under newer grey lines; New now puts red, then magenta, first. (2) Times read “8:00” beside “8:00 AM” elsewhere; the tray now sends the viewer’s locale. (3) A step that was retried still showed as Stopped; it now uses the application’s latest run, the same rule as Needs attention. Changed from the mock: the job name is not repeated under each line, because most lines already name it. The deep link from a line opens the candidate page at that step. With Ask docked, the bell sits in the page’s top gutter, clear of the page actions. Owed: keyboard only, the largest text size, an interviewer’s account, and a fresh critique.</p>
+</article>
 <article class="session" id="session-2026-10-26-inbox">
 <h2><span class="key">Session 2026-10-26 (inbox)<span class="vh">:</span></span> Take a task before you work it, with your week beside the choice</h2>
 <p class="kicker">Existing, Revamp · screen scope · Inbox · mock app/design-mocks/inbox-mocks.html approved by the owner on 2026-10-26, then built</p>

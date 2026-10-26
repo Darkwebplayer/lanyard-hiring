@@ -93,20 +93,3 @@ export async function api<T = unknown>(url: string, opts: Parameters<typeof $fet
     throw err
   }
 }
-
-// What a manager does about each run error (docs/backend.md §5). hasReview: the flow has a person step that
-// reviews applications, so "a manual review" names a real place to move them.
-export function runErrorText(error: string | null | undefined, hasReview = false): { what: string, fix: string } {
-  const e = error ?? ''
-  if (e.startsWith('no_assignees')) return { what: 'Nobody could be assigned', fix: 'Give someone the role this step uses, then retry.' }
-  if (/^(missing_file|file_not_found|checksum_mismatch)/.test(e)) return { what: 'The CV is missing or was changed', fix: 'Move the candidate on by hand.' }
-  if (e.startsWith('unreadable_cv')) return { what: 'The CV can’t be read', fix: `It may be a scan. Move it to ${hasReview ? 'a manual review' : 'another step'}.` }
-  if (e.startsWith('ai_off')) return { what: 'AI is off', fix: 'An admin can turn on Use AI in Settings, then retry.' }
-  if (e.startsWith('ai_quota')) return { what: 'The AI usage limit was reached', fix: 'Retry later, or ask an admin to upgrade the AI key.' }
-  if (/^(ai_not_configured|ai_error)/.test(e)) return { what: 'The AI step couldn’t run', fix: 'Check the AI settings, then retry.' }
-  if (e.startsWith('missing_ref')) return { what: 'The email had an empty field', fix: 'Move the candidate on, or fix their data and retry.' }
-  if (e.startsWith('email_failed')) return { what: 'The email provider refused the email', fix: 'Retry.' }
-  if (e.startsWith('disabled')) return { what: 'This kind of step is switched off', fix: 'Switch it back on, then retry.' }
-  if (/^(invalid_config|no_handler)/.test(e)) return { what: 'This step is set up wrong', fix: 'Ask a developer to look at it.' }
-  return { what: 'A temporary error, three times in a row', fix: 'Retry.' }
-}

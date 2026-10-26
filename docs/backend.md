@@ -211,6 +211,35 @@ Scorecards and blind panels:
   - 404 `task_not_found` (not your task)
 - `completed: true` means your submission reached `minSubmissions` and the flow continued.
 
+### Notices (the Updates bell and tray)
+
+Read from `application_events`; nothing writes notices separately. Code: `server/domain/notices.ts`.
+
+| Method & path | Guard | Returns |
+|---|---|---|
+| `GET /api/notices/count` | user | `{ unread, urgent }`: counted items newer than your last look. The bell polls this every minute while the tab is visible |
+| `GET /api/notices?tz=&locale=` | user | `{ items: Notice[], seenSeq, latestSeq, unread, urgent }`, newest first, at most 100 from the last 30 days. Fetched when the tray opens |
+| `PUT /api/notices` | user | body `{ seen?, cleared? }` (event seqs; send `latestSeq`). Markers only move forward. `cleared` hides everything up to it |
+| `POST /api/notices/:seq` | user | body `{ dismissed?: boolean }`: opened (read) or dismissed one item |
+
+```ts
+Notice = { seq, at, tier: 'urgent'|'important'|'fyi', cat: 'problems'|'candidates'|'tasks'|'offers', text, to, read }
+```
+
+The rules, in order:
+- **Never your own action.** The exception is an offer answered on the link, which is filed under the person who made the offer.
+- **One item per transaction.** Events written together share `created_at`. The highest tier speaks for them, so a close does not also report the interview and offer it called off.
+- **New applications** are one item per job per day.
+- **Tiers.** Only `urgent` and `important` count on the bell. `fyi` items are listed only.
+  - Managers (all jobs):
+    - `urgent`: a step stopped and is still stopped.
+    - `important`: an interviewer passed and the step is now short of people, an offer was answered, or someone was hired.
+    - `fyi`: scorecards, bookings, documents in, moves by others, and new applications.
+  - Employees (only runs they hold):
+    - `important`: a task given to you, or a time booked or called off.
+    - `fyi`: you were taken off a task.
+- **Self-healing tiers.** "Stopped" and "short of people" are judged on the current state. After a retry or a reassign, the item is still listed but no longer counted.
+
 ### Operations (manager unless noted)
 
 | Method & path | Body | Returns |

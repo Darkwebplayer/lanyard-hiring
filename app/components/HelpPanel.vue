@@ -10,7 +10,7 @@ const route = useRoute()
 
 const TITLES = {
   inbox: 'Inbox', hours: 'Interview availability', jobs: 'Jobs', pipeline: 'Pipeline', stages: 'Workflow', form: 'Application form', details: 'Job details',
-  candidate: 'Candidate', library: 'Templates', team: 'Team', settings: 'Settings', hires: 'Reports', import: 'Import', ai: 'AI', words: 'Glossary',
+  candidate: 'Candidate', library: 'Templates', team: 'Team', settings: 'Settings', hires: 'Reports', import: 'Import', ai: 'AI', updates: 'Updates', words: 'Glossary',
 } as const
 type Topic = keyof typeof TITLES
 
@@ -22,7 +22,7 @@ const PAGE: Record<string, Topic> = {
   'team': 'team', 'settings': 'settings', 'hires': 'hires', 'import-id': 'import',
 }
 const RELATED: Record<Topic, Topic[]> = {
-  inbox: ['hours'], hours: ['inbox'], jobs: ['pipeline', 'stages'], pipeline: ['stages', 'candidate'], stages: ['ai'], form: ['stages'],
+  inbox: ['hours', 'updates'], hours: ['inbox'], updates: ['inbox', 'candidate'], jobs: ['pipeline', 'stages'], pipeline: ['stages', 'candidate'], stages: ['ai'], form: ['stages'],
   details: ['ai'], candidate: ['pipeline', 'ai'], library: ['stages'], team: ['hours'], settings: ['ai'], hires: ['jobs'],
   import: ['pipeline'], ai: ['details', 'stages'], words: [],
 }

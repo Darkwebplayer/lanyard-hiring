@@ -27,6 +27,13 @@ watch(id, () => {
   load()
 }, { immediate: true })
 
+// #offer-h, #node:interview (an Updates link): once the page is there, take the person to that part
+watch([tl, () => route.hash], async ([t, hash], [was, wasHash]) => {
+  if (!t || !hash || (was && hash === wasHash)) return
+  await nextTick()
+  point(decodeURIComponent(hash.slice(1)))
+})
+
 const name = computed(() => (tl.value ? fullName(tl.value.candidate) : ''))
 useHead({ title: () => name.value || 'Candidate' })
 

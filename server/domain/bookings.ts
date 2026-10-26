@@ -22,7 +22,7 @@ const TOKEN = /^[\w-]{32}$/
 // ---------- availability ----------
 
 const hhmm = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$|^24:00$/, 'expected HH:MM')
-const validZone = (tz: string) => {
+export const validZone = (tz: string) => {
   try {
     new Intl.DateTimeFormat('en-US', { timeZone: tz })
     return true

@@ -9,7 +9,8 @@ const setup = useSetup()
 // Help and Ask share one dock: opening one closes the other
 watch(asking, (o) => { if (o) helping.value = false })
 watch(helping, (o) => { if (o) asking.value = false })
-const docked = computed(() => !floats.value && (helping.value || (asking.value && (canAsk.value || isAdmin.value))))
+const paneled = computed(() => helping.value || (asking.value && (canAsk.value || isAdmin.value)))
+const docked = computed(() => !floats.value && paneled.value)
 
 function fromMenu(run: () => void) {
   document.getElementById('me-menu')?.hidePopover()
@@ -72,6 +73,10 @@ async function signOut() {
     <main class="main">
       <slot />
     </main>
+    <!-- the top-right corner: Updates, then Ask; it steps left of an open Ask or Help panel -->
+    <div v-if="me" id="corner" class="corner" :class="{ beside: paneled }">
+      <NoticeBell />
+    </div>
     <AskPanel />
     <HelpPanel />
     <Tour />
@@ -121,4 +126,7 @@ ul a[aria-current="page"] .ico { background: var(--surface); box-shadow: var(--s
 .me-menu { position-anchor: auto; inset: auto; left: calc(var(--rail) - 6px); bottom: 16px; }
 .who { display: grid; padding: 8px 10px 4px; font-size: var(--t-sm); }
 .main { min-width: 0; }
+/* fixed above each page's own actions, so "Share job" and "Publish" keep their place */
+.corner { position: fixed; top: 14px; right: 16px; z-index: 30; display: flex; gap: 8px; align-items: center; }
+.corner.beside { right: calc(392px + 16px); }
 </style>
