@@ -179,13 +179,13 @@ pre { margin: 0; padding: 14px 16px; overflow-x: auto; font: .82rem/1.55 var(--m
     <tr><td class="flowid">A</td><td>Login and access</td><td>all</td><td><span class="pill pass">Pass</span></td><td>Sidebar per role correct. Employee → <code>/jobs</code> redirects to Inbox; manager → <code>/team</code> redirects. Manager calls to admin APIs return 403; employee gets 404 on applications not assigned to them, 403 on manager APIs. Switched-off user's session dies at once.
       <div class="shots" data-shots="A-01-inbox-empty.jpg A-02-employee-inbox.jpg A-00-checking-in.jpg"></div></td></tr>
     <tr><td class="flowid">B</td><td>Team and Settings</td><td>admin</td><td><span class="pill warn">Issues</span></td><td>Invite, re-invite with new role, add role, switch off/on all work; reject reasons block duplicates; live apply-form preview. Rows re-sort when someone is switched off, so the next click lands on the wrong person.
-      <div class="shots" data-shots="B-01-team.jpg B-02-invite.jpg B-03-switchoff-dialog.jpg B-04-settings-dup-reason.jpg"></div></td></tr>
+      <div class="shots" data-shots="B-04-settings-dup-reason.jpg"></div></td></tr>
     <tr><td class="flowid">C</td><td>Library</td><td>manager</td><td><span class="pill warn">Issues</span></td><td>Step preset (panel interview, booking 45 min) and SG offer letter created. Blank scorecard question shows a raw developer error; preview data is a UK bakery.
-      <div class="shots" data-shots="C-01-library-steps.jpg C-02-step-preset-editor.jpg C-03-offer-letter-preview.jpg"></div></td></tr>
+      <div class="shots" data-shots="C-01-library-steps.jpg C-03-offer-letter-preview.jpg"></div></td></tr>
     <tr><td class="flowid">D</td><td>Job 1 · Warehouse Ops Supervisor (AI screening)</td><td>manager</td><td><span class="pill pass">Pass</span></td><td>Details, form (forklift yes/no), 3rd AI criterion, panel step with booking, publish v1, then v2 while a candidate stayed on v1. Changing a field's type after publish is caught by validation.
       <div class="shots" data-shots="D-01-new-job-dialog.jpg D-02-stage-list.jpg D-03-canvas.jpg D-04-details.jpg D-05-form.jpg D-06-interview-step.jpg D-07-ai-criteria.jpg D-08-published.jpg"></div></td></tr>
     <tr><td class="flowid">E</td><td>Job 2 · Delivery Driver (Lots of applicants) + CSV import</td><td>manager</td><td><span class="pill pass">Pass</span></td><td>Added licence knockout branch from the stage list; publish blocked with a clear message when the call step had 0 assignable people. Import dry run caught the duplicate row and the already-applied email.
-      <div class="shots" data-shots="E-03-check-answers.jpg E-01-branch-editor.jpg E-02-publish-blocked.jpg E-04-import-dryrun.jpg E-05-import-skips.png"></div></td></tr>
+      <div class="shots" data-shots="E-03-check-answers.jpg E-01-branch-editor.jpg E-04-import-dryrun.jpg E-05-import-skips.png"></div></td></tr>
     <tr><td class="flowid">F</td><td>Job 3 · Customer Service via Describe your flow</td><td>manager</td><td><span class="pill fail">Fail</span></td><td>First draft had no CV field or Read CV step yet reported no problems. After adding a CV field by hand, the redraft wired Read CV correctly.
       <div class="shots" data-shots="F-01-blank-describe.jpg F-02-ai-draft.jpg F-03-redraft-with-cv.jpg"></div></td></tr>
     <tr><td class="flowid">G</td><td>Careers and apply</td><td>public</td><td><span class="pill pass">Pass</span></td><td>Posting page, consent required, Turnstile, success page. Rejects: duplicate email (case-insensitive), text file renamed .pdf, 12 MB PDF, missing consent, missing Turnstile.
@@ -260,8 +260,7 @@ pre { margin: 0; padding: 14px 16px; overflow-x: auto; font: .82rem/1.55 var(--m
       <dl><dt>Actual</dt><dd>Warehouse job 2 hired for 1 opening, job stays Live and keeps accepting applicants.</dd></dl></article>
 
     <article class="bug"><header><span class="pill sev-med">Medium</span><h3>Step preset editor shows a raw validation error</h3></header>
-      <dl><dt>Actual</dt><dd>"Scorecard.1.label: Too small: expected string to have >=1 characters" and Add preset silently disabled.</dd></dl>
-      <div class="shots" data-shots="C-02-step-preset-editor.jpg"></div></article>
+      <dl><dt>Actual</dt><dd>"Scorecard.1.label: Too small: expected string to have >=1 characters" and Add preset silently disabled.</dd></dl></article>
 
     <article class="bug"><header><span class="pill sev-low">Low</span><h3>Board "Hired" count misses offer-accepted hires</h3></header>
       <dl><dt>Actual</dt><dd>"1 person" with two avatars; counts group by <code>current_node_key</code>, which stays at "interview" after an offer is accepted.</dd></dl></article>
