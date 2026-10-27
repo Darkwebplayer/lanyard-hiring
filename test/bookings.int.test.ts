@@ -4,61 +4,40 @@ import { REGISTRY } from '../shared/workflow/registry'
 import { STANDARD_HIRE } from '../shared/workflow/templates'
 import type { Db } from '../server/db/client'
 import * as s from '../server/db/schema'
-import { availabilityInput, book, bookingIcs, freeSlots, publicBooking, putAvailability, runBooking } from '../server/domain/bookings'
+import { answerTimes, askOtherTimes, book, bookingIcs, bookingStates, declineInterview, offerTimes, publicBooking, runBooking, stageOf } from '../server/domain/bookings'
 import { DomainError } from '../server/domain/errors'
 import { createJob, publish, saveDraft } from '../server/domain/jobs'
-import { getTask } from '../server/domain/tasks'
 import { type EngineDeps, type Enqueued, executeAutoRun, startApplication } from '../server/engine/engine'
 import { testDb } from './db'
 
-const weekdays = (from: string, to: string) => Object.fromEntries(['mon', 'tue', 'wed', 'thu', 'fri'].map(d => [d, [[from, to]] as [string, string][]]))
-const NY = { timezone: 'America/New_York', hours: weekdays('09:00', '17:00') }
-const LONDON = { timezone: 'Europe/London', hours: weekdays('09:00', '17:00') }
-const day = (slots: string[], date: string) => slots.filter(x => x.startsWith(date))
+const T = (iso: string) => new Date(`2026-10-${iso}Z`)
 
-describe('freeSlots', () => {
-  it('follows each zone across a DST change (New York leaves EDT on 1 Nov 2026)', () => {
-    const slots = freeSlots({ now: new Date('2026-10-29T12:00:00Z'), durationMin: 60, people: [NY], busy: [] })
-    const fri = day(slots, '2026-10-30') // EDT, UTC-4
-    expect([fri[0], fri.at(-1)]).toEqual(['2026-10-30T13:00:00.000Z', '2026-10-30T20:00:00.000Z'])
-    const mon = day(slots, '2026-11-02') // EST, UTC-5
-    expect([mon[0], mon.at(-1)]).toEqual(['2026-11-02T14:00:00.000Z', '2026-11-02T21:00:00.000Z'])
-    expect(day(slots, '2026-10-31')).toEqual([]) // weekend
-    expect(slots.every(x => new Date(x).getTime() <= new Date('2026-11-12T12:00:00Z').getTime())).toBe(true) // 14 days
+describe('stageOf', () => {
+  const b = { durationMin: 60, startsAt: null, cancelledAt: null, sentAt: null, notedAt: null, declinedAt: null }
+  const now = T('20T09:00:00')
+  const o = (at: string, answers: Record<string, boolean> = { a: true }) => ({ id: at, startsAt: T(at), answers })
+  it('needs times, then the panel, then the candidate; stale and taken times drop out', () => {
+    expect(stageOf(b, true, [], ['a'], [], now).stage).toBe('needs_times')
+    expect(stageOf(b, true, [o('21T10:00:00')], ['a', 'b'], [], now)).toMatchObject({ stage: 'panel', pending: ['b'] })
+    const sent = { ...b, sentAt: now }
+    expect(stageOf(sent, true, [o('21T10:00:00'), o('20T09:30:00')], ['a'], [], now)).toMatchObject({ stage: 'candidate', options: [T('21T10:00:00')] }) // 30 min away: gone
+    const busy = [{ start: T('21T10:30:00'), end: T('21T11:00:00') }]
+    expect(stageOf(sent, true, [o('21T10:00:00')], ['a'], busy, now)).toMatchObject({ stage: 'needs_times', options: [] }) // someone else took it
   })
-
-  it('intersects everyone, keeps 12 h notice and skips other bookings', () => {
-    const both = freeSlots({ now: new Date('2026-10-29T12:00:00Z'), durationMin: 60, people: [NY, LONDON], busy: [] })
-    expect(day(both, '2026-11-02')).toEqual(['14:00', '14:30', '15:00', '15:30', '16:00'].map(h => `2026-11-02T${h}:00.000Z`))
-
-    const soon = freeSlots({ now: new Date('2026-11-02T03:00:00Z'), durationMin: 60, people: [NY], busy: [] })
-    expect(soon[0]).toBe('2026-11-02T15:00:00.000Z')
-
-    const busy = [{ start: new Date('2026-11-02T15:00:00Z'), end: new Date('2026-11-02T16:00:00Z') }]
-    const free = day(freeSlots({ now: new Date('2026-10-29T12:00:00Z'), durationMin: 60, people: [NY, LONDON], busy }), '2026-11-02')
-    expect(free).toEqual(['2026-11-02T14:00:00.000Z', '2026-11-02T16:00:00.000Z'])
-  })
-
-  it('a range may end at 24:00, and nobody set means no slots', () => {
-    const late = freeSlots({ now: new Date('2026-10-29T00:00:00Z'), durationMin: 60, people: [{ timezone: 'UTC', hours: { fri: [['22:00', '24:00']] } }], busy: [] })
-    expect(day(late, '2026-10-30')).toEqual(['2026-10-30T22:00:00.000Z', '2026-10-30T22:30:00.000Z', '2026-10-30T23:00:00.000Z'])
-    expect(freeSlots({ now: new Date(), durationMin: 30, people: [], busy: [] })).toEqual([])
-  })
-
-  it('validates availability input', () => {
-    expect(availabilityInput.safeParse(NY).success).toBe(true)
-    expect(availabilityInput.safeParse({ ...NY, timezone: 'Mars/Olympus' }).success).toBe(false)
-    expect(availabilityInput.safeParse({ ...NY, hours: { mon: [['17:00', '09:00']] } }).success).toBe(false)
-    expect(availabilityInput.safeParse({ ...NY, hours: { mon: [['9:00', '17:00']] } }).success).toBe(false)
-    expect(availabilityInput.safeParse({ ...NY, hours: { funday: [['09:00', '17:00']] } }).success).toBe(false)
-    expect(REGISTRY.human_task!.config.safeParse({ ...STANDARD_HIRE.workflow.nodes.find(n => n.key === 'interview')!.config, booking: { duration_min: 5 } }).success).toBe(false)
+  it('booked, a change asked for, stepped back, and closed', () => {
+    expect(stageOf({ ...b, startsAt: T('22T10:00:00') }, true, [], ['a'], [], now).stage).toBe('booked')
+    expect(stageOf({ ...b, startsAt: T('22T10:00:00'), notedAt: now }, true, [], ['a'], [], now).stage).toBe('needs_times')
+    expect(stageOf({ ...b, declinedAt: now }, true, [], ['a'], [], now).stage).toBe('declined')
+    expect(stageOf(b, false, [], ['a'], [], now).stage).toBe('closed')
   })
 })
 
 describe('booking an interview', () => {
   const ADMIN = 'admin@example.test'
+  const OWNER = { userId: 'owner', level: 'manager' as const }
+  const OTHER = { userId: 'other', level: 'employee' as const }
   let db: Db
-  let t = new Date('2026-10-20T09:00:00Z')
+  const t = T('20T09:00:00')
   const queue: Enqueued[] = []
   const deps: () => EngineDeps = () => ({
     db,
@@ -74,9 +53,9 @@ describe('booking an interview', () => {
   let job: typeof s.jobs.$inferSelect
   let seq = 0
 
-  // applies and runs to the interview task; returns its booking
-  async function interview() {
-    const [c] = await db.insert(s.candidates).values({ email: `c${++seq}@example.test`, firstName: 'Jane', lastName: 'Doe' }).returning()
+  // applies and runs to the interview task; returns its booking. panel: Other sits on it too.
+  async function interview(panel = false) {
+    const [c] = await db.insert(s.candidates).values({ email: `c${++seq}@example.test`, firstName: 'Jane', lastName: `Doe${seq}` }).returning()
     const [a] = await db.insert(s.applications).values({
       jobId: job.id, candidateId: c!.id, jobVersionId: job.publishedVersionId!,
       answers: { cv: { key: 'k', sha256: 'a'.repeat(64), size: 10, mime: 'application/pdf', name: 'cv.pdf' } },
@@ -85,9 +64,14 @@ describe('booking an interview', () => {
     while (queue.length) await executeAutoRun(deps(), queue.shift()!.runId)
     const [run] = await db.select().from(s.nodeRuns).where(eq(s.nodeRuns.applicationId, a!.id)).orderBy(desc(s.nodeRuns.seq)).limit(1)
     expect(run).toMatchObject({ nodeKey: 'interview', status: 'waiting_on_human' })
+    if (panel) await db.insert(s.taskAssignments).values({ runId: run!.id, userId: 'other' })
     const [b] = await db.select().from(s.bookings).where(eq(s.bookings.runId, run!.id))
     return { ...b!, applicationId: a!.id }
   }
+  const offer = (b: { runId: string }, times: string[], who = OWNER) => offerTimes(db, who, b.runId, { times: times.map(x => T(x).toISOString()), timezone: 'Asia/Singapore' }, t, 'https://hire.example')
+  const stage = async (b: { runId: string }, who = 'owner') => (await bookingStates(db, [b.runId], who, t)).get(b.runId)!
+  const mails = (b: { applicationId: string }, kind: string) => db.select().from(s.candidateEmails)
+    .where(and(eq(s.candidateEmails.applicationId, b.applicationId), eq(s.candidateEmails.kind, kind))).orderBy(s.candidateEmails.seq)
   const rejects = async (p: Promise<unknown>, status: number, message: string) => {
     const e = await p.then(() => null, (err: unknown) => err)
     expect(e).toBeInstanceOf(DomainError)
@@ -100,7 +84,7 @@ describe('booking an interview', () => {
     const [employee] = await db.select().from(s.roles).where(eq(s.roles.name, 'Employee'))
     await db.insert(s.user).values([
       { id: 'owner', email: 'owner@example.test', name: 'Olivia Owner', roleId: manager!.id },
-      { id: 'other', email: 'other@example.test', name: 'Other', roleId: employee!.id },
+      { id: 'other', email: 'other@example.test', name: 'Omar Other', roleId: employee!.id },
     ])
     await db.update(s.settings).set({ companyName: 'Acme, Inc.' })
     const tpl = structuredClone(STANDARD_HIRE)
@@ -112,70 +96,153 @@ describe('booking an interview', () => {
   })
   afterAll(() => db.close())
 
-  it('the task gets a link; no availability yet means no slots', async () => {
+  it('the step makes a booking and sends nothing; the interviewer offers times first', async () => {
     const b = await interview()
     expect(b.token).toMatch(/^[\w-]{32}$/)
-    expect(b.durationMin).toBe(60)
-    expect(await publicBooking(db, b.token, t)).toEqual({
-      companyName: 'Acme, Inc.', logoUrl: null, jobTitle: 'Engineer; Backend', candidateFirstName: 'Jane', interviewers: ['Olivia Owner'],
-      durationMin: 60, location: null, cancelled: false, timezoneHint: null, startsAt: null, canBook: true, noAvailability: true, slots: [],
-    })
+    expect(await mails(b, 'booking_request')).toEqual([])
+    expect(await publicBooking(db, b.token, t)).toMatchObject({ interviewers: ['Olivia Owner'], options: [], startsAt: null, closed: false, declined: false, asked: null })
+    expect((await stage(b)).stage).toBe('needs_times')
+    expect(REGISTRY.human_task!.config.safeParse({ ...STANDARD_HIRE.workflow.nodes.find(n => n.key === 'interview')!.config, booking: { duration_min: 5 } }).success).toBe(false)
   })
 
-  it('happy path, then the slot is gone for the next candidate, rebooking, and the 12 h cut-off', async () => {
-    await putAvailability(db, 'owner', { timezone: 'UTC', hours: { tue: [['09:00', '17:00']], wed: [['09:00', '17:00']] } })
-    const first = await interview()
-    const view = await publicBooking(db, first.token, t)
-    expect(view).toMatchObject({ timezoneHint: 'UTC', noAvailability: false })
-    expect(view.slots[0]).toBe('2026-10-21T09:00:00.000Z') // Tuesday 20th is inside the 12 h notice
+  it('alone on it: the times go straight out, the candidate picks one, and the team hears it', async () => {
+    const b = await interview()
+    expect(await offer(b, ['21T02:00:00', '22T06:00:00'])).toEqual({ sent: true, applicationId: b.applicationId })
+    const [ask] = await mails(b, 'booking_request')
+    expect(ask!.subject).toBe('Pick a time for your interview, Jane')
+    expect(ask!.body).toContain('Olivia Owner would like to meet you for 60 minutes. These times work:')
+    expect(ask!.body).toContain('- Wednesday 21 October, 10:00 – 11:00 am (Singapore Standard Time)')
+    expect(ask!.body).toContain('- Thursday 22 October, 2:00 – 3:00 pm (Singapore Standard Time)')
+    expect(ask!.body).toContain(`https://hire.example/book/${b.token}`)
+    expect((await publicBooking(db, b.token, t)).options).toEqual([T('21T02:00:00'), T('22T06:00:00')])
 
-    expect(await book(db, first.token, new Date('2026-10-21T10:00:00Z'), t)).toEqual({ startsAt: new Date('2026-10-21T10:00:00Z'), applicationId: first.applicationId })
-    const [ev] = await db.select().from(s.applicationEvents).where(and(eq(s.applicationEvents.applicationId, first.applicationId), eq(s.applicationEvents.type, 'booked')))
-    expect(ev!.data).toEqual({ runId: first.runId, startsAt: '2026-10-21T10:00:00.000Z', previous: null })
-    expect((await getTask(db, { userId: 'owner', level: 'manager' }, first.runId, t)).booking).toEqual({ startsAt: new Date('2026-10-21T10:00:00Z'), cancelledAt: null })
-
-    const second = await interview()
-    const offered = (await publicBooking(db, second.token, t)).slots
-    expect(offered).not.toContain('2026-10-21T09:30:00.000Z')
-    expect(offered).not.toContain('2026-10-21T10:00:00.000Z')
-    expect(offered).toContain('2026-10-21T11:00:00.000Z')
-    await rejects(book(db, second.token, new Date('2026-10-21T10:00:00Z'), t), 409, 'slot_unavailable')
-    await rejects(book(db, second.token, new Date('2026-10-21T10:10:00Z'), t), 409, 'slot_unavailable') // off the grid
-
-    await book(db, first.token, new Date('2026-10-21T13:00:00Z'), t) // rebook
-    expect((await publicBooking(db, second.token, t)).slots).toContain('2026-10-21T10:00:00.000Z')
-    await book(db, first.token, new Date('2026-10-21T10:00:00Z'), t) // and back: still confirmed
-    const confirms = await db.select().from(s.candidateEmails).where(and(eq(s.candidateEmails.applicationId, first.applicationId), eq(s.candidateEmails.kind, 'booked')))
-    expect(confirms).toHaveLength(3)
-    await rejects(book(db, first.token, new Date('2026-10-22T13:00:00Z'), new Date('2026-10-21T02:00:00Z')), 409, 'too_late_to_change')
+    await rejects(book(db, b.token, T('21T03:00:00'), t), 409, 'slot_unavailable') // not offered
+    const r = await book(db, b.token, T('22T06:00:00'), t, 'Asia/Singapore', 'https://hire.example')
+    expect(r.team).toEqual([{ key: expect.stringMatching(/^team-booked:/), email: expect.objectContaining({ to: 'owner@example.test', subject: 'Interview booked: Jane Doe2, Thu, 22 Oct, 2:00 pm SGT' }) }])
+    expect(r.team[0]!.email.text).toContain(`https://hire.example/api/runs/${b.runId}/booking/invite.ics`)
+    expect((await mails(b, 'booked'))[0]!.subject).toBe('You’re booked: Thu, 22 Oct, 2:00 pm SGT')
+    expect(await stage(b)).toMatchObject({ stage: 'booked', startsAt: T('22T06:00:00'), offers: [] })
+    expect((await publicBooking(db, b.token, t)).options).toEqual([]) // the rest leave the table
   })
 
-  it('[race] two candidates taking the same slot at once: exactly one wins', async () => {
-    const [a, b] = [await interview(), await interview()]
-    const at = new Date('2026-10-28T14:00:00Z')
-    const results = await Promise.allSettled([book(db, a.token, at, t), book(db, b.token, at, t)])
+  it('offered times must be ahead, apart, clear of the panel’s interviews, and from someone on it', async () => {
+    const booked = await interview()
+    await offer(booked, ['23T02:00:00'])
+    await book(db, booked.token, T('23T02:00:00'), t)
+    const b = await interview()
+    await rejects(offer(b, ['20T09:30:00']), 422, 'time_too_soon')
+    await rejects(offer(b, ['19T09:00:00']), 422, 'time_too_soon') // the past
+    await rejects(offerTimes(db, OWNER, b.runId, { times: [new Date(t.getTime() + 91 * 86_400_000).toISOString()] }, t), 422, 'time_too_far')
+    await rejects(offer(b, ['24T02:00:00', '24T02:30:00']), 422, 'times_overlap')
+    await rejects(offer(b, ['23T02:30:00']), 409, 'time_taken')
+    await rejects(offer(b, ['24T02:00:00'], OTHER), 404, 'booking_not_found')
+    expect((await offer(b, ['24T02:00:00', '24T02:00:00'])).sent).toBe(true) // the same time twice is one
+    expect((await stage(b)).offers).toHaveLength(1)
+  })
+
+  it('a time offered to two: the first to pick takes it; the other, with nothing left, needs times again', async () => {
+    const [a, c] = [await interview(), await interview()]
+    await offer(a, ['26T02:00:00', '26T04:00:00'])
+    await offer(c, ['26T02:00:00'])
+    await book(db, a.token, T('26T02:00:00'), t)
+    expect((await publicBooking(db, c.token, t)).options).toEqual([])
+    await rejects(book(db, c.token, T('26T02:00:00'), t), 409, 'slot_unavailable')
+    expect((await stage(c)).stage).toBe('needs_times')
+  })
+
+  it('[race] two candidates taking the same time at once: exactly one wins', async () => {
+    const [a, c] = [await interview(), await interview()]
+    await offer(a, ['28T06:00:00'])
+    await offer(c, ['28T06:00:00'])
+    const results = await Promise.allSettled([book(db, a.token, T('28T06:00:00'), t), book(db, c.token, T('28T06:00:00'), t)])
     expect(results.map(r => r.status).sort()).toEqual(['fulfilled', 'rejected'])
     expect((results.find(r => r.status === 'rejected') as PromiseRejectedResult).reason).toMatchObject({ status: 409, message: 'slot_unavailable' })
   })
 
+  it('a panel: nothing goes out until everyone answers, then only the times all can make; none left goes back', async () => {
+    const b = await interview(true)
+    expect(await offer(b, ['27T02:00:00', '27T04:00:00', '27T06:00:00'])).toMatchObject({ sent: false })
+    expect(await stage(b)).toMatchObject({ stage: 'panel', pending: ['Omar Other'], mustAnswer: false })
+    const theirs = await stage(b, 'other')
+    expect(theirs).toMatchObject({ mustAnswer: true, offeredBy: 'Olivia Owner' })
+    expect(await mails(b, 'booking_request')).toEqual([])
+    expect((await publicBooking(db, b.token, t)).options).toEqual([])
+
+    const [x, y, z] = theirs.offers
+    await rejects(answerTimes(db, OTHER, b.runId, { answers: { [x!.id]: true } }, t), 422, 'answer_every_time')
+    expect(await answerTimes(db, OTHER, b.runId, { answers: { [x!.id]: true, [y!.id]: false, [z!.id]: true }, note: 'Not at noon' }, t)).toMatchObject({ sent: true })
+    const [ask] = await mails(b, 'booking_request')
+    expect(ask!.body).toContain('Olivia Owner and Omar Other would like to meet you for 60 minutes. These times work for both of them:')
+    expect(ask!.body).not.toContain('12:00')
+    expect((await publicBooking(db, b.token, t)).options).toEqual([T('27T02:00:00'), T('27T06:00:00')])
+    await rejects(answerTimes(db, OTHER, b.runId, { answers: {} }, t), 409, 'nothing_to_answer')
+
+    await offer(b, ['29T02:00:00']) // again, and this time Omar can't
+    const [only] = (await stage(b, 'other')).offers
+    expect(await answerTimes(db, OTHER, b.runId, { answers: { [only!.id]: false }, note: 'Away Thursday' }, t)).toMatchObject({ sent: false })
+    expect(await stage(b)).toMatchObject({ stage: 'needs_times', teamNote: 'Omar Other: Away Thursday', offers: [] })
+    const [none] = await db.select().from(s.applicationEvents).where(and(eq(s.applicationEvents.applicationId, b.applicationId), eq(s.applicationEvents.type, 'times_none')))
+    expect(none!.data).toEqual({ runId: b.runId, by: 'owner' })
+  })
+
+  it('“none of these work” takes the times off the table; a booked time stays until a new pick; 12 h before, it can’t change', async () => {
+    const b = await interview()
+    await offer(b, ['30T02:00:00'])
+    await askOtherTimes(db, b.token, 'Mornings are hard', t)
+    expect(await stage(b)).toMatchObject({ stage: 'needs_times', note: 'Mornings are hard', offers: [] })
+    expect(await publicBooking(db, b.token, t)).toMatchObject({ options: [], asked: 'Mornings are hard' })
+    await rejects(book(db, b.token, T('30T02:00:00'), t), 409, 'slot_unavailable')
+
+    await offer(b, ['30T06:00:00'])
+    expect(await publicBooking(db, b.token, t)).toMatchObject({ options: [T('30T06:00:00')], asked: null })
+    await book(db, b.token, T('30T06:00:00'), t)
+    await askOtherTimes(db, b.token, undefined, t) // booked, wants to move
+    expect(await stage(b)).toMatchObject({ stage: 'needs_times', startsAt: T('30T06:00:00') })
+    await offer(b, ['31T06:00:00'])
+    expect(await publicBooking(db, b.token, t)).toMatchObject({ startsAt: T('30T06:00:00'), options: [T('31T06:00:00')] })
+    await book(db, b.token, T('31T06:00:00'), t)
+    const [moved] = (await db.select().from(s.applicationEvents).where(and(eq(s.applicationEvents.applicationId, b.applicationId), eq(s.applicationEvents.type, 'booked'))).orderBy(desc(s.applicationEvents.seq)))
+    expect(moved!.data).toMatchObject({ startsAt: '2026-10-31T06:00:00.000Z', previous: '2026-10-30T06:00:00.000Z' })
+
+    const late = T('30T20:00:00')
+    await rejects(askOtherTimes(db, b.token, 'x', late), 409, 'too_late_to_change')
+    expect((await publicBooking(db, b.token, late)).canChange).toBe(false)
+  })
+
+  it('stepping back: the team hears it, nothing closes, and offering again reopens it', async () => {
+    const b = await interview()
+    await offer(b, ['30T08:00:00'])
+    await declineInterview(db, b.token, 'Took another job', t)
+    expect(await stage(b)).toMatchObject({ stage: 'declined', note: 'Took another job' })
+    expect(await publicBooking(db, b.token, t)).toMatchObject({ declined: true, options: [] })
+    await rejects(book(db, b.token, T('30T08:00:00'), t), 409, 'booking_closed')
+    const [run] = await db.select().from(s.nodeRuns).where(eq(s.nodeRuns.id, b.runId))
+    expect(run!.status).toBe('waiting_on_human')
+    await offer(b, ['30T10:00:00'])
+    expect(await publicBooking(db, b.token, t)).toMatchObject({ declined: false, options: [T('30T10:00:00')] })
+  })
+
   it('unknown or malformed tokens are 404 everywhere', async () => {
-    for (const token of ['nope', 'A'.repeat(32), "'; drop table bookings; --".padEnd(32, 'x')]) {
+    for (const token of ['nope', 'A'.repeat(32), '\'; drop table bookings; --'.padEnd(32, 'x')]) {
       await rejects(publicBooking(db, token, t), 404, 'booking_not_found')
-      await rejects(book(db, token, new Date('2026-10-21T11:00:00Z'), t), 404, 'booking_not_found')
+      await rejects(book(db, token, T('21T11:00:00'), t), 404, 'booking_not_found')
+      await rejects(askOtherTimes(db, token, undefined, t), 404, 'booking_not_found')
+      await rejects(declineInterview(db, token, undefined, t), 404, 'booking_not_found')
       await rejects(bookingIcs(db, token, t), 404, 'booking_not_found')
     }
   })
 
   it('the run booking is for managers and assignees only', async () => {
     const b = await interview()
-    expect(await runBooking(db, { userId: 'owner', level: 'manager' }, b.runId)).toEqual({ token: b.token, durationMin: 60, startsAt: null, location: null, cancelledAt: null })
-    await rejects(runBooking(db, { userId: 'other', level: 'employee' }, b.runId), 404, 'booking_not_found')
+    expect(await runBooking(db, OWNER, b.runId)).toMatchObject({ token: b.token, durationMin: 60, startsAt: null })
+    await rejects(runBooking(db, OTHER, b.runId), 404, 'booking_not_found')
     await rejects(bookingIcs(db, b.token, t), 404, 'booking_not_found') // nothing picked yet
   })
 
-  it('.ics: CRLF, UTC times, UID from the booking, escaped text', async () => {
+  it('.ics: CRLF, UTC times, UID from the booking, escaped text; the team’s names the candidate', async () => {
     const b = await interview()
-    await book(db, b.token, new Date('2026-10-27T15:30:00Z'), t)
+    await offer(b, ['27T15:30:00'])
+    await book(db, b.token, T('27T15:30:00'), t)
     const ics = await bookingIcs(db, b.token, t)
     expect(ics.endsWith('\r\n')).toBe(true)
     expect(ics.replace(/\r\n/g, '')).not.toMatch(/[\r\n]/)
@@ -188,30 +255,12 @@ describe('booking an interview', () => {
     expect(lines).toContain('SUMMARY:Interview: Engineer\\; Backend')
     expect(lines).toContain('DESCRIPTION:Acme\\, Inc.\\nWith Olivia Owner')
     expect(lines.slice(-3)).toEqual(['END:VEVENT', 'END:VCALENDAR', ''])
+    expect((await bookingIcs(db, b.token, t, true)).split('\r\n')).toContain(`SUMMARY:Interview: Jane Doe${seq}\\, Engineer\\; Backend`)
 
     await db.update(s.settings).set({ companyName: 'é'.repeat(100) })
     const long = await bookingIcs(db, b.token, t)
     await db.update(s.settings).set({ companyName: 'Acme, Inc.' })
     expect(long.split('\r\n').every(l => new TextEncoder().encode(l).length <= 75)).toBe(true) // folded
     expect(long.replace(/\r\n /g, '')).toContain(`DESCRIPTION:${'é'.repeat(100)}\\nWith Olivia Owner`)
-  })
-
-  it('emails the link when the step starts, then "You’re booked" in their zone with where, which the .ics carries too', async () => {
-    const b = await interview()
-    const mails = () => db.select().from(s.candidateEmails).where(eq(s.candidateEmails.applicationId, b.applicationId)).orderBy(s.candidateEmails.seq)
-    const [ask] = await mails()
-    expect(ask).toMatchObject({ kind: 'booking_request', key: `booking:${b.id}`, to: expect.stringMatching(/@example\.test$/), subject: 'Pick a time for your interview', sentAt: null })
-    expect(ask!.body).toContain(`/book/${b.token}`)
-    expect(ask!.body).toContain('a 60-minute slot with Olivia Owner')
-
-    await db.update(s.bookings).set({ location: 'Tuas warehouse, 12 Tuas Ave 3' }).where(eq(s.bookings.id, b.id))
-    await book(db, b.token, new Date('2026-10-28T09:00:00Z'), t, 'Asia/Singapore', 'https://hire.example')
-    const booked = (await mails())[1]!
-    expect(booked).toMatchObject({ kind: 'booked', subject: 'You’re booked: Wed, 28 Oct, 5:00 pm SGT' })
-    expect(booked.body).toContain('is on Wednesday 28 October, 5:00 – 6:00 pm (Singapore Standard Time).')
-    expect(booked.body).toContain('Where: Tuas warehouse, 12 Tuas Ave 3')
-    expect(booked.body).toContain(`https://hire.example/book/${b.token}`)
-    expect((await bookingIcs(db, b.token, t)).split('\r\n')).toContain('LOCATION:Tuas warehouse\\, 12 Tuas Ave 3')
-    expect(await publicBooking(db, b.token, t)).toMatchObject({ location: 'Tuas warehouse, 12 Tuas Ave 3', cancelled: false })
   })
 })

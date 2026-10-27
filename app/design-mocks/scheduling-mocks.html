@@ -1,0 +1,745 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lanyard Scheduling Mocks</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Mock: the interviewer offers times, the panel confirms, the candidate picks. Tokens copied from app/assets/css/main.css. */
+:root {
+  color-scheme: light;
+  --bg: oklch(0.974 0.004 330); --surface: oklch(1 0 0); --sunk: oklch(0.955 0.005 330); --hover: oklch(0.944 0.006 330);
+  --ink: oklch(0.24 0.018 330); --ink-2: oklch(0.46 0.016 330); --ink-3: oklch(0.53 0.012 330);
+  --line: oklch(0.912 0.008 330); --line-2: oklch(0.86 0.01 330);
+  --accent: oklch(0.55 0.21 352); --accent-press: oklch(0.49 0.2 352); --accent-ink: oklch(0.47 0.19 352); --accent-tint: oklch(0.955 0.03 352); --accent-line: oklch(0.86 0.08 352);
+  --ok: oklch(0.5 0.12 155); --ok-tint: oklch(0.955 0.04 155); --warn: oklch(0.5 0.1 70); --warn-tint: oklch(0.962 0.05 85);
+  --bad: oklch(0.52 0.19 27); --bad-tint: oklch(0.958 0.03 27);
+  --white: #fff;
+  --shadow-1: 0 1px 0 0 oklch(1 0 0 / 0.9) inset, 0 1px 2px oklch(0.3 0.04 330 / 0.07);
+  --shadow-2: 0 1px 0 0 oklch(1 0 0 / 0.9) inset, 0 1px 2px oklch(0.3 0.04 330 / 0.07), 0 10px 28px -12px oklch(0.3 0.04 330 / 0.18);
+  --shadow-3: 0 2px 4px oklch(0.3 0.04 330 / 0.08), 0 24px 48px -16px oklch(0.3 0.04 330 / 0.28);
+  --font: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  --t-xs: 0.75rem; --t-sm: 0.8125rem; --t-md: 0.875rem; --t-lg: 1rem; --t-xl: 1.25rem; --t-2xl: 1.625rem;
+  --r-field: 10px; --r-card: 20px; --r-panel: 14px; --r-pill: 999px;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1); --t-micro: 140ms; --t-move: 220ms;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 400 var(--t-md)/1.45 var(--font); -webkit-font-smoothing: antialiased; }
+h1, h2, h3 { margin: 0; font-weight: 600; text-wrap: balance; }
+p { margin: 0; text-wrap: pretty; }
+svg { display: block; flex: none; }
+button, input, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+[hidden] { display: none !important; }
+
+/* ---- the page around the mock ---- */
+.doc { max-width: 1480px; margin: 0 auto; padding: 32px 16px 64px; display: grid; gap: 20px; }
+.doc-head { display: grid; gap: 8px; max-width: 78ch; }
+.doc-head h1 { font-size: var(--t-2xl); letter-spacing: -0.015em; }
+.doc-head p { color: var(--ink-2); }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.tabs button { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 14px; border: 0; border-radius: var(--r-pill); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-2); font-weight: 600; cursor: pointer; }
+.tabs button b { font: 500 var(--t-xs) var(--mono); color: var(--ink-3); }
+.tabs button[aria-pressed="true"] { background: var(--ink); color: var(--white); box-shadow: none; }
+.tabs button[aria-pressed="true"] b { color: oklch(1 0 0 / 0.6); }
+.frame { display: grid; gap: 16px; }
+.note { display: grid; gap: 6px; max-width: 96ch; padding: 14px 16px; border-radius: var(--r-panel); background: var(--surface); border: 1px solid var(--line); }
+.note h2 { font-size: var(--t-lg); }
+.note ul { margin: 0; padding-left: 1.2em; color: var(--ink-2); display: grid; gap: 4px; }
+.note li strong { color: var(--ink); }
+.scroll { overflow-x: auto; border-radius: 16px; box-shadow: var(--shadow-3); border: 1px solid var(--line-2); }
+
+/* ---- app window ---- */
+.app { width: 1440px; height: 900px; display: grid; grid-template-columns: 88px 420px minmax(0, 1fr); background: var(--bg); overflow: hidden; position: relative; }
+.rail { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 14px 0 16px; border-right: 1px solid var(--line); }
+.mark { display: grid; justify-items: center; gap: 4px; padding: 8px 6px 14px; }
+.mark i { position: relative; width: 30px; height: 36px; border-radius: 9px; background: var(--ink); }
+.mark i::before { content: ""; position: absolute; top: 6px; left: 50%; translate: -50% 0; width: 12px; height: 4px; border-radius: 4px; background: var(--accent); }
+.mark span { font-size: 11px; font-weight: 700; }
+.rail a { display: grid; justify-items: center; gap: 4px; width: 72px; padding: 8px 0 7px; border-radius: 16px; color: var(--ink-2); font-size: var(--t-xs); font-weight: 600; text-decoration: none; }
+.rail .ico { position: relative; display: grid; place-items: center; width: 44px; height: 30px; border-radius: var(--r-pill); }
+.rail a.cur { color: var(--ink); }
+.rail a.cur .ico { background: var(--surface); box-shadow: var(--shadow-1), 0 0 0 1px var(--line); color: var(--accent-ink); }
+.rail .count { position: absolute; top: -3px; right: -2px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--accent); color: var(--white); font-size: 10.5px; line-height: 18px; text-align: center; box-shadow: 0 0 0 2px var(--bg); }
+.rail .spacer { flex: 1; }
+.avatar { --s: 32px; width: var(--s); height: var(--s); border-radius: 50%; display: inline-grid; place-items: center; font-weight: 600; font-size: calc(var(--s) * 0.38); background: var(--accent-tint); color: var(--accent-ink); flex: none; }
+
+/* ---- shared pieces ---- */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 38px; padding: 0 18px; border: 0; border-radius: var(--r-pill); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-2); font-weight: 600; white-space: nowrap; cursor: pointer; text-decoration: none; color: var(--ink); transition: background var(--t-micro) var(--ease), scale var(--t-micro) var(--ease); }
+.btn:hover { background: var(--hover); }
+.btn:active { scale: 0.97; }
+.btn svg { width: 16px; height: 16px; }
+.btn-sm { height: 30px; padding: 0 12px; font-size: var(--t-sm); gap: 6px; }
+.btn-sm svg { width: 14px; height: 14px; }
+.btn-lg { height: 46px; padding: 0 24px; font-size: var(--t-lg); }
+.btn-primary { background: var(--accent); color: var(--white); box-shadow: 0 1px 0 0 oklch(1 0 0 / 0.25) inset, 0 1px 2px oklch(0.4 0.15 352 / 0.3); }
+.btn-primary:hover { background: var(--accent-press); }
+.btn-primary:disabled { background: var(--line-2); color: var(--ink-2); box-shadow: none; cursor: not-allowed; }
+.btn-quiet { background: transparent; box-shadow: none; color: var(--ink-2); }
+.btn-icon { width: 30px; padding: 0; }
+.chip { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px; border-radius: var(--r-pill); font-size: var(--t-xs); font-weight: 600; white-space: nowrap; background: var(--sunk); color: var(--ink-2); }
+.chip svg { width: 12px; height: 12px; }
+.chip-accent { background: var(--accent-tint); color: var(--accent-ink); }
+.chip-warn { background: var(--warn-tint); color: var(--warn); }
+.chip-ok { background: var(--ok-tint); color: var(--ok); }
+.card { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-card); box-shadow: var(--shadow-2); min-width: 0; }
+[data-slot]::before { content: ""; position: absolute; top: 9px; left: 50%; translate: -50% 0; width: 30px; height: 5px; border-radius: 9px; background: var(--line-2); }
+[data-slot="accent"]::before { background: var(--accent); }
+.muted { color: var(--ink-2); } .faint { color: var(--ink-3); }
+.seg { display: inline-flex; padding: 3px; gap: 2px; background: var(--sunk); border-radius: var(--r-pill); }
+.seg button { white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 14px; border: 0; border-radius: var(--r-pill); background: none; font-weight: 600; font-size: var(--t-sm); color: var(--ink-2); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-1), 0 0 0 1px var(--line); }
+.seg .n { font-weight: 600; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+
+/* ---- list column ---- */
+.list { display: flex; flex-direction: column; border-right: 1px solid var(--line); padding: 0 12px; overflow-y: auto; min-height: 0; }
+.list-head { position: sticky; top: 0; z-index: 1; display: grid; gap: 14px; padding: 28px 8px 14px; background: var(--bg); }
+.list-head h1 { font-size: var(--t-2xl); letter-spacing: -0.015em; }
+.sec { display: flex; gap: 8px; align-items: baseline; margin: 18px 8px 2px; font-size: var(--t-sm); font-weight: 600; color: var(--ink-2); }
+.sec-hint { margin: 0 8px 6px; font-size: var(--t-xs); color: var(--ink-3); }
+.rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+/* a candidate who needs times: drag onto the week, or select and click */
+.need { position: relative; display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; gap: 2px 12px; align-items: center; padding: 10px 12px; border-radius: var(--r-panel); cursor: pointer; }
+.need:hover { background: var(--hover); }
+/* the person a plain click on the week adds a time for: the last one dropped or clicked */
+.need[aria-pressed="true"] { background: var(--accent-tint); }
+.need[aria-pressed="true"]::before { content: ""; position: absolute; left: 0; top: 50%; translate: 0 -50%; width: 4px; height: 22px; border-radius: 4px; background: var(--accent); }
+.need[draggable="true"] { cursor: grab; }
+.need[draggable="true"]:active { cursor: grabbing; }
+.need.dragging { opacity: 0.45; }
+.need .grip { position: absolute; left: -2px; top: 50%; translate: 0 -50%; color: var(--ink-3); opacity: 0; transition: opacity var(--t-micro) var(--ease); }
+.need:hover .grip { opacity: 1; }
+.need[aria-pressed="true"] .grip { display: none; }
+.ev.drop { box-shadow: 0 0 0 2px var(--ink), 0 1px 2px oklch(0.4 0.15 352 / 0.3); }
+.datebtn { position: relative; }
+.datebtn input { position: absolute; inset: 0; opacity: 0; pointer-events: none; }
+.tline { display: grid; grid-template-columns: 24px auto minmax(0, 1fr); gap: 4px 10px; align-items: center; }
+.tline .avatar { --s: 24px; font-size: 9px; }
+.tline .nm { font-weight: 600; }
+.tline .picked { grid-column: 3; }
+.tline .hint { grid-column: 2 / -1; }
+.lines { display: grid; gap: 10px; }
+.need .avatar { grid-row: span 2; }
+.need .t { font-weight: 600; }
+.need .s { grid-column: 2 / -1; font-size: var(--t-sm); color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.need .say { grid-column: 2 / -1; margin-top: 4px; padding: 6px 10px; border-radius: 10px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); font-size: var(--t-sm); color: var(--ink); }
+.need .say b { font-weight: 600; }
+.wait { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; gap: 2px 12px; align-items: center; padding: 10px 12px; border-radius: var(--r-panel); }
+.wait:hover { background: var(--hover); }
+.wait .avatar { grid-row: span 2; background: var(--sunk); color: var(--ink-2); }
+.wait .t { font-weight: 600; }
+.wait .s { grid-column: 2 / -1; font-size: var(--t-sm); color: var(--ink-2); }
+.slot-row { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 0 12px; align-items: baseline; padding: 10px 12px; border-radius: var(--r-panel); }
+.slot-row:hover { background: var(--hover); }
+.slot-row time { grid-row: span 2; font-weight: 600; font-variant-numeric: tabular-nums; }
+.slot-row time small { display: block; font-weight: 500; font-size: var(--t-xs); color: var(--ink-3); }
+.slot-row .t { font-weight: 600; }
+.slot-row .s { font-size: var(--t-sm); color: var(--ink-2); }
+
+/* ---- detail ---- */
+.detail { min-width: 0; padding: 28px 32px 0; overflow: hidden; display: flex; flex-direction: column; gap: 14px; }
+.cal-head { display: flex; align-items: center; gap: 10px; }
+.cal-head h2 { font-size: var(--t-xl); letter-spacing: -0.01em; margin-right: auto; }
+.cal-hint { font-size: var(--t-sm); color: var(--ink-2); margin-top: -8px; }
+.cal { --hr: 58px; position: relative; display: grid; grid-template-columns: 52px repeat(5, minmax(0, 1fr)) repeat(2, minmax(0, 0.45fr)); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-card); box-shadow: var(--shadow-1); overflow: hidden; flex: none; }
+.cal .dh { padding: 10px 10px 8px; font-size: var(--t-sm); font-weight: 600; color: var(--ink-2); border-bottom: 1px solid var(--line); border-left: 1px solid var(--line); display: flex; justify-content: space-between; }
+.cal .dh i { font-style: normal; font-weight: 500; color: var(--ink-3); }
+.cal .gut { border-bottom: 1px solid var(--line); }
+.cal .times { position: relative; height: calc(var(--hr) * 9); }
+.cal .times span { position: absolute; right: 8px; translate: 0 -50%; font-size: var(--t-xs); color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.cal .col { position: relative; height: calc(var(--hr) * 9); border-left: 1px solid var(--line); background: repeating-linear-gradient(to bottom, transparent 0 calc(var(--hr) - 1px), var(--line) calc(var(--hr) - 1px) var(--hr)); }
+.cal.offering .col:not(.wknd) { cursor: copy; }
+.cal .col.over .scrub { display: block; }
+.cal .col.wknd { background-color: var(--sunk); }
+/* the half hour under the pointer, where a click drops a time */
+/* the start line: follows the pointer in 15-minute steps, like the now line, and says the time a click would offer */
+.scrub { position: absolute; left: 0; right: 0; height: 2px; margin-top: -1px; background: var(--accent); pointer-events: none; display: none; z-index: 3; }
+.scrub::before { content: ""; position: absolute; left: -4px; top: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.scrub b { position: absolute; left: 8px; bottom: 5px; padding: 2px 7px; border-radius: var(--r-pill); background: var(--accent); color: var(--white); font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; box-shadow: 0 1px 2px oklch(0.4 0.15 352 / 0.3); }
+.scrub.no { background: var(--ink-3); }
+.scrub.no::before, .scrub.no b { background: var(--ink-3); box-shadow: none; }
+.cal.offering .col:not(.wknd):hover .scrub { display: block; }
+.cal.offering .col:not(.wknd):has(.ev:hover) .scrub { display: none; }
+.ev .top { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.ev .top b { flex: 1; min-width: 0; }
+.faces { display: inline-flex; flex: none; }
+.ev .faces .avatar { --s: 18px; font-size: 7.5px; overflow: visible; background: var(--surface); color: var(--accent-ink); box-shadow: 0 0 0 1.5px var(--accent); }
+.ev .faces { gap: 3px; }
+.ev.booked .faces .avatar, .ev.out .faces .avatar { color: var(--accent-ink); box-shadow: 0 0 0 1.5px var(--surface); background: var(--accent-tint); }
+.ev { position: absolute; left: 4px; right: 4px; display: grid; align-content: start; gap: 1px; padding: 5px 7px; border-radius: 8px; font-size: 11.5px; line-height: 1.25; overflow: hidden; border: 0; text-align: left; }
+.ev b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ev span { color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ev.booked { background: var(--accent-tint); color: var(--ink); }
+/* a time already out with another candidate: reusable with one click */
+.ev.out { background: var(--surface); box-shadow: inset 0 0 0 1.5px var(--line-2); cursor: pointer; }
+.ev.out:hover { box-shadow: inset 0 0 0 1.5px var(--ink-3); }
+/* a time being offered now: the one magenta thing on the calendar */
+.ev.draft { background: var(--accent); color: var(--white); cursor: pointer; box-shadow: 0 1px 2px oklch(0.4 0.15 352 / 0.3); animation: drop var(--t-micro) var(--ease); }
+.ev.draft span { color: oklch(1 0 0 / 0.82); }
+/* move and remove: shown on hover or focus, in place of the faces */
+/* faded, not removed, so Tab still reaches them */
+.ev .acts { position: absolute; top: 4px; right: 4px; display: inline-flex; gap: 2px; opacity: 0; transition: opacity var(--t-micro) var(--ease); }
+.ev.draft:hover .acts, .ev.draft:focus-within .acts { opacity: 1; }
+.ev.draft:hover .faces, .ev.draft:focus-within .faces { opacity: 0; }
+.ia { width: 22px; height: 22px; border: 0; border-radius: 6px; background: oklch(1 0 0 / 0.18); color: var(--white); display: grid; place-items: center; cursor: pointer; padding: 0; }
+.ia:hover { background: oklch(1 0 0 / 0.34); }
+.ia:focus-visible { outline: 2px solid var(--white); outline-offset: 0; }
+.ia svg { width: 14px; height: 14px; }
+/* picked up: the old place stays as a dashed outline until the new place is clicked */
+.ev.draft.lifted { background: transparent; color: var(--accent-ink); box-shadow: inset 0 0 0 1.5px var(--accent); outline: 0; }
+.ev.draft.lifted span { color: var(--accent-ink); }
+.ev.draft.lifted .acts { opacity: 1; }
+.ev.draft.lifted .faces { opacity: 0; }
+.ev.draft.lifted .ia { background: var(--accent-tint); color: var(--accent-ink); }
+@keyframes drop { from { scale: 0.94; opacity: 0; } }
+
+/* the send bar under the week */
+.tray { margin-top: auto; display: grid; gap: 10px; padding: 14px 0 20px; border-top: 1px solid var(--line); }
+.tray-top { display: flex; align-items: center; gap: 12px; }
+.tray-top p { margin-right: auto; }
+.picked { display: flex; flex-wrap: wrap; gap: 6px; }
+.picked .chip { height: 28px; padding: 0 6px 0 11px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-2); color: var(--ink); font-size: var(--t-sm); font-variant-numeric: tabular-nums; }
+.picked .chip button { width: 20px; height: 20px; border: 0; border-radius: 50%; background: none; cursor: pointer; color: var(--ink-3); display: grid; place-items: center; }
+.picked .chip button:hover { background: var(--hover); color: var(--ink); }
+.tray .hint { font-size: var(--t-sm); color: var(--ink-2); display: flex; gap: 6px; align-items: center; }
+.tray .hint.warn { color: var(--warn); }
+.empty-pick { display: grid; place-items: center; gap: 6px; padding: 18px; border-radius: var(--r-panel); border: 1.5px dashed var(--line-2); color: var(--ink-2); font-size: var(--t-sm); text-align: center; }
+
+/* ---- panel confirm (task detail) ---- */
+.task { padding: 30px 30px 26px; display: grid; gap: 20px; max-width: 760px; }
+.task-head { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 4px 14px; align-items: center; }
+.task-head .avatar { --s: 44px; grid-row: span 2; }
+.task-head h2 { font-size: var(--t-xl); letter-spacing: -0.01em; }
+.task-head .sub { color: var(--ink-2); font-size: var(--t-sm); grid-column: 2; }
+.task-head .chip { grid-row: 1; grid-column: 3; }
+.ask { display: grid; gap: 0; border: 1px solid var(--line); border-radius: var(--r-panel); }
+.ask > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 16px; align-items: center; padding: 12px 14px; }
+.ask > div + div { border-top: 1px solid var(--line); }
+.ask b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.ask small { grid-column: 1; font-size: var(--t-sm); color: var(--ink-2); }
+.ask small.clash { color: var(--warn); }
+.ask .seg { grid-row: span 2; grid-column: 2; }
+.ask .seg button[aria-pressed="true"].yes { color: var(--ok); }
+.ask .seg button[aria-pressed="true"].no { color: var(--bad); }
+.from { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: var(--r-panel); background: var(--sunk); font-size: var(--t-sm); }
+.from .avatar { --s: 24px; }
+.act { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; border-top: 1px solid var(--line); padding-top: 20px; }
+.act .faint { font-size: var(--t-sm); }
+
+/* ---- candidate phone pages ---- */
+.phones { display: flex; flex-wrap: wrap; gap: 24px 20px; padding: 4px 4px 16px; align-items: flex-start; }
+.phone-wrap { display: grid; gap: 8px; flex: none; }
+.phone-wrap > h3 { font-size: var(--t-sm); color: var(--ink-2); font-weight: 600; }
+.phone { width: 360px; border-radius: 28px; background: var(--bg); box-shadow: var(--shadow-3); border: 1px solid var(--line-2); padding: 28px 16px 24px; display: grid; gap: 16px; align-content: start; }
+.brand { display: flex; align-items: center; gap: 10px; }
+.mono-mark { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; background: var(--ink); color: #fff; font-size: var(--t-xs); font-weight: 600; }
+.sheet { background: var(--surface); border-radius: var(--r-card); box-shadow: inset 0 0 0 1px var(--line); padding: 20px 16px; display: grid; gap: 16px; }
+.sheet h1 { font-size: 1.375rem; letter-spacing: -0.015em; line-height: 1.2; }
+.sub { color: var(--ink-2); margin-top: 6px; }
+.opts { display: grid; gap: 8px; border: 0; padding: 0; margin: 0; }
+.opts legend { font-size: var(--t-sm); font-weight: 600; color: var(--ink-2); margin-bottom: 8px; padding: 0; }
+.opt { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 2px 12px; align-items: center; padding: 12px 14px; border-radius: var(--r-panel); box-shadow: inset 0 0 0 1px var(--line-2); cursor: pointer; }
+.opt input { appearance: none; margin: 0; width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--line-2); grid-row: span 2; display: grid; place-content: center; }
+.opt input:checked { border-color: var(--ink); }
+.opt input:checked::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--ink); }
+.opt:has(input:checked) { box-shadow: inset 0 0 0 2px var(--ink); }
+.opt b { font-size: var(--t-lg); font-weight: 600; font-variant-numeric: tabular-nums; }
+.opt small { font-size: var(--t-sm); color: var(--ink-2); }
+.zone { font-size: var(--t-sm); color: var(--ink-2); }
+.zone u { color: var(--ink); font-weight: 600; text-underline-offset: 2px; }
+.stack { display: grid; gap: 8px; }
+.wide { width: 100%; }
+.link-btn { border: 0; background: none; padding: 10px 0; font-weight: 600; color: var(--ink); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; text-align: left; }
+.link-btn.quiet { color: var(--ink-2); font-weight: 500; }
+.field { display: grid; gap: 6px; }
+.field span { font-size: var(--t-sm); font-weight: 600; }
+.field textarea { min-height: 96px; padding: 10px 12px; border: 1px solid var(--line-2); border-radius: var(--r-field); background: var(--surface); resize: vertical; }
+.field small { font-size: var(--t-sm); color: var(--ink-2); }
+.when { display: flex; gap: 12px; align-items: flex-start; padding: 14px; border-radius: var(--r-panel); background: var(--sunk); font-size: var(--t-lg); font-weight: 600; }
+.when span { display: grid; gap: 2px; }
+.when small { font-size: var(--t-sm); font-weight: 400; color: var(--ink-2); }
+.rule { border: 0; border-top: 1px solid var(--line); margin: 0; }
+.foot { font-size: var(--t-sm); color: var(--ink-2); text-align: center; }
+.mail { width: 360px; flex: none; background: var(--surface); border-radius: var(--r-panel); border: 1px solid var(--line); padding: 16px; display: grid; gap: 10px; font-size: var(--t-sm); }
+.mail .hdr { display: grid; gap: 2px; padding-bottom: 10px; border-bottom: 1px solid var(--line); color: var(--ink-2); }
+.mail .hdr b { color: var(--ink); }
+.mail ul { margin: 0; padding-left: 1.1em; }
+.mail .fake-btn { justify-self: start; padding: 8px 14px; border-radius: var(--r-pill); background: var(--ink); color: #fff; font-weight: 600; }
+@media (prefers-reduced-motion: reduce) { .ev.draft { animation: none; } .btn { transition: none; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-inbox" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13h4l1.5 2.5h5L16 13h4"/><path d="M5 6.5 4 13v5h16v-5l-1-6.5A1.5 1.5 0 0 0 17.5 5h-11A1.5 1.5 0 0 0 5 6.5Z"/></symbol>
+  <symbol id="i-jobs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="7" width="16" height="12" rx="2.5"/><path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7M4 12h16"/></symbol>
+  <symbol id="i-team" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M15.5 5.6a3.2 3.2 0 0 1 0 5.8M17.5 14.2A5.5 5.5 0 0 1 20.5 19"/></symbol>
+  <symbol id="i-hires" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8v5a4 4 0 0 1-8 0V4ZM12 13v4M8.5 20h7M8 6H5v1.5A2.5 2.5 0 0 0 7.5 10M16 6h3v1.5a2.5 2.5 0 0 1-2.5 2.5"/></symbol>
+  <symbol id="i-set" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m14.5 6-6 6 6 6"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m9.5 6 6 6-6 6"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="m7 7 10 10M17 7 7 17"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5.5" width="16" height="14" rx="2.5"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l2.5 2"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4 2.8 19.5h18.4L12 4Z"/><path d="M12 10v4M12 16.8v.1"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-6-5.6-6-11a6 6 0 0 1 12 0c0 5.4-6 11-6 11Z"/><circle cx="12" cy="10" r="2.2"/></symbol>
+  <symbol id="i-move" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M3 12h18M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7h15M9.5 7V5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v2M6.5 7l.8 12a1.5 1.5 0 0 0 1.5 1.4h6.4a1.5 1.5 0 0 0 1.5-1.4l.8-12M10 11v6M14 11v6"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
+</svg>
+
+<template id="rail">
+  <nav class="rail" aria-label="Main">
+    <div class="mark"><i></i><span>Lanyard</span></div>
+    <a href="#" class="cur"><span class="ico"><svg width="20" height="20"><use href="#i-inbox"/></svg><b class="count">3</b></span>Inbox</a>
+    <a href="#"><span class="ico"><svg width="20" height="20"><use href="#i-jobs"/></svg></span>Jobs</a>
+    <a href="#"><span class="ico"><svg width="20" height="20"><use href="#i-hires"/></svg></span>Hires</a>
+    <a href="#"><span class="ico"><svg width="20" height="20"><use href="#i-team"/></svg></span>Team</a>
+    <a href="#"><span class="ico"><svg width="20" height="20"><use href="#i-set"/></svg></span>Settings</a>
+    <span class="spacer"></span>
+    <span class="avatar" style="--s:36px">MR</span>
+  </nav>
+</template>
+
+<div class="doc">
+  <header class="doc-head">
+    <h1>Scheduling: you offer the times, the candidate picks one</h1>
+    <p>Mock for approval. No code has changed yet. Halfmoon Coffee, Tuesday 27 October. Maya Reyes (Shift lead) interviews. Jonah Ofori sits on one panel with her. In tab 1, drag a person from Needs times onto the week.</p>
+  </header>
+
+  <div class="tabs" role="group" aria-label="Mock">
+    <button type="button" aria-pressed="true" data-f="offer"><b>1</b>Offer times (interviewer)</button>
+    <button type="button" aria-pressed="false" data-f="panel"><b>2</b>Panel: confirm times</button>
+    <button type="button" aria-pressed="false" data-f="cand"><b>3</b>Candidate: email and page</button>
+  </div>
+
+  <!-- 1 OFFER TIMES -->
+  <section class="frame" data-frame="offer">
+    <div class="note">
+      <h2>One week, many candidates</h2>
+      <ul>
+        <li><strong>Needs times</strong> is a new group at the top of Schedule. Drag a person onto the week. While you drag, a line shows the exact start in 15-minute steps, and turns grey on a clash. Drop to place a time. Drag again for each extra option. Each placed time shows a move and a trash button on hover. Move picks it up: the line follows the pointer, a click puts it down, Esc cancels.</li>
+        <li><strong>Sharing:</strong> drop a person on someone else’s time to offer it to both. Both faces show on it. The first to pick gets it, and the other then sees what is left. If someone runs out of times, they come back to Needs times on their own.</li><li><strong>Faster:</strong> the last person you dropped stays selected (magenta bar). A plain click on the week adds another time for them. This is also the way to do it without a mouse.</li><li><strong>Send</strong> sends everyone’s times at once. The people move to Waiting, and their times stay on the week as outlines.</li><li>The date button opens the browser’s date picker, to jump to any week.</li>
+        <li>Times you already sent to someone else show as outlines. Click one to offer it again.</li>
+        <li><strong>Panel:</strong> Ana’s interview has two people, so her times go to Jonah first. She gets only the times you both can make.</li>
+        <li>Interview hours go away. You choose each time yourself, with your own calendar beside you.</li>
+      </ul>
+    </div>
+    <div class="scroll"><div class="app">
+      <slot-rail></slot-rail>
+      <aside class="list" aria-label="Schedule">
+        <header class="list-head">
+          <h1>Inbox</h1>
+          <div class="seg" role="group" aria-label="Show">
+            <button aria-pressed="false">Tasks <b class="n">4</b></button>
+            <button aria-pressed="true">Schedule <b class="n">3</b></button>
+            <button aria-pressed="false">Done</button>
+          </div>
+        </header>
+
+        <section>
+          <h2 class="sec">Needs times <span class="faint" id="nNeed">3</span></h2>
+          <p class="sec-hint" id="needHint">Drag a person onto the week to offer a time. Drag again for another time. Drop on someone’s time to share it.</p>
+          <ul class="rows" id="needRows"></ul>
+        </section>
+
+        <section>
+          <h2 class="sec">Waiting <span class="faint" id="nWait">2</span></h2>
+          <ul class="rows" id="waitRows">
+            <li><div class="wait"><span class="avatar">KM</span><span class="t">Kofi Mensah</span><span class="chip"><svg><use href="#i-clock"/></svg>Sent Sun</span><span class="s">3 times sent · Kofi hasn’t picked yet</span></div></li>
+            <li><div class="wait"><span class="avatar">LO</span><span class="t">Luis Ortega</span><span class="chip">Jonah’s turn</span><span class="s">Waiting for Jonah to confirm 4 times</span></div></li>
+          </ul>
+        </section>
+
+        <section>
+          <h2 class="sec">Mon 2 Nov <span class="faint">1</span></h2>
+          <ul class="rows"><li><div class="slot-row"><time>10:00<small>45 min</small></time><span class="t">Leo Park</span><span class="s">Barista · Shoreditch</span></div></li></ul>
+          <h2 class="sec">Wed 4 Nov <span class="faint">1</span></h2>
+          <ul class="rows"><li><div class="slot-row"><time>14:00<small>60 min</small></time><span class="t">Sam Ito</span><span class="s">Shift lead · Camden · with Jonah</span></div></li></ul>
+        </section>
+      </aside>
+
+      <main class="detail">
+        <div class="cal-head">
+          <h2 id="calTitle">Your week</h2>
+          <button class="btn btn-sm" id="today">Today</button>
+          <button class="btn btn-sm btn-icon" aria-label="Previous week" id="prev"><svg><use href="#i-left"/></svg></button>
+          <label class="btn btn-sm datebtn" title="Go to a date"><svg><use href="#i-cal"/></svg><span id="wkLabel">2 – 8 Nov</span><input type="date" id="goto" aria-label="Go to a date"></label>
+          <button class="btn btn-sm btn-icon" aria-label="Next week" id="next"><svg><use href="#i-right"/></svg></button>
+        </div>
+        <p class="cal-hint" id="calHint"></p>
+        <div class="cal offering" id="cal">
+          <div class="gut"></div>
+          <span id="dhs" style="display:contents"></span>
+          <div class="times" id="times"></div>
+          <div class="col" data-d="0"></div><div class="col" data-d="1"></div><div class="col" data-d="2"></div><div class="col" data-d="3"></div><div class="col" data-d="4"></div><div class="col wknd" data-d="5"></div><div class="col wknd" data-d="6"></div>
+        </div>
+
+        <div class="tray" id="tray"></div>
+      </main>
+    </div></div>
+  </section>
+
+  <!-- 2 PANEL CONFIRM -->
+  <section class="frame" data-frame="panel" hidden>
+    <div class="note">
+      <h2>Panel: everyone says yes before the candidate hears anything</h2>
+      <ul>
+        <li>When a task has more than one person, the person who offers the times is the one who checks with the others. That person is Maya here. The others get a short task: <strong>Can you make these?</strong></li>
+        <li>Each time gets a Yes or No. If a time clashes with an interview Jonah already has in Lanyard, the row says so. He still checks his own calendar for everything else.</li>
+        <li>Once everyone has answered, the candidate gets an email with only the times all of you can make, and all of your names. If no time is left, Maya gets the task back with Jonah’s note.</li>
+        <li>People usually agree on times in person or in chat first. This step makes that agreement visible, so nobody gets an invite they didn’t agree to.</li>
+      </ul>
+    </div>
+    <div class="scroll"><div class="app" style="height:760px">
+      <slot-rail></slot-rail>
+      <aside class="list" aria-label="Tasks">
+        <header class="list-head">
+          <h1>Inbox</h1>
+          <div class="seg" role="group" aria-label="Show">
+            <button aria-pressed="true">Tasks <b class="n">2</b></button>
+            <button aria-pressed="false">Schedule</button>
+            <button aria-pressed="false">Done</button>
+          </div>
+        </header>
+        <h2 class="sec">Yours <span class="faint">2</span></h2>
+        <ul class="rows">
+          <li><div class="need" style="grid-template-columns:32px minmax(0,1fr) auto;background:var(--accent-tint)"><span class="avatar">AS</span><span class="t">Can you make these? Ana Silva</span><span class="chip chip-accent">3 times</span><span class="s" style="grid-column:2/-1">Shift lead · Camden · from Maya</span></div></li>
+          <li><div class="need" style="grid-template-columns:32px minmax(0,1fr) auto"><span class="avatar">SI</span><span class="t">Panel interview: Sam Ito</span><span class="chip chip-accent"><svg><use href="#i-cal"/></svg>Wed 14:00</span><span class="s" style="grid-column:2/-1">Shift lead · Camden</span></div></li>
+        </ul>
+      </aside>
+      <main class="detail" style="overflow:auto">
+        <article class="card task" data-slot="accent">
+          <header class="task-head">
+            <span class="avatar">AS</span>
+            <h2>Can you make these? Ana Silva</h2>
+            <span class="chip chip-accent">Yours</span>
+            <p class="sub">Panel interview · Shift lead · Camden · 60 min, with Maya Reyes</p>
+          </header>
+          <p class="from"><span class="avatar">MR</span><span><b>Maya</b> picked these times. Ana said: “Mornings are hard, I do the school run. Any time after 11 is fine.”</span></p>
+          <div class="ask" role="group" aria-label="Times">
+            <div><b>Tue 3 Nov, 11:30 – 12:30</b><div class="seg" role="radiogroup" aria-label="Tue 3 Nov, 11:30"><button class="yes" aria-pressed="true">I can</button><button class="no" aria-pressed="false">I can’t</button></div><small>Nothing else in Lanyard</small></div>
+            <div><b>Wed 4 Nov, 13:30 – 14:30</b><div class="seg" role="radiogroup" aria-label="Wed 4 Nov, 13:30"><button class="yes" aria-pressed="false">I can</button><button class="no" aria-pressed="true">I can’t</button></div><small class="clash">Overlaps your panel with Sam Ito at 14:00</small></div>
+            <div><b>Thu 5 Nov, 15:00 – 16:00</b><div class="seg" role="radiogroup" aria-label="Thu 5 Nov, 15:00"><button class="yes" aria-pressed="true">I can</button><button class="no" aria-pressed="false">I can’t</button></div><small>Nothing else in Lanyard</small></div>
+          </div>
+          <label class="field"><span>Note for Maya <span class="faint" style="font-weight:400">(optional)</span></span><textarea style="min-height:64px" placeholder="Thursday after 3 works best for me."></textarea></label>
+          <div class="act">
+            <button class="btn btn-primary btn-lg">Send answers<svg><use href="#i-arrow"/></svg></button>
+            <span class="faint">You’re the last to answer. Ana then gets the 2 times you can both make.</span>
+          </div>
+        </article>
+      </main>
+    </div></div>
+  </section>
+
+  <!-- 3 CANDIDATE -->
+  <section class="frame" data-frame="cand" hidden>
+    <div class="note">
+      <h2>The candidate: pick one, ask for others, or step back</h2>
+      <ul>
+        <li>The email names everyone who will be there and lists the times. It goes out only when every person on the panel has agreed.</li>
+        <li>On the page, the candidate picks one time and books it. <strong>None of these work</strong> opens a note. The note goes to the interviewer, who sends new times.</li>
+        <li><strong>I’m no longer interested</strong> is quiet and asks once more, inline. The team gets a notice. Nothing closes on its own.</li>
+        <li>After booking, <strong>Need a different time?</strong> uses the same note. The booked time stays until the candidate picks a new one, so nobody is left with nothing.</li>
+      </ul>
+    </div>
+    <div class="phones">
+      <div class="phone-wrap"><h3>The email</h3>
+        <div class="mail">
+          <div class="hdr"><span><b>Halfmoon Coffee</b> &lt;jobs@halfmooncoffee.co&gt;</span><span>Pick a time for your interview, Ana</span></div>
+          <p>Hi Ana,</p>
+          <p>Thanks for applying for Shift lead in Camden. Maya Reyes and Jonah Ofori would like to meet you for 60 minutes. These times work for both of them:</p>
+          <ul><li>Tue 3 Nov, 11:30</li><li>Thu 5 Nov, 15:00</li></ul>
+          <p>Pick the one that suits you. If neither works, tell us when does.</p>
+          <span class="fake-btn">Pick a time</span>
+          <p class="faint">Times are in London time (GMT).</p>
+        </div>
+      </div>
+
+      <div class="phone-wrap"><h3>Pick a time</h3>
+        <div class="phone">
+          <p class="brand"><span class="mono-mark">H</span><b>Halfmoon Coffee</b></p>
+          <section class="sheet">
+            <div><h1>Hi Ana, pick a time for your interview</h1><p class="sub">Shift lead · 60 minutes with Maya Reyes and Jonah Ofori</p><p class="sub">Where: 14 Parkway, Camden</p></div>
+            <fieldset class="opts"><legend>Times that work for the team</legend>
+              <label class="opt"><input type="radio" name="o1"><b>Tue 3 Nov, 11:30</b><small>until 12:30</small></label>
+              <label class="opt"><input type="radio" name="o1" checked><b>Thu 5 Nov, 15:00</b><small>until 16:00</small></label>
+            </fieldset>
+            <p class="zone">Times in London time (GMT). <u>Change</u></p>
+            <button class="btn btn-primary btn-lg wide">Book Thu 5 Nov, 15:00</button>
+            <hr class="rule">
+            <div class="stack">
+              <button class="link-btn">None of these work</button>
+              <button class="link-btn quiet">I’m no longer interested</button>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <div class="phone-wrap"><h3>None of these work</h3>
+        <div class="phone">
+          <p class="brand"><span class="mono-mark">H</span><b>Halfmoon Coffee</b></p>
+          <section class="sheet">
+            <div><h1>When suits you, Ana?</h1><p class="sub">Maya will send new times that fit.</p></div>
+            <label class="field"><span>Your note to Maya</span><textarea>Mornings are hard, I do the school run. Any time after 11 is fine.</textarea><small>For example, the days or hours that work for you.</small></label>
+            <button class="btn btn-primary btn-lg wide">Ask for other times</button>
+            <button class="btn btn-lg wide">Back to the times</button>
+          </section>
+        </div>
+      </div>
+
+      <div class="phone-wrap"><h3>After asking</h3>
+        <div class="phone">
+          <p class="brand"><span class="mono-mark">H</span><b>Halfmoon Coffee</b></p>
+          <section class="sheet">
+            <div><h1>We’ve asked Maya for other times</h1><p class="sub">You’ll get an email with new times, usually within a working day. This link stays the same.</p></div>
+            <div class="when" style="font-size:var(--t-md);font-weight:400"><span><b style="font-weight:600">You said</b><small style="font-size:var(--t-md);color:var(--ink)">“Mornings are hard, I do the school run. Any time after 11 is fine.”</small></span></div>
+          </section>
+        </div>
+      </div>
+
+      <div class="phone-wrap"><h3>No longer interested</h3>
+        <div class="phone">
+          <p class="brand"><span class="mono-mark">H</span><b>Halfmoon Coffee</b></p>
+          <section class="sheet">
+            <div><h1>Step back from this interview?</h1><p class="sub">We’ll let Maya and Jonah know. Your application stays with Halfmoon Coffee, and they may get in touch.</p></div>
+            <label class="field"><span>Anything you’d like them to know? <span class="faint" style="font-weight:400">(optional)</span></span><textarea style="min-height:72px"></textarea></label>
+            <button class="btn btn-lg wide" style="color:var(--bad)">Step back from the interview</button>
+            <button class="btn btn-lg wide btn-quiet">Keep my interview</button>
+          </section>
+        </div>
+      </div>
+
+      <div class="phone-wrap"><h3>Booked</h3>
+        <div class="phone">
+          <p class="brand"><span class="mono-mark">H</span><b>Halfmoon Coffee</b></p>
+          <section class="sheet">
+            <div><h1>You’re booked, Ana</h1><p class="sub">Shift lead · 60 minutes with Maya Reyes and Jonah Ofori</p></div>
+            <p class="when"><svg width="20" height="20" style="margin-top:2px"><use href="#i-cal"/></svg><span>Thursday 5 November, 15:00<small>London time (GMT)</small></span></p>
+            <p class="when"><svg width="20" height="20" style="margin-top:2px"><use href="#i-pin"/></svg><span>14 Parkway, Camden<small>Where</small></span></p>
+            <button class="btn btn-primary btn-lg wide"><svg><use href="#i-down"/></svg>Add to calendar</button>
+            <button class="link-btn">Need a different time?</button>
+          </section>
+          <p class="foot">We’ve emailed this to you, and sent Maya and Jonah a calendar invite.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+const rail = document.getElementById('rail').content
+document.querySelectorAll('slot-rail').forEach(s => s.replaceWith(rail.cloneNode(true)))
+document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.tabs button').forEach(x => x.setAttribute('aria-pressed', x === b))
+  document.querySelectorAll('.frame').forEach(f => f.hidden = f.dataset.frame !== b.dataset.f)
+}))
+document.querySelectorAll('.ask .seg').forEach(seg => seg.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return
+  seg.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b))
+}))
+
+// ---- the week: 9:00–18:00, 15-minute steps ----
+const START = 9, HOURS = 9, HR = 58, END = (START + HOURS) * 60
+const BASE = new Date(2026, 10, 2) // Mon 2 Nov
+let wk = 0 // weeks from BASE
+const dayDate = d => new Date(BASE.getFullYear(), BASE.getMonth(), BASE.getDate() + wk * 7 + d)
+const wd = new Intl.DateTimeFormat('en-GB', { weekday: 'short' })
+const dm = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' })
+const dayName = d => `${wd.format(dayDate(d))} ${dayDate(d).getDate()}`
+const hhmm = m => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`
+const $ = id => document.getElementById(id)
+const times = $('times')
+for (let h = 1; h < HOURS; h++) times.insertAdjacentHTML('beforeend', `<span style="top:${h * HR}px">${START + h}:00</span>`)
+const cols = [...document.querySelectorAll('.cal .col')]
+
+const people = {
+  Priya: { ini: 'PN', full: 'Priya Nair', len: 45, s: 'Barista · Shoreditch · Interview' },
+  Ben: { ini: 'BO', full: 'Ben Okafor', len: 45, s: 'Barista · Shoreditch · Interview' },
+  Ana: { ini: 'AS', full: 'Ana Silva', len: 60, s: 'Shift lead · Camden · Panel with Jonah', panel: 'Jonah', say: 'Mornings are hard, I do the school run. Any time after 11 is fine.' },
+}
+let need = ['Priya', 'Ben', 'Ana']
+let current = null // who a plain click adds a time for
+const booked = [{ wk: 0, d: 0, m: 600, len: 45, who: 'Leo Park', ini: 'LP', what: 'Barista' }, { wk: 0, d: 2, m: 840, len: 60, who: 'Sam Ito', ini: 'SI', what: 'with Jonah' }]
+let out = [{ wk: 0, d: 3, m: 660, who: ['Kofi'], ini: ['KM'], len: 45 }] // sent, still open
+let drafts = [{ wk: 0, d: 1, m: 600, who: ['Priya'] }, { wk: 0, d: 3, m: 840, who: ['Priya'] }, { wk: 0, d: 1, m: 900, who: ['Ben'] }, { wk: 0, d: 4, m: 630, who: ['Priya', 'Ben'] }]
+const dlen = e => Math.max(...e.who.map(n => people[n]?.len ?? 45))
+const names = l => l.length < 2 ? l.join('') : `${l.slice(0, -1).join(', ')} and ${l.at(-1)}`
+const faces = l => `<span class="faces">${l.map(x => `<span class="avatar">${x}</span>`).join('')}</span>`
+const at = (c, y) => START * 60 + Math.max(0, Math.round((y - c.getBoundingClientRect().top) / (HR / 4))) * 15
+const overlaps = (e, d, m, l, len) => e.wk === wk && e.d === d && m < e.m + len && e.m < m + l
+function clashWith(d, m, l, skip) {
+  const b = [...booked, ...out].find(e => overlaps(e, d, m, l, e.len))
+  if (b) return Array.isArray(b.who) ? `your time for ${b.who.join(', ')}` : b.who
+  const x = drafts.find(e => e !== skip && overlaps(e, d, m, l, dlen(e)))
+  return x ? `your time for ${names(x.who)}` : ''
+}
+
+function block(cls, d, m, l, html, onclick, data) {
+  const el = document.createElement(data ? 'div' : 'button') // a placed time holds its own buttons
+  if (!data) el.type = 'button'
+  el.className = `ev ${cls}`
+  el.style.top = `${(m / 60 - START) * HR + 1}px`; el.style.height = `${l / 60 * HR - 3}px`
+  el.innerHTML = html
+  if (data) el._draft = data
+  if (onclick) el.addEventListener('click', e => { e.stopPropagation(); onclick() }); else if (!data) el.tabIndex = -1
+  if (data) el.addEventListener('click', e => e.stopPropagation())
+  cols[d].append(el)
+}
+
+function drawList() {
+  $('nNeed').textContent = need.length
+  $('needRows').innerHTML = need.length ? need.map(n => {
+    const p = people[n], k = drafts.filter(e => e.who.includes(n)).length
+    return `<li><div class="need" draggable="true" tabindex="0" role="button" data-name="${n}" aria-pressed="${current === n}" aria-label="${p.full}. Drag onto the week, or select and click the week.">
+      <svg class="grip" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>
+      <span class="avatar">${p.ini}</span><span class="t">${p.full}</span>
+      <span class="chip ${k ? 'chip-accent' : ''}">${k ? `${k} ${k === 1 ? 'time' : 'times'}` : `${p.len} min`}</span>
+      <span class="s">${p.s}</span>${p.say ? `<span class="say"><b>${n}:</b> “${p.say}”</span>` : ''}</div></li>`
+  }).join('') : '<li><p class="sec-hint" style="margin:6px 8px">Everyone has times. New candidates show here.</p></li>'
+  $('needHint').hidden = !need.length
+  document.querySelectorAll('#needRows .need').forEach(row => {
+    const n = row.dataset.name
+    row.addEventListener('click', () => { current = current === n ? null : n; draw() })
+    row.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); row.click() } })
+    row.addEventListener('dragstart', e => { dragging = n; e.dataTransfer.setData('text/plain', n); e.dataTransfer.effectAllowed = 'copy'; row.classList.add('dragging'); $('cal').classList.add('offering') })
+    row.addEventListener('dragend', () => { dragging = null; row.classList.remove('dragging'); cols.forEach(c => c.classList.remove('over')); draw() })
+  })
+}
+
+function draw() {
+  cols.forEach(c => { c.innerHTML = '<div class="scrub"><b></b></div>' })
+  $('dhs').innerHTML = [0, 1, 2, 3, 4, 5, 6].map(d => `<div class="dh">${wd.format(dayDate(d))} <i>${dayDate(d).getDate()}</i></div>`).join('')
+  $('wkLabel').textContent = `${dayDate(0).getDate()} – ${dm.format(dayDate(6))}`
+  booked.filter(e => e.wk === wk).forEach(e => block('booked', e.d, e.m, e.len, `<span class="top"><b>${e.who}</b>${faces([e.ini])}</span><span>${hhmm(e.m)} · ${e.what}</span>`))
+  out.filter(e => e.wk === wk).forEach(e => block('out', e.d, e.m, e.len, `<span class="top"><b>Offered to ${names(e.who)}</b>${faces(e.ini)}</span><span>${hhmm(e.m)} · waiting for a pick</span>`))
+  drafts.sort((a, b) => a.wk - b.wk || a.d - b.d || a.m - b.m)
+  drafts.filter(e => e.wk === wk).forEach((e) => {
+    const t = `${names(e.who)} at ${dayName(e.d)}, ${hhmm(e.m)}`
+    block(`draft${e === moving ? ' lifted' : ''}`, e.d, e.m, dlen(e), `<span class="top"><b>${hhmm(e.m)} – ${hhmm(e.m + dlen(e))}</b>${faces(e.who.map(n => people[n].ini))}<span class="acts"><button type="button" class="ia" data-a="move" aria-pressed="${e === moving}" aria-label="${e === moving ? 'Cancel the move' : `Move ${t}`}" title="${e === moving ? 'Cancel the move (Esc)' : 'Move'}"><svg><use href="#i-move"/></svg></button><button type="button" class="ia" data-a="del" aria-label="Remove ${t}" title="Remove"><svg><use href="#i-trash"/></svg></button></span></span><span>${e === moving ? 'Click the new place' : names(e.who)}</span>`, null, e)
+  })
+  cols.forEach(c => c.querySelectorAll('.ia').forEach(b => b.addEventListener('click', (ev) => {
+    ev.stopPropagation()
+    const e = b.closest('.ev')._draft
+    if (b.dataset.a === 'del') { if (moving === e) moving = null; drafts.splice(drafts.indexOf(e), 1); drawAll() }
+    else { moving = moving === e ? null : e; draw() }
+  })))
+  $('cal').classList.toggle('offering', !!current || !!dragging || !!moving)
+  $('calTitle').textContent = moving ? `Moving ${names(moving.who)}’s ${hhmm(moving.m)}` : current ? `Add times for ${people[current].full}` : 'Your week'
+  $('calHint').textContent = moving ? 'Click where it should go. Esc or the move button again cancels.' : current ? `Click the week to add another ${people[current].len}-minute time for ${current}, or drag someone else in.` : need.length ? 'Drag someone from Needs times onto the week. The line shows when the interview would start.' : 'Booked interviews, and times waiting for a pick.'
+  document.querySelectorAll('#needRows .need').forEach(r => r.setAttribute('aria-pressed', r.dataset.name === current))
+  drawTray()
+}
+function drawAll() { drawList(); draw() }
+
+function drawTray() {
+  const tray = $('tray')
+  const by = need.map(n => ({ n, ts: drafts.filter(e => e.who.includes(n)) })).filter(x => x.ts.length)
+  if (!by.length) { tray.innerHTML = `<div class="empty-pick">${need.length ? 'No times yet. Drag a person onto the week.' : 'Nothing to send.'}</div>`; return }
+  const panel = by.filter(x => people[x.n].panel)
+  const lines = by.map(({ n, ts }) => {
+    const p = people[n]
+    const chips = ts.map(e => `<span class="chip">${e.wk !== wk ? dm.format(new Date(BASE.getFullYear(), BASE.getMonth(), BASE.getDate() + e.wk * 7 + e.d)) : dayName(e.d)}, ${hhmm(e.m)}${e.who.length > 1 ? ` <span class="faint">· shared</span>` : ''}<button type="button" aria-label="Remove ${n} from ${hhmm(e.m)}" data-n="${n}" data-i="${drafts.indexOf(e)}"><svg width="12" height="12"><use href="#i-x"/></svg></button></span>`).join('')
+    const hint = p.panel ? `<p class="hint">Goes to ${p.panel} first. ${n} gets only the times you can both make.</p>` : ts.length === 1 ? `<p class="hint warn"><svg width="14" height="14"><use href="#i-alert"/></svg>One time only. Most people need two or three to find one that fits.</p>` : ''
+    return `<div class="tline"><span class="avatar">${p.ini}</span><span class="nm">${n}</span><div class="picked">${chips}</div>${hint}</div>`
+  }).join('')
+  const label = panel.length === by.length ? `Ask ${people[panel[0].n].panel} to confirm` : `Send times to ${by.length === 1 ? by[0].n : `${by.length} people`}`
+  tray.innerHTML = `<div class="tray-top"><p><b>${by.length === 1 ? by[0].n : `${by.length} people`}</b> <span class="muted">${drafts.length} ${drafts.length === 1 ? 'time' : 'times'} on the week</span></p><button class="btn btn-primary btn-lg" id="send">${label}<svg><use href="#i-arrow"/></svg></button></div><div class="lines">${lines}</div>`
+  tray.querySelectorAll('.picked button').forEach(b => b.addEventListener('click', () => {
+    const e = drafts[+b.dataset.i]; e.who = e.who.filter(x => x !== b.dataset.n)
+    if (!e.who.length) drafts.splice(+b.dataset.i, 1)
+    drawAll()
+  }))
+  $('send').addEventListener('click', () => send(by))
+}
+
+// Send: each person moves to Waiting; their times stay on the week as outlines
+function send(by) {
+  for (const { n, ts } of by) {
+    const p = people[n]
+    $('waitRows').insertAdjacentHTML('afterbegin', `<li><div class="wait" style="animation:drop var(--t-move) var(--ease)"><span class="avatar">${p.ini}</span><span class="t">${p.full}</span><span class="chip">${p.panel ? `${p.panel}’s turn` : '<svg><use href="#i-clock"/></svg>Just now'}</span><span class="s">${p.panel ? `Waiting for ${p.panel} to confirm ${ts.length} times` : `${ts.length} ${ts.length === 1 ? 'time' : 'times'} sent · ${n} hasn’t picked yet`}</span></div></li>`)
+  }
+  const sent = new Set(by.map(x => x.n))
+  for (const e of [...drafts]) {
+    const mine = e.who.filter(n => sent.has(n))
+    if (!mine.length) continue
+    out.push({ wk: e.wk, d: e.d, m: e.m, len: dlen(e), who: mine, ini: mine.map(n => people[n].ini) })
+    e.who = e.who.filter(n => !sent.has(n))
+    if (!e.who.length) drafts.splice(drafts.indexOf(e), 1)
+  }
+  need = need.filter(n => !sent.has(n))
+  $('nWait').textContent = $('waitRows').children.length
+  if (sent.has(current)) current = null
+  drawAll()
+}
+
+// ---- pointer: the start line while dragging, or while someone is selected ----
+let dragging = null
+let moving = null // a placed time picked up with its move button
+function scrub(c, d, y) {
+  const g = c.querySelector('.scrub'); if (!g) return
+  const who = dragging ?? (moving ? `Moving ${names(moving.who)}` : current); if (!who) return
+  const m = at(c, y), l = moving && !dragging ? dlen(moving) : people[who].len, hit = clashWith(d, m, l, moving)
+  g.style.top = `${(m / 60 - START) * HR}px`
+  g.classList.toggle('no', !!hit || m + l > END)
+  g.firstChild.textContent = hit ? `${hhmm(m)} · clashes with ${hit}` : m + l > END ? `${hhmm(m)} · runs past 18:00` : `${who} · ${hhmm(m)} – ${hhmm(m + l)}`
+}
+function place(who, d, m) {
+  const l = people[who].len
+  if (m + l > END || clashWith(d, m, l)) return false
+  drafts.push({ wk, d, m, who: [who] }); current = who; drawAll(); return true
+}
+cols.forEach((c, d) => {
+  if (d > 4) return
+  c.addEventListener('mousemove', e => scrub(c, d, e.clientY))
+  c.addEventListener('click', (e) => {
+    const m = at(c, e.clientY)
+    if (moving) {
+      if (m + dlen(moving) > END || clashWith(d, m, dlen(moving), moving)) return
+      Object.assign(moving, { wk, d, m }); moving = null; drawAll(); return
+    }
+    if (current) place(current, d, m)
+  })
+  c.addEventListener('dragover', e => {
+    if (!dragging) return
+    e.preventDefault()
+    const onDraft = e.target.closest('.ev.draft')
+    document.querySelectorAll('.ev.drop').forEach(x => x !== onDraft && x.classList.remove('drop'))
+    if (onDraft) { onDraft.classList.add('drop'); c.classList.remove('over'); return }
+    c.classList.add('over'); scrub(c, d, e.clientY)
+  })
+  c.addEventListener('dragleave', e => { if (!c.contains(e.relatedTarget)) { c.classList.remove('over'); document.querySelectorAll('.ev.drop').forEach(x => x.classList.remove('drop')) } })
+  c.addEventListener('drop', e => {
+    e.preventDefault()
+    const who = dragging; if (!who) return
+    const onDraft = e.target.closest('.ev.draft')?._draft
+    if (onDraft) { // share this time
+      if (!onDraft.who.includes(who) && !clashWith(d, onDraft.m, Math.max(dlen(onDraft), people[who].len), onDraft)) onDraft.who.push(who)
+      current = who; drawAll(); return
+    }
+    place(who, d, at(c, e.clientY))
+  })
+})
+
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && moving) { moving = null; draw() } })
+
+// ---- weeks ----
+$('prev').addEventListener('click', () => { wk--; draw() })
+$('next').addEventListener('click', () => { wk++; draw() })
+$('today').addEventListener('click', () => { wk = -1; draw() }) // today is Tue 27 Oct, the week before
+const goto = $('goto')
+goto.closest('label').addEventListener('click', e => { e.preventDefault(); try { goto.showPicker() } catch { goto.focus() } })
+goto.addEventListener('change', () => {
+  if (!goto.value) return
+  const [y, mo, da] = goto.value.split('-').map(Number)
+  const t = new Date(y, mo - 1, da)
+  wk = Math.round((new Date(y, mo - 1, da - ((t.getDay() + 6) % 7)) - BASE) / (7 * 86_400_000)) // the Monday of that week
+  draw()
+})
+drawAll()
+</script>
+</body>
+</html>

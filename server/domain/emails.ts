@@ -96,10 +96,23 @@ export function interviewTime(start: Date, durationMin: number, timeZone: string
 interface Who { first: string, job: string, company: string | null }
 
 export const words = {
-  bookingRequest: (w: Who & { url: string, durationMin: number, interviewers: string[], location?: string | null }) => ({
-    subject: 'Pick a time for your interview',
-    text: `Hi ${w.first},\n\nThanks for applying for ${w.job}${at(w.company)}. Please pick a ${w.durationMin}-minute slot${w.interviewers.length ? ` with ${w.interviewers.join(' and ')}` : ''}:\n${w.url}${where(w.location)}`,
-  }),
+  // the offered times, in the offerer's zone (the page shows them in the candidate's own)
+  bookingRequest: (w: Who & { url: string, durationMin: number, interviewers: string[], location?: string | null, times: Date[], timeZone: string }) => {
+    const both = w.interviewers.length > 2 ? 'all of them' : 'both of them'
+    const list = w.times.map(t => `- ${interviewTime(t, w.durationMin, w.timeZone).long}`).join('\n')
+    return {
+      subject: `Pick a time for your interview, ${w.first}`,
+      text: `Hi ${w.first},\n\nThanks for applying for ${w.job}${at(w.company)}. ${w.interviewers.length ? `${w.interviewers.join(' and ')} would like to meet you` : 'We’d like to meet you'} for ${w.durationMin} minutes. ${w.interviewers.length > 1 ? `These times work for ${both}` : 'These times work'}:\n\n${list}${where(w.location)}\n\nPick the one that suits you. If none work, tell us when does:\n${w.url}`,
+    }
+  },
+  // to each interviewer when a candidate books or moves a time
+  teamBooked: (w: { first: string, candidate: string, job: string, start: Date, durationMin: number, timeZone: string, location?: string | null, others: string[], url: string, icsUrl: string, moved: boolean }) => {
+    const t = interviewTime(w.start, w.durationMin, w.timeZone)
+    return {
+      subject: `${w.moved ? 'Interview moved' : 'Interview booked'}: ${w.candidate}, ${t.short}`,
+      text: `Hi ${w.first},\n\n${w.candidate} ${w.moved ? 'moved' : 'booked'} the ${w.job} interview ${w.moved ? 'to' : 'for'} ${t.long}${w.others.length ? `, with ${w.others.join(' and ')}` : ''}.${where(w.location)}\n\nAdd it to your calendar: ${w.icsUrl}\n\nThe task: ${w.url}`,
+    }
+  },
   booked: (w: Who & { url: string, icsUrl: string, start: Date, durationMin: number, timeZone: string, location?: string | null }) => {
     const t = interviewTime(w.start, w.durationMin, w.timeZone)
     return {

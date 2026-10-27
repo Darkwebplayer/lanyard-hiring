@@ -15,9 +15,9 @@
 
     <h4>Booking an interview</h4>
     <ul>
-      <li>When an interview step lets them book, they get a link and pick a free time in the next two weeks, inside the interviewers’ <b>Interview availability</b>.</li>
-      <li>Times show in their own time zone, which they can change. They can <b>Change time</b> later and <b>Add to calendar</b>.</li>
-      <li>No hours set means <b>No times are open yet</b>. If they move on before the interview, the page says it was cancelled.</li>
+      <li>The interviewer offers a few times. The candidate gets an email with them and a link to pick one.</li>
+      <li>Times show in their own time zone, which they can change. After booking they can <b>Add to calendar</b>, or ask for a different time.</li>
+      <li><b>None of these work</b> sends the interviewer a note, and they offer new times. <b>I’m no longer interested</b> tells the team; nothing closes on its own. If they move on before the interview, the page says it was cancelled.</li>
     </ul>
 
     <h4>Offer</h4>

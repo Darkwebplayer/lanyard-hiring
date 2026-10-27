@@ -11,7 +11,7 @@ import { gemini, isQuotaError } from '../engine/ai'
 import type { AppEnv } from '../env'
 import { atLeastManager } from './access'
 import { board, hireReport, pipeline, timeline, type Viewer } from './applications'
-import { getAvailability, runBooking } from './bookings'
+import { runBooking } from './bookings'
 import { listDocuments } from './documents'
 import { listEmails } from './emails'
 import { DomainError } from './errors'
@@ -365,17 +365,16 @@ async function build(db: Db, viewer: Viewer, where: z.output<typeof askWhere>, a
     case 'inbox': {
       // one page, four tabs (?list=); all of them go, so a question can move between them
       const week = new Date(now.getTime() + 7 * DAY)
-      const [tasks, done, schedule, hours] = await Promise.all([
+      const [tasks, done, schedule] = await Promise.all([
         listTasks(db, viewer, adminEmail, now),
         listDone(db, viewer, now),
         listSchedule(db, viewer, now, week, false, now),
-        getAvailability(db, viewer.userId),
       ])
       const tab = ({ schedule: 'Schedule', done: 'Done', attention: 'Needs attention' } as Record<string, string>)[query.list ?? ''] ?? 'Tasks'
       const late = tasks.overdue?.[0]
       const grab = tasks.open[0]
       return base('Inbox', scope, [
-        tab === 'Schedule' ? 'What’s on this week?' : tasks.mine.length && 'What should I do first?',
+        tab === 'Schedule' ? (schedule.needs.length ? 'Who still needs times?' : 'What’s on this week?') : tasks.mine.length && 'What should I do first?',
         grab && `Should I take ${grab.title} for ${grab.candidateName}?`,
         late && `Who is holding up ${late.candidateName}?`,
         tasks.failed?.length && 'Why are some steps stopped?',
@@ -383,14 +382,10 @@ async function build(db: Db, viewer: Viewer, where: z.output<typeof askWhere>, a
         showing_tab: tab,
         // mine: assigned to me; open: Up for grabs (take or pass); the rest are Needs attention (managers)
         tasks,
+        // needs: candidates I offer times to (drag them onto the week); waiting: on the panel or the candidate
         schedule_next_7_days: schedule,
         done_latest: done.slice(0, 30),
-        my_interview_hours: hours,
       }, 'Ask about your tasks')
-    }
-    case 'inbox-hours': {
-      const hours = await getAvailability(db, viewer.userId)
-      return base('Interview availability', scope, ['How do candidates book a time with me?', 'What if I set no hours?', 'Does this sync with my calendar?'], { my_interview_hours: hours }, 'Ask about your hours')
     }
     case 'settings': {
       // the page is for admins; managers can read the same settings, employees get only the guide

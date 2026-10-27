@@ -9,21 +9,21 @@ const { open: asking, floats } = useAsk()
 const route = useRoute()
 
 const TITLES = {
-  inbox: 'Inbox', hours: 'Interview availability', jobs: 'Jobs', pipeline: 'Pipeline', stages: 'Workflow', form: 'Application form', details: 'Job details',
+  inbox: 'Inbox', jobs: 'Jobs', pipeline: 'Pipeline', stages: 'Workflow', form: 'Application form', details: 'Job details',
   candidate: 'Candidate', library: 'Templates', team: 'Team', settings: 'Settings', hires: 'Reports', import: 'Import', applicants: 'What candidates see', ai: 'AI', updates: 'Updates', words: 'Glossary',
 } as const
 type Topic = keyof typeof TITLES
 
 // route name → topic; the library's flow editor is the same stage list as a job's, so it gets the same help
 const PAGE: Record<string, Topic> = {
-  'inbox': 'inbox', 'inbox-runId': 'inbox', 'tasks-runId': 'inbox', 'inbox-hours': 'hours',
+  'inbox': 'inbox', 'inbox-runId': 'inbox', 'tasks-runId': 'inbox',
   'jobs': 'jobs', 'jobs-id': 'pipeline', 'jobs-id-flow': 'stages', 'jobs-id-form': 'form', 'jobs-id-details': 'details',
   'candidates-id': 'candidate', 'library-flows-id': 'stages', 'library-flows-id-form': 'form',
   'team': 'team', 'settings': 'settings', 'hires': 'hires', 'import-id': 'import',
 }
 const RELATED: Record<Topic, Topic[]> = {
-  inbox: ['hours', 'updates'], hours: ['inbox'], updates: ['inbox', 'candidate'], jobs: ['pipeline', 'stages'], pipeline: ['stages', 'candidate'], stages: ['ai'], form: ['stages'],
-  details: ['ai'], candidate: ['pipeline', 'ai', 'applicants'], library: ['stages'], team: ['hours'], settings: ['ai', 'applicants'], hires: ['jobs'],
+  inbox: ['updates', 'applicants'], updates: ['inbox', 'candidate'], jobs: ['pipeline', 'stages'], pipeline: ['stages', 'candidate'], stages: ['ai'], form: ['stages'],
+  details: ['ai'], candidate: ['pipeline', 'ai', 'applicants'], library: ['stages'], team: ['inbox'], settings: ['ai', 'applicants'], hires: ['jobs'],
   import: ['pipeline'], applicants: ['candidate', 'settings'], ai: ['details', 'stages'], words: [],
 }
 

@@ -663,6 +663,60 @@ tr.group th{text-align:left;font-weight:600;padding-top:1.25rem;border-bottom:1p
 </section>
 
 <section id="sessions">
+<article class="session" id="session-2026-10-27-scheduling">
+<h2><span class="key">Session 2026-10-27 (scheduling)<span class="vh">:</span></span> The interviewer offers the times; the candidate picks one or asks for others</h2>
+<p class="note">Existing, Revamp · flow scope · Schedule, panel task, booking page · mock app/design-mocks/scheduling-mocks.html approved by the owner on 2026-10-27, then built</p>
+<p>The owner replaces self-booking from interview hours. Lanyard cannot see other calendars, so a candidate could book over another meeting. Now the interviewer chooses the times.</p>
+<h3 class="i-list"><span class="key">Decisions</span> 12</h3>
+<div class="scroll"><table>
+<thead><tr><th scope="col">Element</th><th scope="col">Decision</th><th scope="col">Because</th><th scope="col">Rejected default</th></tr></thead>
+<tbody>
+<tr><td>Where times are offered</td><td>A Needs times group at the top of Schedule, with the week calendar in the right pane in offer mode</td><td>The interviewer already plans the week there; the times and the load are seen together</td><td>A form with date and time fields on each task</td></tr>
+<tr><td>Batch</td><td>Drag one person onto the week per time; drop a person on another person’s time to share it (both faces; the first to pick takes it); Send sends everyone at once</td><td>The owner found that ticking several people gave them all the same times without showing it; a drag makes each block belong to someone</td><td>Tick boxes that give every ticked person the same times</td></tr>
+<tr><td>Adding a time</td><td>While you drag, a start line follows the pointer in 15-minute steps with “Name · 10:15 – 11:00” (grey with the reason on a clash); the last person dropped stays selected, so a plain click adds another time for them</td><td>The owner asked to see the exact time before placing it, like the now line; the click is the faster path for extra times and the path without a mouse</td><td>A dashed block on the half hour; drag again for every time</td></tr>
+<tr><td>Too few times</td><td>A warning when there are fewer times than people, but Send still works</td><td>Someone may get new times later; it is the interviewer's call</td><td>Block Send</td></tr>
+<tr><td>Times already out</td><td>Outlines on the week; one click offers them again</td><td>Reuse is the batch case across days</td><td>Hide them</td></tr>
+<tr><td>Panel</td><td>The person who offers checks with the others: each gets "Can you make these?" with I can / I can't per time; the candidate gets only the times everyone can make</td><td>The owner: the email goes only once the whole panel agrees; people agree in person, this makes it visible</td><td>Send to the candidate at once and hope</td></tr>
+<tr><td>Candidate choices</td><td>Pick one and book; None of these work with a note; I'm no longer interested, asked once more inline</td><td>The owner: accept, skip, or ask for another time with a note</td><td>Reply to the email</td></tr>
+<tr><td>Step back</td><td>Notice to the team only; nothing closes</td><td>The owner's decision</td><td>Close the application</td></tr>
+<tr><td>Change after booking</td><td>The booked time stays until the candidate picks a new one</td><td>Nobody is left with no time</td><td>Cancel first, then offer</td></tr>
+<tr><td>Move and remove</td><td>Move and trash buttons on each placed time, faded in on hover or focus. Move picks the time up: the old place shows as an outline, the start line says “Moving Priya · 12:00 – 12:45”, a click puts it down, Esc cancels</td><td>The owner asked for clear icons. Faded, not hidden, so Tab still reaches them. A click to pick up is easier to aim than a drag on a small block</td><td>Click the block to remove it; drag the block to move it</td></tr>
+<tr><td>Go to a date</td><td>The week label is a button on the native date picker, beside Today and the arrows</td><td>The owner asked to jump to a date; the native picker needs no new code</td><td>A custom month popover</td></tr>
+<tr><td>Interview hours</td><td>Removed (page, Schedule line, wizard step)</td><td>Nothing reads them any more</td><td>Keep them as a hint</td></tr>
+</tbody></table></div>
+<h3 class="i-list" id="chunks-2026-10-27-scheduling"><span class="key">Chunks</span> 2 chunks: the mock, then the build</h3>
+<div class="scroll"><table>
+<thead><tr><th scope="col">Chunk</th><th scope="col">Files it owns</th><th scope="col">Behaviour contract (baseline)</th><th scope="col">Checks</th><th scope="col">Parity</th></tr></thead>
+<tbody>
+<tr><td>C-2 Scheduling build</td><td>server/domain/bookings.ts, tasks.ts, notices.ts, emails.ts, status.ts, engine.ts (settle), server/api/runs/[id]/booking/*, server/api/public/bookings/*, app/components/inbox/Calendar.vue, ScheduleList.vue, TaskRow.vue, app/pages/inbox/[runId].vue, app/pages/book/[token].vue, app/components/candidate/Booking.vue, SetupWizard.vue, help pages</td><td>As C-1</td><td>check.py on the six UI files: 0 errors, 1 question; check.py --inventory on app/; typecheck; build; 275 tests</td><td>Code parity: the scorecard, Take it and Not for me, the week calendar for Everyone, the .ics file, the 12-hour lock and the booking race lock keep their code paths; tests for them pass. Changed on purpose: the step sends no email when it starts; the interviewer offers times; the panel answers first; interview hours are removed. Visual parity owed: the dev database needs migration 0017 first</td></tr>
+<tr><td>C-1 Scheduling mock</td><td>app/design-mocks/scheduling-mocks.html</td><td>The candidate picks a free half hour inside every assignee's weekly hours in the next 14 days; the link goes out when the task has its people; interviewers only set hours</td><td>check.py, renders at 1520 px and 360 px</td><td>not applicable: no app code changed. Compared at build: the week calendar, the task page, the booking page states, the .ics and the emails</td></tr>
+</tbody></table></div>
+<h3 class="i-alert"><span class="key">App-wide states</span> In Schedule, the task and the booking page</h3>
+<div class="scroll"><table>
+<thead><tr><th scope="col">State</th><th scope="col">Here</th></tr></thead>
+<tbody>
+<tr><td>Not found</td><td>Booking page: “This booking link doesn’t work”, as before. Offer or answer on a task you are no longer on: the error shows in the send bar or the card, and the list reloads</td></tr>
+<tr><td>No access</td><td>Only open assignees can offer or answer (404 otherwise). The team’s calendar file needs sign-in</td></tr>
+<tr><td>Signed out</td><td>not applicable: the app shell sends you to sign-in, as now. The booking page needs no sign-in</td></tr>
+<tr><td>Crash</td><td>“Your schedule didn’t load” with Retry, per view, as now. Booking page: “This page didn’t load” with Try again</td></tr>
+<tr><td>Offline</td><td>Send keeps the placed times and names who did not get them; nothing is lost</td></tr>
+<tr><td>First launch</td><td>Empty Schedule: “Nothing booked. When you have an interview, the candidate shows here and you offer them times.” Empty send bar: “No times yet. Drag a person onto the week.”</td></tr>
+</tbody></table></div>
+<h3 class="i-motion"><span class="key">Motion map</span> One micro move; the rest is instant</h3>
+<div class="scroll"><table>
+<thead><tr><th scope="col">Moment</th><th scope="col">Tier</th><th scope="col">Why</th></tr></thead>
+<tbody>
+<tr><td>Start line</td><td>none</td><td>It follows the pointer; any delay makes it lie about the time</td></tr>
+<tr><td>Place, share, move, remove a time</td><td>none</td><td>Frequent; the block appears where the line was, so nothing needs to travel</td></tr>
+<tr><td>Move and remove buttons</td><td>micro</td><td>Fade in on hover or focus (140 ms); none with reduced motion</td></tr>
+<tr><td>Send</td><td>none</td><td>The rows move to Waiting on reload; a status line says who got times</td></tr>
+<tr><td>Candidate picks</td><td>none</td><td>The page changes to “You’re booked”, read out by aria-live, as before</td></tr>
+</tbody></table></div>
+<h3>Look notes</h3>
+<p>Looked at all three tabs at 1520 px and the candidate pages at 360 px. Fixed after the look: the phones scrolled sideways and hid two states (now they wrap); an outline block cut its text; the chip "Jonah" became "Jonah's turn". check.py on the mock: 0 errors, 2 questions. Kept: the middle dots ("Barista · Shoreditch" reads as one phrase, as in the inbox session); the stop under reduced motion (nothing here shows progress). Owed: a fresh critique, keyboard only, the largest text size.</p>
+<p>Build: Schedule list (Needs times, Waiting, booked days), the week (start line, drop, share, move, remove, outlines, send bar, go to a date, a typed time for keyboard use), the panel card on the task, the line on each task row, the candidate page. check.py on the six files: 0 errors, 1 question (middle dots, kept as in earlier sessions). Typecheck, build and 275 tests pass. Owed: a look at the real pages. The dev database needs migration 0017 first, and it drops the old hours table, so it waits for the owner.</p>
+<p>check.py --inventory on app/: the new code uses existing tokens; the one new z-index (4, the start line above events) sits inside the week. The other drift it lists is from earlier sessions. Owed: the look at the real pages, keyboard only, the largest text size and a fresh critique.</p>
+</article>
 <article class="session" id="session-2026-10-26-updates">
 <h2><span class="key">Session 2026-10-26 (updates)<span class="vh">:</span></span> A bell beside Ask tells you what changed; only what you would act on counts</h2>
 <p class="kicker">Existing, Minimal · component scope · Updates bell and tray · mock app/design-mocks/notices-mocks.html approved by the owner on 2026-10-26, then built</p>

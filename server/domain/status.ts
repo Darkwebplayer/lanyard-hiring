@@ -55,9 +55,10 @@ export async function publicStatus(db: Db, token: string, now: Date) {
     let interview: { startsAt: Date, url: string } | null = null
     if (live) {
       for (const { b, applicationId, runStatus } of books) {
-        if (applicationId !== app.id || b.cancelledAt || runStatus !== 'waiting_on_human' || !told.has(`booking:${b.id}`)) continue
-        if (!b.startsAt) todo.push({ kind: 'book', applicationId: app.id, job: title, url: `/book/${b.token}`, durationMin: b.durationMin })
-        else if (b.startsAt > now) interview = { startsAt: b.startsAt, url: `/book/${b.token}` }
+        if (applicationId !== app.id || b.cancelledAt || b.declinedAt || runStatus !== 'waiting_on_human') continue
+        // times to pick: once the email with the current times went out
+        if (!b.startsAt && b.sentAt && told.has(`times:${b.id}:${b.sentAt.getTime()}`)) todo.push({ kind: 'book', applicationId: app.id, job: title, url: `/book/${b.token}`, durationMin: b.durationMin })
+        else if (b.startsAt && b.startsAt > now) interview = { startsAt: b.startsAt, url: `/book/${b.token}` }
       }
       const asked = mine.some(e => e.kind === 'documents' || e.kind === 'documents_reminder')
       for (const { d, runStatus } of docs) {

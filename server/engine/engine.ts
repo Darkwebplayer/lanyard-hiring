@@ -200,8 +200,8 @@ async function activateHumanTask(w: Walk, node: GraphNode, config: HumanTaskConf
 }
 
 // A human task sent to more people than it needs waits for them to take it. Once enough have taken it (claimedAt,
-// or a scorecard sent), everyone else is let go. Once nobody spare is left, the booking link goes out, so the
-// candidate books against the hours of the people who will be there. Caller holds the application lock.
+// or a scorecard sent), everyone else is let go. Once nobody spare is left, the booking exists and the people
+// on it offer times (bookings.ts). Caller holds the application lock.
 async function settle(tx: Tx, deps: EngineDeps, app: Application, run: Run, config: HumanTaskConfig, t: Date) {
   let rows = await tx.select().from(taskAssignments).where(eq(taskAssignments.runId, run.id))
   const live = () => rows.filter(r => r.submittedAt || !r.closedAt)
@@ -212,18 +212,8 @@ async function settle(tx: Tx, deps: EngineDeps, app: Application, run: Run, conf
     rows = await tx.select().from(taskAssignments).where(eq(taskAssignments.runId, run.id))
   }
   if (!config.booking || live().length > config.min_submissions) return
-  const [had] = await tx.select({ id: bookings.id }).from(bookings).where(eq(bookings.runId, run.id))
-  if (had) return
-  const ctx = await buildContext(tx, app.id)
-  const [b] = await tx.insert(bookings).values({ runId: run.id, token: newBookingToken(), durationMin: config.booking.duration_min, location: config.booking.where ?? null }).returning()
-  const names = await tx.select({ name: user.name }).from(user).where(inArray(user.id, live().map(r => r.userId))).orderBy(asc(user.name))
-  await queueEmail(tx, {
-    applicationId: app.id, kind: 'booking_request', key: `booking:${b!.id}`,
-    ...words.bookingRequest({
-      first: ctx.candidate.first_name, job: ctx.job.title, company: (await getSettings(tx)).companyName,
-      url: `${deps.appUrl ?? ''}/book/${b!.token}`, durationMin: b!.durationMin, interviewers: names.map(n => n.name), location: b!.location,
-    }),
-  }, deps.appUrl ?? '')
+  await tx.insert(bookings).values({ runId: run.id, token: newBookingToken(), durationMin: config.booking.duration_min, location: config.booking.where ?? null })
+    .onConflictDoNothing({ target: bookings.runId })
 }
 
 // Locks the application behind a waiting human task and returns what claim and pass need.

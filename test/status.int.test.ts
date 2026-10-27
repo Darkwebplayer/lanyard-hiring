@@ -1,10 +1,11 @@
 import { readFileSync } from 'node:fs'
-import { eq } from 'drizzle-orm'
+import { desc, eq } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { STANDARD_HIRE } from '../shared/workflow/templates'
 import type { Db } from '../server/db/client'
 import * as s from '../server/db/schema'
 import { submitApplication } from '../server/domain/apply'
+import { offerTimes } from '../server/domain/bookings'
 import { deliver } from '../server/domain/emails'
 import { DomainError } from '../server/domain/errors'
 import { createJob, publish, saveDraft } from '../server/domain/jobs'
@@ -77,6 +78,10 @@ describe('status page', () => {
     expect(app.step).toBe(0)
     expect((await status('mei@example.test')).todo).toEqual([])
 
+    await sendAll()
+    expect((await status('mei@example.test')).todo).toEqual([]) // nothing to pick until times are offered
+    const [run] = await db.select().from(s.nodeRuns).where(eq(s.nodeRuns.applicationId, id)).orderBy(desc(s.nodeRuns.seq)).limit(1)
+    await offerTimes(db, { userId: 'owner', level: 'manager' }, run!.id, { times: [new Date(NOW.getTime() + 2 * 86_400_000).toISOString()] }, NOW)
     await sendAll()
     const st = await status('mei@example.test')
     app = st.applications[0]!

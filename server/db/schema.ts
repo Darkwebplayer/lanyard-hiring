@@ -90,14 +90,6 @@ export const settings = pgTable('settings', {
     .default(['Not enough experience', 'Skills don’t match', 'Salary expectations', 'Position filled', 'Other']),
 }, t => [check('settings_single_row', sql`${t.id} = 1`)])
 
-// One interviewer's weekly hours for booking links: { mon: [['09:00', '17:00']], ... } in their own time zone.
-export const availability = pgTable('availability', {
-  userId: text('user_id').primaryKey().references(() => user.id),
-  timezone: text('timezone').notNull(),
-  hours: jsonb('hours').$type<Record<string, [string, string][]>>().notNull(),
-  updatedAt: ts('updated_at').notNull().defaultNow(),
-})
-
 // Library: offer letter templates, Markdown with {{candidate.*}}, {{job.*}}, {{offer.*}} holes.
 export const offerTemplates = pgTable('offer_templates', {
   id: id(),
@@ -259,7 +251,8 @@ export const applicationEvents = pgTable('application_events', {
   index('application_events_seq_idx').on(t.seq), // the notices tray reads recent events across every application
 ])
 
-// A candidate's link to pick a time for one human-task run. starts_at null until they book.
+// One human-task run's interview: the interviewer offers times (booking_offers), the candidate picks one through
+// the link (token). starts_at null until they book.
 export const bookings = pgTable('bookings', {
   id: id(),
   runId: uuid('run_id').notNull().references(() => nodeRuns.id).unique(),
@@ -268,8 +261,25 @@ export const bookings = pgTable('bookings', {
   location: text('location'), // the step's "Where", copied when the link is made, like the duration
   startsAt: ts('starts_at'),
   cancelledAt: ts('cancelled_at'), // the application moved on (an accepted offer, a close) before the interview
+  offeredBy: text('offered_by').references(() => user.id), // who offered the current times; the panel's answers come back to them
+  timezone: text('timezone'), // the offerer's, for the times in the email
+  sentAt: ts('sent_at'), // the current times went to the candidate (after the whole panel said yes)
+  note: text('note'), // the candidate's last words: "none of these work" or why they stepped back
+  notedAt: ts('noted_at'), // they asked for other times; cleared when new times go out or they book
+  teamNote: text('team_note'), // what the panel said when it answered, for the offerer
+  declinedAt: ts('declined_at'), // the candidate stepped back; offering new times clears it
   createdAt: createdAt(),
 })
+
+// The times offered for a booking. answers: user id → can make it; the offerer's own yes is written when offered.
+// The same time can be offered to several candidates (separate rows): whoever books first takes it.
+export const bookingOffers = pgTable('booking_offers', {
+  id: id(),
+  bookingId: uuid('booking_id').notNull().references(() => bookings.id, { onDelete: 'cascade' }),
+  startsAt: ts('starts_at').notNull(),
+  answers: jsonb('answers').$type<Record<string, boolean>>().notNull().default({}),
+  createdAt: createdAt(),
+}, t => [uniqueIndex('booking_offers_time').on(t.bookingId, t.startsAt)])
 
 // A request_documents step's checklist and the candidate's upload link. One per application and step, so moving
 // back to the step (or a retry) keeps the link and what came in; run_id follows the step's latest run.

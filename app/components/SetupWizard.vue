@@ -1,9 +1,8 @@
 <script setup lang="ts">
-// First-run setup for the admin: company, team, their own hours, then the first job.
+// First-run setup for the admin: company, team, then the first job.
 // Opens by itself once, while the company has no name; later from the me-menu ("Set up Lanyard").
 interface Settings { companyName: string | null, replyToEmail: string | null, aiEnabled: boolean, [k: string]: unknown }
 interface Role { id: string, name: string, level: 'manager' | 'employee' }
-type Day = 'mon' | 'tue' | 'wed' | 'thu' | 'fri'
 
 const { me } = useMe()
 const { seen, markSeen } = useSeen()
@@ -15,11 +14,11 @@ const dlg = ref<HTMLDialogElement>()
 const step = ref(1)
 const busy = ref(false)
 const error = ref('')
-const LABELS = ['Company', 'Team', 'Your hours', 'First job']
+const LABELS = ['Company', 'Team', 'First job']
 const ROLE_VIEW = [
   { name: 'Admin', sees: ['Everything', 'Team', 'Settings'] },
   { name: 'Manager', sees: ['Jobs', 'Candidates', 'Reports'] },
-  { name: 'Employee', sees: ['Their tasks', 'Their availability'] },
+  { name: 'Employee', sees: ['Their tasks', 'Their interviews'] },
 ]
 
 onMounted(async () => {
@@ -41,11 +40,11 @@ function onClose() {
 }
 
 // ---------- what was done, for the checklist ----------
-const done = reactive({ company: false, invited: [] as { email: string, role: string }[], hours: false })
+const done = reactive({ company: false, invited: [] as { email: string, role: string }[] })
 function reset() {
   step.value = 1
   error.value = ''
-  Object.assign(done, { company: false, invited: [], hours: false })
+  Object.assign(done, { company: false, invited: [] })
   rows.value = [{ email: '', roleId: '' }]
 }
 
@@ -53,17 +52,13 @@ function reset() {
 const showAi = computed(() => me.value?.ai !== 'unconfigured')
 const company = reactive({ name: '', reply: '', ai: true })
 const roles = ref<Role[]>([])
-const hadHours = ref(false)
 async function load() {
-  const [s, r, a] = await Promise.all([
+  const [s, r] = await Promise.all([
     api<Settings>('/api/settings').catch(() => null),
     api<Role[]>('/api/roles').catch(() => []),
-    api<{ timezone: string | null }>('/api/me/availability').catch(() => null),
   ])
   if (s) Object.assign(company, { name: s.companyName ?? '', reply: s.replyToEmail ?? '', ai: s.aiEnabled })
   roles.value = r
-  hadHours.value = !!a?.timezone
-  if (a?.timezone) timezone.value = a.timezone
 }
 async function saveCompany() {
   if (!company.name.trim()) throw new Error('Add your company name, or skip this for now.')
@@ -115,37 +110,14 @@ async function sendInvites() {
   if (left.length) throw new Error(left.length === 1 ? 'One invite didn’t go. Fix it, or skip for now.' : `${left.length} invites didn’t go. Fix them, or skip for now.`)
 }
 
-// ---------- 3 hours ----------
-const here = Intl.DateTimeFormat().resolvedOptions().timeZone
-const zones = (() => {
-  try { return Intl.supportedValuesOf('timeZone') }
-  catch { return [here] }
-})()
-const timezone = ref(here)
-const WEEK: { key: Day, label: string }[] = [{ key: 'mon', label: 'Mon' }, { key: 'tue', label: 'Tue' }, { key: 'wed', label: 'Wed' }, { key: 'thu', label: 'Thu' }, { key: 'fri', label: 'Fri' }]
-const on = reactive<Record<Day, boolean>>({ mon: true, tue: true, wed: true, thu: true, fri: true })
-const clock = (h: number) => new Date(2000, 0, 1, h).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-const nineToFive = `${clock(9)} – ${clock(17)}`
-async function saveHours() {
-  const days = WEEK.filter(d => on[d.key])
-  if (!days.length) throw new Error('Turn on at least one day, or skip for now.')
-  await api('/api/me/availability', { method: 'PUT', body: { timezone: timezone.value, hours: Object.fromEntries(days.map(d => [d.key, [['09:00', '17:00']]])) } })
-  done.hours = true
-}
-const daysText = computed(() => {
-  const d = WEEK.filter(x => on[x.key])
-  return d.length === 5 ? 'Weekdays' : d.map(x => x.label).join(', ')
-})
-
 // ---------- moving between steps ----------
-const primaryLabel = computed(() => step.value === 2 ? (rows.value.some(r => r.email.trim()) ? 'Send invites' : 'Next') : step.value === 3 && !hadHours.value ? 'Save availability' : 'Next')
+const primaryLabel = computed(() => step.value === 2 && rows.value.some(r => r.email.trim()) ? 'Send invites' : 'Next')
 async function primary() {
   error.value = ''
   busy.value = true
   try {
     if (step.value === 1) await saveCompany()
     else if (step.value === 2) await sendInvites()
-    else if (step.value === 3 && !hadHours.value) await saveHours()
     step.value++
   }
   catch (e) { error.value = e instanceof Error ? e.message : toApiError(e).message }
@@ -218,26 +190,6 @@ function tour() {
           <p class="faint">They get an email and sign in with Google.</p>
         </template>
 
-        <template v-else-if="step === 3">
-          <div class="lead"><h3>Interview availability</h3><p class="faint">Candidates pick a time from these hours. Without hours, nobody can book you.</p></div>
-          <p v-if="hadHours" class="panel note">You’ve set your hours already. Change them on the <NuxtLink to="/inbox/hours" @click.prevent="leave('/inbox/hours')">full hours page</NuxtLink>.</p>
-          <template v-else>
-            <div class="field tz">
-              <label for="su-tz">Time zone</label>
-              <select id="su-tz" v-model="timezone">
-                <option v-for="z in zones" :key="z" :value="z">{{ z.replaceAll('_', ' ') }}</option>
-              </select>
-            </div>
-            <ul class="days">
-              <li v-for="d in WEEK" :key="d.key" class="day">
-                <label class="day-on"><input v-model="on[d.key]" type="checkbox" role="switch" class="switch" :aria-label="`Available on ${d.label}`"><b>{{ d.label }}</b></label>
-                <span :class="{ faint: !on[d.key] }">{{ on[d.key] ? nineToFive : 'Not available' }}</span>
-              </li>
-            </ul>
-            <NuxtLink to="/inbox/hours" class="go" @click.prevent="leave('/inbox/hours')">Need split hours or weekends? Use the full availability page</NuxtLink>
-          </template>
-        </template>
-
         <template v-else>
           <div class="lead"><h3>Setup complete</h3><p class="faint">One thing left: the job you’re hiring for.</p></div>
           <ul class="checks">
@@ -249,11 +201,7 @@ function tour() {
               <b>{{ done.invited.length ? `${plural(done.invited.length, 'person', 'people')} invited` : 'Your team' }}</b><br>
               <span class="faint">{{ done.invited.length ? done.invited.map(x => `${x.email.split('@')[0]} · ${x.role}`).join(', ') : 'Skipped. Invite people from Team.' }}</span>
             </span></li>
-            <li><i :class="{ no: !done.hours && !hadHours }">{{ done.hours || hadHours ? '✓' : 3 }}</i><span>
-              <b>Your hours</b><br>
-              <span class="faint">{{ done.hours ? `${daysText}, ${nineToFive}, ${timezone.replaceAll('_', ' ')} time` : hadHours ? 'Already set' : 'Skipped. Set them from Inbox → Interview availability.' }}</span>
-            </span></li>
-            <li><i class="no">4</i><span><b>Your first job</b><br><span class="faint">Two minutes, step by step</span></span></li>
+            <li><i class="no">3</i><span><b>Your first job</b><br><span class="faint">Two minutes, step by step</span></span></li>
           </ul>
         </template>
 
@@ -281,20 +229,6 @@ function tour() {
           <p class="faint">An interviewer only sees the people they’re asked to score. Not the whole pipeline.</p>
           <div class="later"><p class="eyebrow">Later, change it in</p><span class="faint"><b>Team</b> in the left menu</span></div>
         </template>
-        <template v-else-if="step === 3">
-          <p class="eyebrow">What the candidate sees</p>
-          <div class="panel booking" role="img" aria-label="The candidate gets a link and picks one free slot inside your hours.">
-            <b>Pick a time for your interview</b>
-            <div class="week" aria-hidden="true">
-              <em /><b>M</b><b>T</b><b>W</b><b>T</b><b>F</b>
-              <template v-for="h in ['9', '10', '11', '2', '3']" :key="h">
-                <em>{{ h }}</em><span v-for="d in 5" :key="d" :class="{ pick: h === '10' && d === 3 }" />
-              </template>
-            </div>
-            <span class="faint">Booked: Wed 10:00 AM. It goes into your inbox.</span>
-          </div>
-          <div class="later"><p class="eyebrow">Later, change it in</p><span class="faint"><b>Inbox → Interview availability</b></span></div>
-        </template>
         <template v-else>
           <p class="eyebrow">Where things live</p>
           <div class="panel places">
@@ -309,9 +243,9 @@ function tour() {
 
       <footer class="foot">
         <button v-if="step > 1" type="button" class="btn" :disabled="busy" @click="back">Back</button>
-        <span v-else class="faint">Four short steps.</span>
+        <span v-else class="faint">Three short steps.</span>
         <div class="acts">
-          <template v-if="step < 4">
+          <template v-if="step < 3">
             <button type="button" class="btn btn-quiet" :disabled="busy" @click="skip">Skip for now</button>
             <button class="btn btn-primary" :disabled="busy" :aria-busy="busy"><span v-if="busy" class="spinner" /><span>{{ primaryLabel }}</span></button>
           </template>
@@ -345,7 +279,7 @@ dialog.setup[open] { display: grid; grid-template-rows: auto minmax(0, 1fr); }
 .foot { grid-column: 1 / -1; padding: 16px 28px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .acts { display: flex; gap: 8px; }
 
-/* the switch: the same one the hours page uses */
+/* the switch: the same one as Settings */
 .switch { width: 38px; height: 24px; border-radius: 99px; border: 2px solid transparent; background: var(--line-2) padding-box; position: relative; flex: none; appearance: none; margin: 0; cursor: pointer; }
 .switch::before { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px oklch(0.3 0.04 330 / 0.3); transition: translate var(--t-micro) var(--ease); }
 .switch:checked { background: var(--ink) padding-box; }
@@ -360,13 +294,6 @@ dialog.setup[open] { display: grid; grid-template-rows: auto minmax(0, 1fr); }
 .add { justify-self: start; margin-left: -8px; color: var(--accent-ink); }
 .ok { display: flex; gap: 6px; align-items: center; color: var(--ok); font-size: var(--t-sm); font-weight: 500; }
 
-.tz { max-width: 320px; }
-.days { list-style: none; margin: 0; padding: 0; }
-.day { display: grid; grid-template-columns: 110px 1fr; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
-.day-on { display: flex; align-items: center; gap: 12px; cursor: pointer; }
-.go { color: var(--accent-ink); font-size: var(--t-sm); font-weight: 600; justify-self: start; }
-.note { padding: 12px 16px; }
-.note a { color: var(--accent-ink); font-weight: 600; }
 
 .checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
 .checks li { display: grid; grid-template-columns: 24px 1fr; gap: 10px; align-items: start; line-height: 1.4; }
@@ -394,13 +321,6 @@ dialog.setup[open] { display: grid; grid-template-rows: auto minmax(0, 1fr); }
 .role .badge::before { top: 5px; width: 12px; }
 .role ul { list-style: none; margin: 0; padding: 0; font-size: var(--t-xs); color: var(--ink-2); text-align: center; display: grid; gap: 2px; }
 
-.booking { display: grid; gap: 10px; padding: 16px; }
-.week { display: grid; grid-template-columns: 28px repeat(5, 1fr); gap: 3px; font-size: 11px; color: var(--ink-3); }
-.week span { height: 16px; border-radius: 3px; background: var(--accent-tint); }
-.week em { font-style: normal; text-align: right; padding-right: 4px; }
-.week b { text-align: center; font-weight: 600; color: var(--ink-3); }
-.week .pick { animation: book 5s var(--ease) infinite; background: var(--accent); }
-@keyframes book { 0%, 40% { background: var(--accent-tint); } 50%, 90% { background: var(--accent); } 100% { background: var(--accent-tint); } }
 .places { display: grid; gap: 10px; padding: 16px; }
 
 @media (width < 860px) {

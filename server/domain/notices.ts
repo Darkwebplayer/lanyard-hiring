@@ -20,8 +20,8 @@ const SCAN = 500
 const KEEP = 100
 const RANK: Record<Tier, number> = { urgent: 3, important: 2, fyi: 1 }
 
-const MANAGER_TYPES = ['run_failed', 'task_passed', 'task_submitted', 'booked', 'documents_in', 'offer_answered', 'offer_made', 'offer_withdrawn', 'manual_move', 'closed', 'application_submitted']
-const EMPLOYEE_TYPES = ['task_assigned', 'task_reassigned', 'booked', 'booking_cancelled', 'documents_in']
+const MANAGER_TYPES = ['run_failed', 'task_passed', 'task_submitted', 'booked', 'times_offered', 'times_none', 'times_requested', 'booking_declined', 'documents_in', 'offer_answered', 'offer_made', 'offer_withdrawn', 'manual_move', 'closed', 'application_submitted']
+const EMPLOYEE_TYPES = ['task_assigned', 'task_reassigned', 'booked', 'booking_cancelled', 'documents_in', 'times_offered', 'times_none', 'times_requested', 'booking_declined']
 
 type Ev = Awaited<ReturnType<typeof scan>>[number]
 const scan = (db: Db, types: string[], where: ReturnType<typeof and>) => db.select({
@@ -93,6 +93,13 @@ export async function listNotices(db: Db, viewer: Viewer, tz: string, now: Date,
     const step = node ? nodeLabel(node) : 'a step'
     const page = `/candidates/${e.applicationId}`
     const atStep = key ? `${page}#node:${key}` : page
+    // scheduling: the same words for managers who interview too; a panel's "can you make these?" only for those on it
+    const holds = holders.some(h => h.runId === d.runId && h.userId === viewer.userId && !h.closedAt && !h.passedAt)
+    const toTask = `/inbox/${d.runId}`
+    if (e.type === 'times_offered') return holds && d.panel ? { tier: 'important', cat: 'tasks', text: `${who} offered ${d.count} ${d.count === 1 ? 'time' : 'times'} for ${cand}. Can you make them?`, to: toTask } : null
+    if (e.type === 'times_none') return d.by === viewer.userId ? { tier: 'important', cat: 'tasks', text: `The panel can’t make any of the times for ${cand}. Offer new ones.`, to: toTask } : null
+    if (e.type === 'times_requested') return holds ? { tier: 'important', cat: 'tasks', text: `${cand} asked for other times for ${step}`, to: toTask } : manager ? { tier: 'fyi', cat: 'tasks', text: `${cand} asked for other times for ${step}`, to: atStep } : null
+    if (e.type === 'booking_declined') return holds || manager ? { tier: 'important', cat: 'candidates', text: `${cand} stepped back from ${step}`, to: holds ? toTask : atStep } : null
 
     if (!manager) {
       const held = holders.find(h => h.runId === d.runId && h.userId === viewer.userId)

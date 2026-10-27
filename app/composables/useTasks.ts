@@ -2,8 +2,14 @@ export interface TaskRow {
   runId: string, nodeKey: string, nodeType: string, status: string, title: string
   dueAt: string | null, overdue: boolean, error: string | null, retries: number, createdAt: string
   applicationId: string, candidateName: string, jobId: string, jobTitle: string
-  booking?: { startsAt: string | null, cancelledAt?: string | null } | null // the step lets the candidate book a time; startsAt once they have
+  booking?: TaskBooking | null // the step has an interview to book; startsAt once picked
   grab?: { others: string[], taken: string[], need: number } // up for grabs: sent to more people than it needs, not taken by you
+}
+// Where an interview stands: the interviewer offers times, the panel says yes, the candidate picks.
+export type BookingStage = 'closed' | 'declined' | 'needs_times' | 'panel' | 'candidate' | 'booked'
+export interface TaskBooking {
+  startsAt: string | null, cancelledAt?: string | null
+  stage?: BookingStage, offeredBy?: string | null, pending?: string[], mustAnswer?: boolean, note?: string | null, count?: number // on your own open tasks
 }
 // open: up for grabs. calledOff: your interviews cancelled in the last week (an accepted offer, a close)
 export interface Inbox { mine: TaskRow[], open?: TaskRow[], calledOff?: TaskRow[], overdue?: TaskRow[], blocked?: TaskRow[], failed?: TaskRow[], stuck?: TaskRow[] }
@@ -32,7 +38,22 @@ export interface InboxFlash { at: string, text: string, next?: { to: string, tit
 
 // A booked interview on someone's calendar (Schedule, the week strip).
 export interface Booked extends TaskRow { startsAt: string, durationMin: number, location: string | null, people: { id: string, name: string }[] }
-export interface Schedule { events: Booked[], waiting: TaskRow[] }
+// Your open interviews that need times, or wait on the panel or the candidate.
+export interface ToBook extends TaskRow { booking: TaskBooking, durationMin: number, location: string | null, others: string[], teamNote: string | null, sentAt: string | null }
+// A time on the table, shown as an outline on the week.
+export interface Offered { runId: string, candidateName: string, startsAt: string, durationMin: number }
+export interface Schedule { events: Booked[], needs: ToBook[], waiting: ToBook[], offered: Offered[] }
+
+// Times being placed on the week before Send: each belongs to one or more candidates (runIds) who need times.
+// Shared by the Schedule list (drag from) and the week (drop on).
+export interface Draft { id: number, startsAt: string, runIds: string[] }
+export const useOffering = () => ({
+  needs: useState<ToBook[]>('offer-needs', () => []),
+  drafts: useState<Draft[]>('offer-drafts', () => []),
+  current: useState<string | null>('offer-current', () => null), // a plain click on the week adds a time for this run
+  dragging: useState<string | null>('offer-dragging', () => null),
+  rev: useState('sched-rev', () => 0), // bumped after a send, so the list and the week reload
+})
 // One line of Done: a task you sent or passed on.
 export interface DoneRow extends TaskRow { doneAt: string, passed: boolean, answer: { label: string, yes: boolean } | null }
 

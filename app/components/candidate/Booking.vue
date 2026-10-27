@@ -1,8 +1,9 @@
 <script setup lang="ts">
-// The candidate's booking link for the step they're at. It was emailed to them; Copy link is for resending by hand.
+// The candidate's interview for the step they're at, and their link. The link went out with the offered times;
+// Copy link is for resending by hand.
 // Renders nothing when the step has no booking (404) — most steps don't.
 const props = defineProps<{ runId: string, firstName: string }>()
-interface Booking { url: string, durationMin: number, startsAt: string | null, location: string | null, cancelledAt: string | null }
+interface Booking { url: string, durationMin: number, startsAt: string | null, location: string | null, cancelledAt: string | null, declinedAt: string | null, sentAt: string | null, note: string | null, notedAt: string | null }
 const b = ref<Booking | null>(null)
 const failed = ref(false)
 watch(() => props.runId, async (id) => {
@@ -25,8 +26,11 @@ async function copy() {
   <section v-if="b" class="panel booking" aria-labelledby="book-h">
     <h2 id="book-h" class="sec">Interview booking</h2>
     <p v-if="b.cancelledAt" class="when muted"><Icon name="calendar" :size="16" /><span>Cancelled. It was booked for {{ fmtBooked(b.startsAt) }}.</span></p>
+    <p v-else-if="b.declinedAt" class="when"><Icon name="alert" :size="16" /><span>{{ firstName }} stepped back from the interview<template v-if="b.note">: “{{ b.note }}”</template>. Nothing has closed.</span></p>
     <p v-else-if="b.startsAt" class="when"><Icon name="calendar" :size="16" /><span>Booked for <b>{{ fmtBooked(b.startsAt) }}</b>, {{ b.durationMin }} min</span></p>
-    <p v-else class="when muted"><Icon name="clock" :size="16" /><span>Not booked yet. We emailed {{ firstName }} the link to pick a {{ b.durationMin }}-minute slot.</span></p>
+    <p v-if="!b.cancelledAt && !b.declinedAt && b.notedAt" class="when muted"><Icon name="clock" :size="16" /><span>{{ firstName }} asked for other times<template v-if="b.note">: “{{ b.note }}”</template></span></p>
+    <p v-else-if="!b.cancelledAt && !b.declinedAt && b.sentAt" class="when muted"><Icon name="clock" :size="16" /><span>We emailed {{ firstName }} the offered times. Waiting for a pick.</span></p>
+    <p v-else-if="!b.cancelledAt && !b.declinedAt && !b.startsAt" class="when muted"><Icon name="clock" :size="16" /><span>No times offered yet. The interviewer offers them from their inbox, under Schedule.</span></p>
     <p v-if="b.location" class="when"><Icon name="pin" :size="16" /><span>{{ b.location }}</span></p>
     <div class="copy">
       <a :href="b.url" target="_blank" rel="noopener" class="url mono">{{ b.url.replace(/^https?:\/\//, '') }}</a>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { InboxFlash, TaskRow } from '~/composables/useTasks'
+import { type InboxFlash, type TaskBooking, type TaskRow, useOffering } from '~/composables/useTasks'
 import { type Timeline, fmtVal, humanise } from '~/components/candidate/Trace.vue'
 import type { ScorecardField } from '~~/shared/workflow/registry'
 
@@ -8,7 +8,11 @@ interface TaskDetail extends TaskRow {
   scorecard: ScorecardField[], minSubmissions: number, canSubmit: boolean, assignments: Assignment[]
   instructions: string | null
   offer?: boolean // Make offer: answered through the offer dialog, not a scorecard
-  plan: { durationMin: number, where: string | null } | null // the step lets the candidate book; the link goes out once it's taken
+  plan: { durationMin: number, where: string | null } | null // the step has an interview; times are offered once it's taken
+  booking: (TaskBooking & {
+    durationMin: number, teamNote: string | null, sentAt: string | null, others: string[]
+    offers: { id: string, startsAt: string, mine: boolean | null, clash: boolean }[] // the times on the table, with your answer
+  }) | null
 }
 
 const route = useRoute()
@@ -85,6 +89,40 @@ async function copyBookingLink() {
   catch { copied.value = 'failed' }
   finally { copying.value = false }
   setTimeout(() => (copied.value = false), copied.value === 'failed' ? 4000 : 2000)
+}
+
+// offering times happens on the week: select this person there
+const { current: offerFor, rev } = useOffering()
+function offerTimes() {
+  offerFor.value = id.value
+  router.push({ path: '/inbox', query: { list: 'schedule' } })
+}
+const first = computed(() => task.value?.candidateName.split(' ')[0] ?? '')
+
+// a panel member's answers: one yes or no per offered time
+const answers = ref<Record<string, boolean>>({})
+const teamNote = ref('')
+const answering = ref(false)
+const answerError = ref('')
+watch(() => task.value?.booking?.offers, (o) => { answers.value = Object.fromEntries((o ?? []).filter(x => x.mine !== null).map(x => [x.id, x.mine!])) })
+const unanswered = computed(() => (task.value?.booking?.offers ?? []).filter(o => answers.value[o.id] === undefined).length)
+const yesCount = computed(() => Object.values(answers.value).filter(Boolean).length)
+async function sendAnswers() {
+  answerError.value = ''
+  if (unanswered.value) return (answerError.value = `Answer every time first: ${plural(unanswered.value, 'time')} left.`)
+  answering.value = true
+  try {
+    const { sent } = await api<{ sent: boolean }>(`/api/runs/${id.value}/booking/answers`, { method: 'POST', body: { answers: answers.value, ...(teamNote.value.trim() && { note: teamNote.value.trim() }) } })
+    teamNote.value = ''
+    flash.value = { at: route.path, text: sent ? `Thanks. ${first.value} now has the times you can all make.` : yesCount.value ? 'Thanks. Waiting for the others to answer.' : `Thanks. ${task.value?.booking?.offeredBy ?? 'The organiser'} will offer new times.` }
+    await Promise.all([load(), refreshInbox()])
+    rev.value++
+  }
+  catch (e) {
+    answerError.value = (e as ApiError).message
+    await load()
+  }
+  finally { answering.value = false }
 }
 
 const mine = computed(() => task.value?.assignments.find(a => a.userId === me.value?.id))
@@ -249,16 +287,29 @@ async function pass() {
             <RunStatus v-if="task.status !== 'waiting_on_human'" :status="task.status" />
             <DueChip v-else :due="task.dueAt" :overdue="task.overdue" />
           </p>
-          <p v-if="task.booking" class="booking" :class="{ waiting: !task.booking.startsAt }">
-            <Icon name="calendar" :size="16" />
-            <template v-if="task.booking.startsAt"><span>Interview booked for <b>{{ fmtBooked(task.booking.startsAt, true) }}</b></span></template>
-            <template v-else>
-              <span>Waiting for the candidate to book a time</span>
-              <button type="button" class="btn btn-sm btn-quiet" :aria-busy="copying" @click="copyBookingLink">
-                <Icon :name="copied === true ? 'check' : copied ? 'alert' : 'copy'" /><span aria-live="polite">{{ copied === true ? 'Copied' : copied ? 'Couldn’t copy it' : 'Copy their booking link' }}</span>
+          <div v-if="task.booking" class="booking" :class="{ waiting: !task.booking.startsAt || task.booking.stage !== 'booked', alert: task.booking.stage === 'declined' }">
+            <Icon :name="task.booking.stage === 'declined' ? 'alert' : 'calendar'" :size="16" />
+            <span v-if="task.booking.cancelledAt">Cancelled. It was booked for {{ fmtBooked(task.booking.startsAt, true) }}.</span>
+            <span v-else-if="task.booking.stage === 'declined'">{{ first }} stepped back from the interview<template v-if="task.booking.note">: “{{ task.booking.note }}”</template>. Nothing has closed; decide what happens next.</span>
+            <span v-else-if="task.booking.stage === 'booked'">Interview booked for <b>{{ fmtBooked(task.booking.startsAt, true) }}</b></span>
+            <span v-else-if="task.booking.stage === 'needs_times'">
+              <template v-if="task.booking.startsAt">Booked for {{ fmtBooked(task.booking.startsAt, true) }}, but {{ first }} asked to move it</template>
+              <template v-else-if="task.booking.note">{{ first }} asked for other times</template>
+              <template v-else>Needs times. Offer {{ first }} a few that suit you</template><template v-if="task.booking.note">: “{{ task.booking.note }}”</template>
+              <template v-if="task.booking.teamNote"><br><span class="faint pre">{{ task.booking.teamNote }}</span></template>
+            </span>
+            <span v-else-if="task.booking.stage === 'panel'">{{ task.booking.mustAnswer ? `${task.booking.offeredBy} offered ${plural(task.booking.offers.length, 'time')}. Say which you can make below.` : `Waiting for ${listJoin(task.booking.pending ?? [])} to confirm ${plural(task.booking.offers.length, 'time')}` }}</span>
+            <span v-else-if="task.booking.stage === 'candidate'">{{ plural(task.booking.offers.length, 'time') }} sent<template v-if="task.booking.startsAt"> to move it from {{ fmtBooked(task.booking.startsAt) }}</template>. Waiting for {{ first }} to pick one.</span>
+            <span class="booking-act">
+              <a v-if="task.booking.stage === 'booked'" class="btn btn-sm btn-quiet" :href="`/api/runs/${task.runId}/booking/invite.ics`" download="interview.ics"><Icon name="download" />Add to calendar</a>
+              <button v-if="mine && !mine.closedAt && ['needs_times', 'declined', 'candidate', 'booked'].includes(task.booking.stage ?? '')" type="button" class="btn btn-sm" :class="{ 'btn-primary': task.booking.stage === 'needs_times' }" @click="offerTimes">
+                {{ task.booking.stage === 'needs_times' ? 'Offer times' : task.booking.stage === 'booked' ? 'Offer a new time' : 'Offer different times' }}
               </button>
-            </template>
-          </p>
+              <button v-if="task.booking.stage === 'candidate'" type="button" class="btn btn-sm btn-quiet" :aria-busy="copying" @click="copyBookingLink">
+                <Icon :name="copied === true ? 'check' : copied ? 'alert' : 'copy'" /><span aria-live="polite">{{ copied === true ? 'Copied' : copied ? 'Couldn’t copy it' : 'Copy their link' }}</span>
+              </button>
+            </span>
+          </div>
         </div>
       </div>
       <p v-if="task.instructions" class="instructions">{{ task.instructions }}</p>
@@ -285,6 +336,31 @@ async function pass() {
       <div v-else-if="snapLoading" class="snap" aria-busy="true" aria-label="Loading the candidate"><span class="skeleton" style="height:14px;width:48%" /></div>
     </header>
 
+    <!-- a panel member's turn: which of the offered times can you make? -->
+    <section v-if="task.booking?.mustAnswer" class="card form-card confirm" data-slot="accent" aria-labelledby="confirm-h">
+      <div class="ro-head">
+        <h3 id="confirm-h">Can you make these?</h3>
+        <span class="faint">{{ task.booking.durationMin }} min, with {{ listJoin(task.booking.others) }}</span>
+      </div>
+      <p v-if="task.booking.note" class="from"><Avatar :name="task.candidateName" :size="24" /><span><b>{{ first }}</b> said: “{{ task.booking.note }}”</span></p>
+      <ul class="ask">
+        <li v-for="o in task.booking.offers" :key="o.id">
+          <b>{{ fmtBooked(o.startsAt, true) }}</b>
+          <div class="seg" role="radiogroup" :aria-label="fmtBooked(o.startsAt, true)">
+            <label><input type="radio" :name="`a-${o.id}`" :checked="answers[o.id] === true" @change="answers[o.id] = true"><span class="yes">I can</span></label>
+            <label><input type="radio" :name="`a-${o.id}`" :checked="answers[o.id] === false" @change="answers[o.id] = false"><span class="no">I can’t</span></label>
+          </div>
+          <small :class="{ clash: o.clash }">{{ o.clash ? 'Overlaps another interview of yours' : 'Nothing else of yours in Lanyard. Check your own calendar too.' }}</small>
+        </li>
+      </ul>
+      <label class="field"><span class="label">Note for {{ task.booking.offeredBy }} <span class="faint">(optional)</span></span><textarea v-model="teamNote" rows="2" maxlength="1000" placeholder="Thursday after 3 works best for me." /></label>
+      <p v-if="answerError" class="form-error" role="alert"><Icon name="alert" :size="16" />{{ answerError }}</p>
+      <div class="act">
+        <button class="btn btn-primary btn-lg" :aria-busy="answering" :disabled="answering" @click="sendAnswers"><span v-if="answering" class="spinner" />Send answers<Icon name="arrow-right" /></button>
+        <span class="faint">{{ (task.booking.pending?.length ?? 0) <= 1 ? `You’re the last to answer. ${first} then gets the times you can all make.` : `${first} gets the times everyone can make, once all have answered.` }}</span>
+      </div>
+    </section>
+
     <section v-if="task.grab" class="card form-card grab" aria-labelledby="grab-h">
       <div class="ro-head">
         <h3 id="grab-h">Up for grabs</h3>
@@ -292,7 +368,7 @@ async function pass() {
       </div>
       <dl class="facts">
         <div v-if="task.plan"><dt>What</dt><dd>{{ task.plan.durationMin }} min interview<small v-if="task.plan.where">{{ task.plan.where }}</small></dd></div>
-        <div v-if="task.plan"><dt>When</dt><dd>{{ firstName(task.candidateName) }} picks a time<small>inside your interview hours, once you take it</small></dd></div>
+        <div v-if="task.plan"><dt>When</dt><dd>You offer a few times<small>{{ firstName(task.candidateName) }} picks one, once you take it</small></dd></div>
         <div><dt>Due</dt><dd>{{ task.dueAt ? fmtDate(task.dueAt) : 'No due date' }}<small v-if="task.scorecard.length">scorecard sent by then</small></dd></div>
       </dl>
       <div v-if="task.scorecard.length">
@@ -300,7 +376,7 @@ async function pass() {
         <ul class="qs"><li v-for="f in task.scorecard" :key="f.key" class="chip">{{ f.label }}</li></ul>
       </div>
       <div>
-        <p class="lbl">Your next 7 days <NuxtLink to="/inbox/hours">Interview hours</NuxtLink></p>
+        <p class="lbl">Your next 7 days</p>
         <InboxWeekStrip :due-at="task.dueAt" />
       </div>
       <p v-if="formError" class="form-error" role="alert"><Icon name="alert" :size="16" />{{ formError }}</p>
@@ -424,7 +500,22 @@ async function pass() {
 .booking > svg { color: var(--accent-ink); flex: none; }
 .booking.waiting { background: var(--sunk); color: var(--ink-2); }
 .booking.waiting > svg { color: var(--ink-3); }
-.booking .btn { margin-left: auto; }
+.booking > span:not(.booking-act) { flex: 1 1 260px; }
+.booking-act { display: inline-flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+.booking.alert { background: var(--warn-tint); }
+.booking.alert > svg { color: var(--warn); }
+.pre { white-space: pre-line; }
+.confirm { display: grid; gap: 16px; }
+.from { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: var(--r-panel); background: var(--sunk); font-size: var(--t-sm); }
+.ask { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--r-panel); }
+.ask li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 16px; align-items: center; padding: 12px 14px; }
+.ask li + li { border-top: 1px solid var(--line); }
+.ask b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.ask .seg { grid-row: span 2; grid-column: 2; }
+.ask small { font-size: var(--t-sm); color: var(--ink-2); }
+.ask small.clash { color: var(--warn); }
+.ask .seg input:checked + .yes { color: var(--ok); }
+.ask .seg input:checked + .no { color: var(--bad); }
 .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: 10px; }
 .who { font-weight: 600; }
 .snap { margin-top: 18px; display: grid; gap: 14px; }

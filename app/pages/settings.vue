@@ -258,7 +258,6 @@ async function save() {
           <p v-if="!orNull(form.consentText) && !orNull(form.aiNoticeText)" class="faint none">Nothing extra shows above the button.</p>
           <span class="fake-send">Send application</span>
         </div>
-        <p class="faint aside-note">Your own interview availability is in your <NuxtLink to="/inbox/hours">Inbox</NuxtLink>.</p>
       </aside>
     </form>
   </div>

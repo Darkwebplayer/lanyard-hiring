@@ -3,6 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { STANDARD_HIRE } from '../shared/workflow/templates'
 import type { Db } from '../server/db/client'
 import * as s from '../server/db/schema'
+import { offerTimes } from '../server/domain/bookings'
 import { DomainError } from '../server/domain/errors'
 import { createJob, publish, saveDraft } from '../server/domain/jobs'
 import { makeOffer, offerInput, respondToOffer } from '../server/domain/offers'
@@ -348,7 +349,7 @@ describe('human tasks', () => {
     await rejects(reassignTask(deps(), task.id, { add: ['ghost'], remove: [] }, 'owner'), 409, 'task_closed')
   })
 
-  it('up for grabs: one of a role takes it, the others are let go; passing, undo, and the booking link waits for the taker', async () => {
+  it('up for grabs: one of a role takes it, the others are let go; passing, undo, and the booking waits for the taker, who offers the times', async () => {
     const id = await apply(await publishedJob((tpl) => {
       const n = tpl.workflow.nodes.find(n => n.key === 'interview')!
       n.config = { ...(n.config as object), assignees: { users: [], roles: [role], job_owner: false }, booking: { duration_min: 45 } }
@@ -374,6 +375,9 @@ describe('human tasks', () => {
     expect((await asI('i1')).mine.map(r => r.runId)).toEqual([task.id])
     expect(await asI('i2')).toMatchObject({ mine: [], open: [] })
     const [b] = await links()
+    expect(b).toBeDefined() // now it has its person; they offer the times
+    await rejects(offerTimes(db, { userId: 'i2', level: 'employee' }, task.id, { times: [new Date(t.getTime() + 2 * 86_400_000).toISOString()] }, t), 404, 'booking_not_found')
+    await offerTimes(db, { userId: 'i1', level: 'employee' }, task.id, { times: [new Date(t.getTime() + 2 * 86_400_000).toISOString()] }, t)
     const [ask] = await db.select().from(s.candidateEmails).where(and(eq(s.candidateEmails.applicationId, id), eq(s.candidateEmails.kind, 'booking_request')))
     expect(ask!.body).toContain(`/book/${b!.token}`)
     expect(ask!.body).toContain('I1')

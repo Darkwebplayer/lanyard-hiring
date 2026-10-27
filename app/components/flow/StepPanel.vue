@@ -547,7 +547,7 @@ const setRule = (b: { rule: Rule }, r: Rule) => (b.rule = r)
         <div v-if="!ht.offer" class="row-card">
           <label class="check">
             <input type="checkbox" role="switch" :checked="!!booking" @change="setBooking(($event.target as HTMLInputElement).checked)">
-            <span><b>Let the candidate book a time</b><br><span class="hint">They get a link to pick a slot when the people above are free. Interviewers set their availability in their inbox, under <NuxtLink to="/inbox/hours">Interview availability</NuxtLink>.</span></span>
+            <span><b>Book a time with the candidate</b><br><span class="hint">The people above offer a few times from their inbox, under Schedule. The candidate gets a link to pick one, or to ask for other times.</span></span>
           </label>
           <div v-if="booking" class="field dur">
             <label :for="`book-${node.key}`">Duration (minutes)</label>

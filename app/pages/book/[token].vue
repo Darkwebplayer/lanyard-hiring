@@ -2,11 +2,12 @@
 definePageMeta({ layout: 'bare' })
 
 interface Booking {
-  companyName: string | null, logoUrl: string | null, jobTitle: string, candidateFirstName: string, interviewers: string[], durationMin: number
-  location: string | null, cancelled: boolean, timezoneHint: string | null, startsAt: string | null, canBook: boolean, noAvailability: boolean, slots: string[]
+  companyName: string | null, logoUrl: string | null, jobTitle: string, candidateFirstName: string, interviewers: string[], offeredBy: string | null
+  durationMin: number, location: string | null, cancelled: boolean, declined: boolean, closed: boolean, timezoneHint: string | null
+  startsAt: string | null, options: string[], asked: string | null, canChange: boolean
 }
 
-// Client-only (routeRules '/**'): the slots depend on the candidate's own clock and zone anyway.
+// Client-only (routeRules '/**'): the times are shown in the candidate's own clock and zone anyway.
 const token = useRoute().params.token as string
 const base = `/api/public/bookings/${encodeURIComponent(token)}`
 const b = ref<Booking | null>(null)
@@ -51,66 +52,65 @@ const zoneName = computed(() => {
 })
 
 const fmt = (opts: Intl.DateTimeFormatOptions) => computed(() => new Intl.DateTimeFormat(undefined, { timeZone: tz.value, ...opts }))
-const dayKeyF = computed(() => new Intl.DateTimeFormat('en-CA', { timeZone: tz.value, year: 'numeric', month: '2-digit', day: '2-digit' }))
-const weekdayF = fmt({ weekday: 'short' })
-const dayNumF = fmt({ day: 'numeric' })
 const timeF = fmt({ hour: 'numeric', minute: '2-digit' })
 const longF = fmt({ weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })
 const fullF = fmt({ weekday: 'long', day: 'numeric', month: 'long', hour: 'numeric', minute: '2-digit' })
-
-// only days that have a free slot, in the candidate's zone
-const days = computed(() => {
-  const map = new Map<string, string[]>()
-  for (const s of b.value?.slots ?? []) {
-    const k = dayKeyF.value.format(new Date(s))
-    map.set(k, [...(map.get(k) ?? []), s])
-  }
-  return [...map].map(([key, slots]) => ({ key, slots, weekday: weekdayF.value.format(new Date(slots[0]!)), num: dayNumF.value.format(new Date(slots[0]!)) }))
-})
-const dayKey = ref('')
-const day = computed(() => days.value.find(d => d.key === dayKey.value) ?? days.value[0])
-const pick = ref('')
-watch(days, () => { if (!day.value?.slots.includes(pick.value)) pick.value = '' })
+const until = (iso: string) => timeF.value.format(new Date(new Date(iso).getTime() + (b.value?.durationMin ?? 0) * 60_000))
 
 const people = computed(() => {
   const n = b.value?.interviewers ?? []
   return n.length <= 1 ? n[0] ?? '' : `${n.slice(0, -1).join(', ')} and ${n.at(-1)}`
 })
 const company = computed(() => b.value?.companyName || 'the team')
+const host = computed(() => b.value?.offeredBy?.split(' ')[0] ?? company.value)
 
-// ---- booking ----
-const changing = ref(false) // picking a new time after booking
+// what the page is doing: picking from the times, writing a note for other times, or stepping back
+const mode = ref<'pick' | 'other' | 'decline'>('pick')
+const pick = ref('')
+watch(() => b.value?.options, (o) => { if (!o?.includes(pick.value)) pick.value = '' })
+const note = ref('')
 const busy = ref(false)
-const bookError = ref('')
+const actError = ref('')
 const justBooked = ref(false)
 const ERR: Record<string, string> = {
-  slot_unavailable: 'Someone took that time a moment ago. The times below are up to date; pick another.',
+  slot_unavailable: 'Someone took that time a moment ago. Pick another, or ask for other times.',
   too_late_to_change: 'Your interview is less than 12 hours away, so the time can’t change here.',
   booking_closed: 'This interview can’t be booked any more.',
 }
-async function confirm() {
-  if (!pick.value) return
+async function act(run: () => Promise<unknown>) {
   busy.value = true
-  bookError.value = ''
+  actError.value = ''
   try {
-    await api(base, { method: 'POST', body: { startsAt: pick.value, timezone: tz.value } }) // the email says the time in their zone
-    changing.value = false
-    justBooked.value = true
+    await run()
     await load()
+    return true
   }
   catch (e) {
     const err = toApiError(e)
     const known = ERR[err.code]
-    bookError.value = known ? `${known}${err.code === 'too_late_to_change' ? ` Reply to the email from ${company.value} to move it.` : ''}` : err.message
-    if (known) { pick.value = ''; await load() }
+    actError.value = known ? `${known}${err.code === 'too_late_to_change' ? ` Reply to the email from ${company.value} to move it.` : ''}` : err.message
+    if (known) await load()
+    return false
   }
-  finally {
-    busy.value = false
-  }
+  finally { busy.value = false }
 }
-// booked but locked: within the 12 hours' notice (otherwise the step has finished and there's nothing to say)
-const soon = computed(() => { const t = b.value?.startsAt ? new Date(b.value.startsAt).getTime() - Date.now() : -1; return t > 0 && t < 12 * 3600_000 })
-const picking = computed(() => !!b.value?.canBook && (!b.value.startsAt || changing.value))
+async function confirm() {
+  if (!pick.value) return (actError.value = 'Pick a time first.')
+  if (await act(() => api(base, { method: 'POST', body: { startsAt: pick.value, timezone: tz.value } }))) justBooked.value = true // the email says the time in their zone
+}
+async function askOther() {
+  if (await act(() => api(`${base}/other`, { method: 'POST', body: note.value.trim() ? { note: note.value.trim() } : {} }))) (mode.value = 'pick', note.value = '')
+}
+async function decline() {
+  if (await act(() => api(`${base}/decline`, { method: 'POST', body: note.value.trim() ? { note: note.value.trim() } : {} }))) (mode.value = 'pick', note.value = '')
+}
+function to(m: typeof mode.value) {
+  mode.value = m
+  actError.value = ''
+  justBooked.value = false
+}
+// booked but locked: within the 12 hours' notice
+const soon = computed(() => { const t = b.value?.startsAt ? new Date(b.value.startsAt).getTime() - Date.now() : -1; return t > 0 && !b.value?.canChange })
 </script>
 
 <template>
@@ -140,57 +140,52 @@ const picking = computed(() => !!b.value?.canBook && (!b.value.startsAt || chang
       <p class="muted">Your application has moved on, so it no longer goes ahead<template v-if="b.startsAt"> on {{ fullF.format(new Date(b.startsAt)) }}</template>. {{ b.companyName ?? 'The team' }} will be in touch, or reply to their email with any questions.</p>
     </div>
 
-    <!-- booked, not changing -->
-    <section v-else-if="b.startsAt && !changing" class="card sheet" aria-labelledby="bk-h" :aria-live="justBooked ? 'polite' : undefined">
-      <div>
-        <h1 id="bk-h">{{ justBooked ? `You’re booked, ${b.candidateFirstName}` : `Your interview, ${b.candidateFirstName}` }}</h1>
-        <p class="sub">{{ b.jobTitle }} · {{ b.durationMin }} minutes<template v-if="people"> with {{ people }}</template></p>
-      </div>
-      <p class="when"><Icon name="calendar" :size="20" /><span>{{ fullF.format(new Date(b.startsAt)) }}<small>{{ zoneName }}</small></span></p>
-      <p v-if="b.location" class="when"><Icon name="pin" :size="20" /><span>{{ b.location }}<small>Where</small></span></p>
-      <p v-if="justBooked" class="muted small">We’ve emailed this to you too.</p>
-      <div class="row">
-        <a class="btn btn-primary btn-lg" :href="`${base}/invite.ics`" download="interview.ics"><Icon name="download" />Add to calendar</a>
-        <button v-if="b.canBook" class="btn btn-lg" @click="changing = true; bookError = ''">Change time</button>
-      </div>
-      <p v-if="!b.canBook && soon" class="muted small">It’s less than 12 hours away, so the time can’t change here. To move it, reply to the email from {{ company }}.</p>
-      <p v-if="bookError" class="form-error" role="alert"><Icon name="alert" :size="16" />{{ bookError }}</p>
-    </section>
+    <div v-else-if="b.declined" class="card sheet" aria-live="polite">
+      <h1>You stepped back from this interview</h1>
+      <p class="muted">We let {{ people || 'the team' }} know. Your application stays with {{ company }}, and they may get in touch. Changed your mind? Reply to their email.</p>
+    </div>
 
-    <div v-else-if="!b.canBook" class="card sheet">
+    <div v-else-if="b.closed" class="card sheet">
       <h1>This interview can’t be booked any more</h1>
       <p class="muted">Your application has moved on since this link was sent. {{ b.companyName ?? 'The team' }} will be in touch about what happens next.</p>
     </div>
 
-    <section v-else class="card sheet" aria-labelledby="pk-h">
+    <!-- step back: asked once more, inline -->
+    <section v-else-if="mode === 'decline'" class="card sheet" aria-labelledby="dc-h">
+      <div><h1 id="dc-h">Step back from this interview?</h1><p class="sub">We’ll let {{ people || 'the team' }} know. Your application stays with {{ company }}, and they may get in touch.</p></div>
+      <label class="field"><span class="label">Anything you’d like them to know? <span class="faint">(optional)</span></span><textarea v-model="note" rows="3" maxlength="1000" /></label>
+      <p v-if="actError" class="form-error" role="alert"><Icon name="alert" :size="16" />{{ actError }}</p>
+      <button class="btn btn-lg bad" :aria-busy="busy" :disabled="busy" @click="decline"><span v-if="busy" class="spinner" />Step back from the interview</button>
+      <button class="btn btn-lg btn-quiet" @click="to('pick')">Keep my interview</button>
+    </section>
+
+    <!-- none of these work: a note for the team -->
+    <section v-else-if="mode === 'other'" class="card sheet" aria-labelledby="ot-h">
       <div>
-        <h1 id="pk-h">Hi {{ b.candidateFirstName }}, pick a time for your interview</h1>
+        <h1 id="ot-h">{{ b.startsAt ? 'Need a different time?' : `When suits you, ${b.candidateFirstName}?` }}</h1>
+        <p class="sub">{{ host }} will send new times that fit.<template v-if="b.startsAt"> Your interview stays on {{ longF.format(new Date(b.startsAt)) }} until you pick a new one.</template></p>
+      </div>
+      <label class="field"><span class="label">Your note to {{ host }}</span><textarea v-model="note" rows="4" maxlength="1000" /><small class="muted">For example, the days or hours that work for you.</small></label>
+      <p v-if="actError" class="form-error" role="alert"><Icon name="alert" :size="16" />{{ actError }}</p>
+      <button class="btn btn-primary btn-lg" :aria-busy="busy" :disabled="busy" @click="askOther"><span v-if="busy" class="spinner" />Ask for other times</button>
+      <button class="btn btn-lg" @click="to('pick')">{{ b.options.length ? 'Back to the times' : 'Back' }}</button>
+    </section>
+
+    <!-- times to pick (also to move a booked one) -->
+    <section v-else-if="b.options.length" class="card sheet" aria-labelledby="pk-h">
+      <div>
+        <h1 id="pk-h">{{ b.startsAt ? `New times for your interview, ${b.candidateFirstName}` : `Hi ${b.candidateFirstName}, pick a time for your interview` }}</h1>
         <p class="sub">{{ b.jobTitle }} · {{ b.durationMin }} minutes<template v-if="people"> with {{ people }}</template></p>
         <p v-if="b.location" class="sub">Where: {{ b.location }}</p>
+        <p v-if="b.startsAt" class="sub">Booked now: {{ fullF.format(new Date(b.startsAt)) }}. It stays until you pick a new time.</p>
       </div>
-
-      <p v-if="bookError" class="form-error" role="alert"><Icon name="alert" :size="16" />{{ bookError }}</p>
-
-      <div v-if="!days.length" class="none">
-        <h2>{{ b.noAvailability ? 'No times are open yet' : 'Every time in the next two weeks is taken' }}</h2>
-        <p class="muted">Reply to the email from {{ company }} and they’ll find a time with you.</p>
-      </div>
-
-      <template v-else>
-        <div class="days" role="group" aria-label="Day">
-          <button
-            v-for="d in days" :key="d.key" type="button" class="day" :aria-pressed="d.key === day?.key"
-            @click="dayKey = d.key; pick = ''"
-          ><small>{{ d.weekday }}</small><b>{{ d.num }}</b></button>
-        </div>
-        <div class="slots" role="group" :aria-label="`Times on ${day?.weekday} ${day?.num}`">
-          <button
-            v-for="s in day?.slots" :key="s" type="button" class="slot" :aria-pressed="s === pick"
-            @click="pick = s"
-          >{{ timeF.format(new Date(s)) }}</button>
-        </div>
-      </template>
-
+      <fieldset class="opts">
+        <legend>{{ b.interviewers.length > 1 ? 'Times that work for everyone' : 'Times that work' }}</legend>
+        <label v-for="o in b.options" :key="o" class="opt">
+          <input v-model="pick" type="radio" name="time" :value="o">
+          <b>{{ longF.format(new Date(o)) }}</b><small>until {{ until(o) }}</small>
+        </label>
+      </fieldset>
       <div class="zone">
         <template v-if="!changingZone">Times in {{ zoneName }}. <button type="button" class="link" @click="openZone">Change</button></template>
         <label v-else class="field">
@@ -200,17 +195,48 @@ const picking = computed(() => !!b.value?.canBook && (!b.value.startsAt || chang
           </select>
         </label>
       </div>
-
-      <div v-if="days.length || changing" class="row">
-        <button v-if="days.length" class="btn btn-primary btn-lg grow" :aria-busy="busy" :disabled="busy" @click="pick ? confirm() : (bookError = 'Pick a time first.')">
-          <span v-if="busy" class="spinner" />
-          <span>{{ pick ? `${changing ? 'Move to' : 'Book'} ${longF.format(new Date(pick))}` : 'Pick a time above' }}</span>
-        </button>
-        <button v-if="changing" class="btn btn-lg" @click="changing = false; bookError = ''">Keep {{ longF.format(new Date(b.startsAt!)) }}</button>
+      <p v-if="actError" class="form-error" role="alert"><Icon name="alert" :size="16" />{{ actError }}</p>
+      <button class="btn btn-primary btn-lg" :aria-busy="busy" :disabled="busy" @click="confirm">
+        <span v-if="busy" class="spinner" /><span>{{ pick ? `${b.startsAt ? 'Move to' : 'Book'} ${longF.format(new Date(pick))}` : 'Pick a time above' }}</span>
+      </button>
+      <hr class="rule">
+      <div class="more">
+        <button type="button" class="link" @click="to('other')">None of these work</button>
+        <button v-if="!b.startsAt" type="button" class="link quiet" @click="to('decline')">I’m no longer interested</button>
       </div>
     </section>
 
-    <p v-if="b && picking && days.length" class="foot">None of these times work? Reply to the email from {{ company }}.</p>
+    <!-- booked -->
+    <section v-else-if="b.startsAt" class="card sheet" aria-labelledby="bk-h" :aria-live="justBooked ? 'polite' : undefined">
+      <div>
+        <h1 id="bk-h">{{ justBooked ? `You’re booked, ${b.candidateFirstName}` : `Your interview, ${b.candidateFirstName}` }}</h1>
+        <p class="sub">{{ b.jobTitle }} · {{ b.durationMin }} minutes<template v-if="people"> with {{ people }}</template></p>
+      </div>
+      <p class="when"><Icon name="calendar" :size="20" /><span>{{ fullF.format(new Date(b.startsAt)) }}<small>{{ zoneName }}</small></span></p>
+      <p v-if="b.location" class="when"><Icon name="pin" :size="20" /><span>{{ b.location }}<small>Where</small></span></p>
+      <p v-if="b.asked !== null" class="muted small">You asked for another time. {{ host }} will email you new times; this one stays until you pick.</p>
+      <p v-else-if="justBooked" class="muted small">We’ve emailed this to you too, and sent {{ people || 'the team' }} a calendar invite.</p>
+      <a class="btn btn-primary btn-lg" :href="`${base}/invite.ics`" download="interview.ics"><Icon name="download" />Add to calendar</a>
+      <div v-if="b.canChange" class="more">
+        <button type="button" class="link" @click="to('other')">Need a different time?</button>
+        <button type="button" class="link quiet" @click="to('decline')">I’m no longer interested</button>
+      </div>
+      <p v-else-if="soon" class="muted small">It’s less than 12 hours away, so the time can’t change here. To move it, reply to the email from {{ company }}.</p>
+      <p v-if="actError" class="form-error" role="alert"><Icon name="alert" :size="16" />{{ actError }}</p>
+    </section>
+
+    <!-- waiting for new times -->
+    <section v-else class="card sheet" aria-live="polite">
+      <div>
+        <h1>{{ b.asked !== null ? `We’ve asked ${host} for other times` : 'New times are on their way' }}</h1>
+        <p class="sub">{{ b.asked !== null ? 'You’ll get an email with new times, usually within a working day. This link stays the same.' : `The times we offered have passed or been taken. ${host} will email you new ones, and this link stays the same.` }}</p>
+      </div>
+      <div v-if="b.asked" class="when said"><span><b>You said</b><small>“{{ b.asked }}”</small></span></div>
+      <div class="more">
+        <button v-if="b.asked === null" type="button" class="link" @click="to('other')">Tell them when suits you</button>
+        <button type="button" class="link quiet" @click="to('decline')">I’m no longer interested</button>
+      </div>
+    </section>
   </main>
 </template>
 
@@ -226,46 +252,33 @@ const picking = computed(() => !!b.value?.canBook && (!b.value.startsAt || chang
 @media (max-width: 400px) { .sheet { padding: 20px 16px; } }
 .sheet h1 { font-size: var(--t-2xl); letter-spacing: -0.015em; overflow-wrap: anywhere; }
 .sub { margin-top: 6px; color: var(--ink-2); }
-.days { display: flex; gap: 8px; overflow-x: auto; padding: 2px; scrollbar-width: none; }
-/* with a mouse a sideways strip hides days behind a scroll nobody can see: the tiles narrow (to 40 px) so the
-   two weeks' working days share one row, and wrap only past that. A phone keeps the swipe, and the cut-off
-   day at the edge shows there is more */
-@media (hover: hover) and (pointer: fine) {
-  .days { flex-wrap: wrap; overflow: visible; }
-  .days .day { flex: 1 1 40px; width: auto; max-width: 56px; }
-}
-.day {
-  flex: none; display: grid; justify-items: center; gap: 2px; width: 56px; padding: 8px 0; border: 0; border-radius: var(--r-panel);
-  background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-2); color: var(--ink); font: inherit; cursor: pointer;
-  transition: background var(--t-micro) var(--ease), box-shadow var(--t-micro) var(--ease);
-}
-.day small { font-size: var(--t-xs); color: var(--ink-2); }
-.day b { font-size: var(--t-xl); font-variant-numeric: tabular-nums; }
-.day[aria-pressed="true"] { background: var(--ink); color: #fff; box-shadow: none; }
-.day[aria-pressed="true"] small { color: oklch(1 0 0 / 0.75); }
-.slots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-.slot {
-  height: 44px; border: 0; border-radius: var(--r-field); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-2);
-  color: var(--ink); font: 500 var(--t-lg) var(--font); font-variant-numeric: tabular-nums; cursor: pointer;
-  transition: background var(--t-micro) var(--ease), box-shadow var(--t-micro) var(--ease);
-}
-.slot:hover, .day:hover:not([aria-pressed="true"]) { box-shadow: inset 0 0 0 1px var(--ink-3); }
-.slot[aria-pressed="true"] { background: var(--ink); color: #fff; box-shadow: none; }
+.opts { display: grid; gap: 8px; border: 0; padding: 0; margin: 0; min-width: 0; }
+.opts legend { padding: 0; margin-bottom: 8px; font-size: var(--t-sm); font-weight: 600; color: var(--ink-2); }
+.opt { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 2px 12px; align-items: center; min-height: 44px; padding: 12px 14px; border-radius: var(--r-panel); box-shadow: inset 0 0 0 1px var(--line-2); cursor: pointer; transition: box-shadow var(--t-micro) var(--ease); }
+.opt:hover { box-shadow: inset 0 0 0 1px var(--ink-3); }
+.opt input { appearance: none; margin: 0; width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--line-2); grid-row: span 2; display: grid; place-content: center; background: var(--surface); }
+.opt input:checked { border-color: var(--ink); }
+.opt input:checked::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--ink); }
+.opt input:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.opt:has(input:checked) { box-shadow: inset 0 0 0 2px var(--ink); }
+.opt b { font-size: var(--t-lg); font-weight: 600; font-variant-numeric: tabular-nums; }
+.opt small { font-size: var(--t-sm); color: var(--ink-2); }
+.rule { border: 0; border-top: 1px solid var(--line); margin: 0; }
+.more { display: flex; flex-wrap: wrap; gap: 4px 20px; }
+.link.quiet { color: var(--ink-2); font-weight: 500; }
+.bad { color: var(--bad); }
+.said { font-size: var(--t-md); font-weight: 400; }
+.said small { font-size: var(--t-md); color: var(--ink); }
+.field textarea { width: 100%; }
 .zone { font-size: var(--t-sm); color: var(--ink-2); }
 .zone select { margin-top: 6px; min-height: 44px; }
 .zone select:focus-visible { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink), 0 0 0 4px oklch(0.24 0.018 330 / 0.14); }
 /* padding grows the target to 44 px tall, the negative margin keeps the sentence where it was */
 .link { border: 0; background: none; padding: 12px 8px; margin: -12px -8px; font: inherit; font-weight: 600; line-height: 20px; color: var(--ink); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
-.row { display: flex; gap: 8px; flex-wrap: wrap; }
-.grow { flex: 1 1 auto; }
-.row .btn { max-width: 100%; }
 .when { display: flex; gap: 12px; align-items: flex-start; padding: 16px; border-radius: var(--r-panel); background: var(--sunk); font-size: var(--t-lg); font-weight: 600; }
 .when svg { flex: none; margin-top: 2px; }
 .when span { display: grid; gap: 2px; }
 .when small { font-size: var(--t-sm); font-weight: 400; color: var(--ink-2); }
-.none { display: grid; gap: 6px; padding: 16px; border-radius: var(--r-panel); background: var(--sunk); }
-.none h2 { font-size: var(--t-lg); }
 .small { font-size: var(--t-sm); }
-.foot { font-size: var(--t-sm); color: var(--ink-2); text-align: center; }
-@media (prefers-reduced-motion: reduce) { .day, .slot { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .opt { transition: none; } }
 </style>

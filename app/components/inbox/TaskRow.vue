@@ -8,6 +8,19 @@ defineProps<{ task: TaskRow, to: RouteLocationRaw, current: boolean }>()
 const who = (g: NonNullable<TaskRow['grab']>) => g.need > 1
   ? `Needs ${g.need} people${g.taken.length ? ` · ${g.taken.join(', ')} took it` : ''}`
   : `Also open for ${plural(g.others.length, 'other')}`
+
+// the interview in a few words: what's next, and whether it's yours to do
+function said(b: NonNullable<TaskRow['booking']>) {
+  if (b.cancelledAt) return `Cancelled: the interview on ${fmtBooked(b.startsAt)}`
+  switch (b.stage) {
+    case 'declined': return 'Stepped back from the interview'
+    case 'needs_times': return b.startsAt ? 'Asked to move the interview' : b.note ? 'Asked for other times' : 'Needs times from you'
+    case 'panel': return b.mustAnswer ? `${b.offeredBy} offered ${plural(b.count ?? 0, 'time')}: can you make them?` : `Waiting for ${listJoin(b.pending ?? [])} to confirm`
+    case 'candidate': return `${plural(b.count ?? 0, 'time')} sent, waiting for a pick`
+  }
+  return b.startsAt ? `Interview ${fmtBooked(b.startsAt)}` : 'No time yet'
+}
+const yourMove = (b: NonNullable<TaskRow['booking']>) => !b.cancelledAt && (b.stage === 'needs_times' || b.stage === 'declined' || !!b.mustAnswer)
 </script>
 
 <template>
@@ -16,8 +29,8 @@ const who = (g: NonNullable<TaskRow['grab']>) => g.need > 1
     <span class="title">{{ task.title }}</span>
     <span class="job">{{ task.jobTitle }}</span>
     <DueChip :due="task.dueAt" :overdue="task.overdue" class="due" />
-    <span v-if="task.booking" class="book" :class="{ waiting: !task.booking.startsAt }">
-      <Icon name="calendar" :size="14" />{{ task.booking.cancelledAt ? `Cancelled: the interview on ${fmtBooked(task.booking.startsAt)}` : task.booking.startsAt ? `Interview ${fmtBooked(task.booking.startsAt)}` : 'Waiting for the candidate to book' }}
+    <span v-if="task.booking" class="book" :class="{ waiting: !yourMove(task.booking) && (task.booking.stage ? task.booking.stage !== 'booked' : !task.booking.startsAt), yours: yourMove(task.booking) }">
+      <Icon name="calendar" :size="14" />{{ said(task.booking) }}
     </span>
     <span v-if="task.grab" class="who">{{ who(task.grab) }}</span>
   </NuxtLink>
@@ -37,6 +50,7 @@ const who = (g: NonNullable<TaskRow['grab']>) => g.need > 1
 .book { grid-column: 2 / -1; display: inline-flex; gap: 6px; align-items: center; font-size: var(--t-sm); font-weight: 500; color: var(--ink); }
 .book svg { color: var(--accent-ink); flex: none; }
 .book.waiting { color: var(--ink-3); font-weight: 400; }
+.book.yours { color: var(--accent-ink); font-weight: 600; }
 .who { grid-column: 2 / -1; font-size: var(--t-xs); color: var(--ink-3); }
 /* up for grabs: nobody holds it yet, so the face is an empty outline */
 .row.open .av { background: transparent; box-shadow: inset 0 0 0 1.5px var(--line-2); color: var(--ink-3); }

@@ -75,3 +75,7 @@ export const SCORE_BANDS = [
   { value: '40', label: 'AI score 40–69', min: 40, max: 69.999 },
   { value: '0', label: 'AI score under 40', max: 39.999 },
 ] as const
+
+// "Priya", "Priya and Ben", "Priya, Ben and Ana"
+const and = new Intl.ListFormat('en-GB', { type: 'conjunction' })
+export const listJoin = (xs: string[]) => and.format(xs)

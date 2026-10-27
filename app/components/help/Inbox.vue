@@ -18,9 +18,17 @@ const { isManager } = useMe()
       <li>On a panel, where several people score the same candidate, you can’t see the others’ answers until you send yours.</li>
     </ul>
     <h4>Up for grabs</h4>
-    <p>A task sent to a whole role, or to more people than it needs, waits under <b>Up for grabs</b>. The first person to press <b>Take it</b> gets it, and it leaves everyone else’s list, so two people never work the same candidate. <b>Not for me</b> hides it from you only. Your next 7 days show beside the button, so you can see if you have room. For an interview, the candidate gets the booking link once someone takes it.</p>
+    <p>A task sent to a whole role, or to more people than it needs, waits under <b>Up for grabs</b>. The first person to press <b>Take it</b> gets it, and it leaves everyone else’s list, so two people never work the same candidate. <b>Not for me</b> hides it from you only. Your next 7 days show beside the button, so you can see if you have room. For an interview, whoever takes it offers the candidate a few times.</p>
     <h4>Schedule and Done</h4>
     <p><b>Schedule</b> lists the interviews booked with you, day by day, with a calendar of the week. <b>Done</b> keeps every task you sent, with your answers, so you can look back.</p>
+    <h4>Offering times</h4>
+    <ul>
+      <li>Candidates who need times wait at the top of Schedule, under <b>Needs times</b>. Drag one onto the week: a line shows when the interview would start. Drop it, and drag again for each extra time. Two or three is usually enough.</li>
+      <li>Drop someone on a time you already placed to offer it to both. Whoever picks first gets it, and it goes from the other’s list.</li>
+      <li>Each placed time has a move and a remove button. <b>Send</b> sends everyone’s times at once.</li>
+      <li>On a panel, the others first say which times they can make. The candidate gets only the times all of you can make.</li>
+      <li>Lanyard can’t see your own calendar, so check it before you offer a time. Once booked, you get an email with a calendar file.</li>
+    </ul>
     <template v-if="isManager">
       <h4>Needs attention</h4>
       <p>Things in your jobs that need a hand:</p>
@@ -32,7 +40,6 @@ const { isManager } = useMe()
       </ul>
       <p>In Schedule, <b>Everyone</b> shows the whole team’s week, so you can see who is busy before you assign someone.</p>
     </template>
-    <p>Interviews are booked inside <NuxtLink to="/inbox/hours" class="go">your interview availability</NuxtLink>. Set them once.</p>
   </div>
 </template>
 

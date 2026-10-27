@@ -10,7 +10,7 @@
     <p>Everyone who helps you hire. Each person has a <b>role</b>, and each role has a <b>level</b> that decides what they see.</p>
     <ul>
       <li><b>Manager</b>: jobs, workflows and all candidates.</li>
-      <li><b>Employee</b>: only their own tasks and their interview availability. An interviewer sees just the people they’re asked to score.</li>
+      <li><b>Employee</b>: only their own tasks and interviews. An interviewer sees just the people they’re asked to score.</li>
       <li><b>Admin</b>: everything, plus Team and Settings. The admin is set on the server, not here.</li>
     </ul>
     <h4>Inviting people</h4>
@@ -24,7 +24,7 @@
 const ROLES = [
   { name: 'Admin', sees: ['Everything', 'Team', 'Settings'] },
   { name: 'Manager', sees: ['Jobs', 'Candidates', 'Reports'] },
-  { name: 'Employee', sees: ['Their tasks', 'Their availability'] },
+  { name: 'Employee', sees: ['Their tasks', 'Their interviews'] },
 ]
 </script>
 

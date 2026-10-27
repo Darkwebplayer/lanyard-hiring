@@ -7,6 +7,7 @@ import type { Email } from '../engine/email'
 import { LOST_PENDING_MS, STALE_RUNNING_MS } from '../engine/engine'
 import { accessLevel, atLeastManager } from './access'
 import { blindNodes, heldThrough, isOverdue, visibleAssignments, type Viewer } from './applications'
+import { type BookingState, bookingStates } from './bookings'
 import { DomainError } from './errors'
 
 const runRows = (db: Db) => db.select({
@@ -14,7 +15,7 @@ const runRows = (db: Db) => db.select({
   dueAt: nodeRuns.dueAt, error: nodeRuns.error, retries: nodeRuns.retries, createdAt: nodeRuns.createdAt,
   applicationId: applications.id, jobVersionId: applications.jobVersionId,
   firstName: candidates.firstName, lastName: candidates.lastName, jobId: jobs.id, jobTitle: jobs.title,
-  bookingId: bookings.id, bookedAt: bookings.startsAt, bookingCancelledAt: bookings.cancelledAt, bookingMin: bookings.durationMin, bookingWhere: bookings.location,
+  bookingId: bookings.id, bookedAt: bookings.startsAt, bookingCancelledAt: bookings.cancelledAt, bookingDeclinedAt: bookings.declinedAt, bookingMin: bookings.durationMin, bookingWhere: bookings.location,
 }).from(nodeRuns)
   .innerJoin(applications, eq(applications.id, nodeRuns.applicationId))
   .innerJoin(candidates, eq(candidates.id, applications.candidateId))
@@ -27,8 +28,17 @@ const view = (r: RunRow, now: Date) => ({
   title: (r.input as { title?: string } | null)?.title ?? r.nodeKey,
   dueAt: r.dueAt, overdue: isOverdue(r, now), error: r.error, retries: r.retries, createdAt: r.createdAt,
   applicationId: r.applicationId, candidateName: `${r.firstName} ${r.lastName}`, jobId: r.jobId, jobTitle: r.jobTitle,
-  booking: r.bookingId ? { startsAt: r.bookedAt, cancelledAt: r.bookingCancelledAt } : null, // the candidate's booking link exists; startsAt once they picked
+  booking: r.bookingId ? { startsAt: r.bookedAt, cancelledAt: r.bookingCancelledAt } as TaskBooking : null, // the step has an interview to book; startsAt once picked
 })
+// what a task row says about its interview; the stage and its people only on the viewer's own open tasks
+type TaskBooking = { startsAt: Date | null, cancelledAt: Date | null } & Partial<Pick<BookingState, 'stage' | 'offeredBy' | 'pending' | 'mustAnswer' | 'note'>> & { count?: number }
+const summary = (b: BookingState): TaskBooking => ({
+  startsAt: b.startsAt, cancelledAt: b.cancelledAt, stage: b.stage, offeredBy: b.offeredBy, pending: b.pending, mustAnswer: b.mustAnswer, note: b.note, count: b.offers.length,
+})
+async function withStages<T extends ReturnType<typeof view>>(db: Db, rows: T[], viewerId: string, now: Date) {
+  const states = await bookingStates(db, rows.filter(r => r.booking).map(r => r.runId), viewerId, now)
+  return rows.map(r => (states.has(r.runId) ? { ...r, booking: summary(states.get(r.runId)!) } : r))
+}
 
 async function humanConfigs(db: Db, versionIds: string[]) {
   const versions = versionIds.length ? await db.select({ id: jobVersions.id, workflow: jobVersions.workflow }).from(jobVersions).where(inArray(jobVersions.id, versionIds)) : []
@@ -50,7 +60,8 @@ export async function listTasks(db: Db, viewer: Viewer, adminEmail: string, now:
   const calledOff = (await runRows(db).innerJoin(taskAssignments, eq(taskAssignments.runId, nodeRuns.id))
     .where(and(eq(taskAssignments.userId, viewer.userId), isNotNull(bookings.cancelledAt), gt(bookings.cancelledAt, new Date(now.getTime() - 7 * 86_400_000))))
     .orderBy(desc(bookings.cancelledAt))).map(r => view(r, now))
-  if (!atLeastManager(viewer.level)) return { mine: mine.map(r => view(r, now)), open, calledOff }
+  const mineRows = await withStages(db, mine.map(r => view(r, now)), viewer.userId, now)
+  if (!atLeastManager(viewer.level)) return { mine: mineRows, open, calledOff }
 
   const t = now.getTime()
   const waiting = await runRows(db).where(eq(nodeRuns.status, 'waiting_on_human')).orderBy(asc(nodeRuns.dueAt), asc(nodeRuns.seq))
@@ -78,7 +89,7 @@ export async function listTasks(db: Db, viewer: Viewer, adminEmail: string, now:
   })
 
   return {
-    mine: mine.map(r => view(r, now)),
+    mine: mineRows,
     open,
     calledOff,
     overdue: waiting.filter(r => isOverdue(r, now)).map(r => view(r, now)),
@@ -135,11 +146,11 @@ export async function listDone(db: Db, viewer: Viewer, now: Date) {
   })
 }
 
-// Booked interviews between two times: this person's, or (managers) everyone's. Plus, for their own,
-// the ones still waiting for the candidate to pick a time.
+// Booked interviews between two times: this person's, or (managers) everyone's. Plus, for their own open tasks:
+// who needs times offered, who is waiting (on the panel or the candidate), and the times on the table in the range.
 export async function listSchedule(db: Db, viewer: Viewer, from: Date, to: Date, everyone: boolean, now: Date) {
   if (everyone && !atLeastManager(viewer.level)) throw new DomainError(403, 'forbidden')
-  const booked = await runRows(db).where(and(ne(nodeRuns.status, 'cancelled'), isNull(bookings.cancelledAt), gte(bookings.startsAt, from), lt(bookings.startsAt, to)))
+  const booked = await runRows(db).where(and(ne(nodeRuns.status, 'cancelled'), isNull(bookings.cancelledAt), isNull(bookings.declinedAt), gte(bookings.startsAt, from), lt(bookings.startsAt, to)))
     .orderBy(asc(bookings.startsAt))
   const people = booked.length
     ? await db.select({ runId: taskAssignments.runId, id: user.id, name: user.name }).from(taskAssignments)
@@ -150,10 +161,22 @@ export async function listSchedule(db: Db, viewer: Viewer, from: Date, to: Date,
     ...view(r, now), startsAt: r.bookedAt!, durationMin: r.bookingMin!, location: r.bookingWhere,
     people: people.filter(p => p.runId === r.runId).map(p => ({ id: p.id, name: p.name })),
   })).filter(e => everyone || e.people.some(p => p.id === viewer.userId))
-  const waiting = everyone ? [] : (await runRows(db).innerJoin(taskAssignments, eq(taskAssignments.runId, nodeRuns.id))
-    .where(and(eq(taskAssignments.userId, viewer.userId), isNull(taskAssignments.closedAt), eq(nodeRuns.status, 'waiting_on_human'), isNotNull(bookings.id), isNull(bookings.startsAt)))
-    .orderBy(asc(nodeRuns.dueAt))).map(r => view(r, now))
-  return { events, waiting }
+  if (everyone) return { events, needs: [], waiting: [], offered: [] }
+  const held = await runRows(db).innerJoin(taskAssignments, eq(taskAssignments.runId, nodeRuns.id))
+    .where(and(eq(taskAssignments.userId, viewer.userId), isNull(taskAssignments.closedAt), eq(nodeRuns.status, 'waiting_on_human'), isNotNull(bookings.id)))
+    .orderBy(asc(nodeRuns.dueAt), asc(nodeRuns.seq))
+  const states = await bookingStates(db, held.map(r => r.runId), viewer.userId, now)
+  const rows = held.map(r => ({ r, b: states.get(r.runId)! })).filter(x => x.b)
+  const full = ({ r, b }: typeof rows[number]) => ({
+    ...view(r, now), booking: summary(b), durationMin: b.durationMin, location: b.location, others: b.others, teamNote: b.teamNote, sentAt: b.sentAt,
+  })
+  return {
+    events,
+    needs: rows.filter(x => x.b.stage === 'needs_times').map(full),
+    waiting: rows.filter(x => x.b.stage === 'panel' || x.b.stage === 'candidate' || x.b.stage === 'declined').map(full),
+    offered: rows.flatMap(({ r, b }) => b.offers.filter(o => o.startsAt >= from && o.startsAt < to)
+      .map(o => ({ runId: r.runId, candidateName: `${r.firstName} ${r.lastName}`, startsAt: o.startsAt, durationMin: b.durationMin }))),
+  }
 }
 
 // One task with its scorecard. Assignees (current, or past ones who submitted) and managers only.
@@ -169,8 +192,10 @@ export async function getTask(db: Db, viewer: Viewer, runId: string, now: Date) 
   if (!atLeastManager(viewer.level) && !(mine && (!mine.closedAt || mine.submittedAt))) throw new DomainError(404, 'task_not_found')
 
   const config = (await humanConfigs(db, [row.jobVersionId]))(row.jobVersionId, row.nodeKey)
+  const booking = row.bookingId ? (await bookingStates(db, [row.runId], viewer.userId, now)).get(row.runId)! : null
   return {
     ...view(row, now),
+    booking, // the whole interview: its stage, the times on the table and this viewer's answers
     grab: (await grabsFor(db, viewer.userId, [row])).get(row.runId) ?? null, // up for grabs, for this viewer
     plan: config.booking ? { durationMin: config.booking.duration_min, where: config.booking.where ?? null } : null, // before the link exists
     instructions: (row.input as { instructions?: string } | null)?.instructions ?? null,
