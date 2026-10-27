@@ -8,7 +8,7 @@ interface App {
 }
 interface Todo { kind: 'book' | 'documents' | 'offer', applicationId: string, job: string, url: string, durationMin?: number, until?: string | null }
 interface Status {
-  companyName: string | null, contactEmail: string | null, firstName: string
+  companyName: string | null, logoUrl: string | null, contactEmail: string | null, firstName: string
   applications: App[], todo: Todo[], updates: { id: string, applicationId: string, job: string, subject: string, body: string, sentAt: string }[]
 }
 
@@ -95,7 +95,8 @@ async function askLink() {
 
 <template>
   <main class="status">
-    <p v-if="d?.companyName" class="brand"><span class="mono-mark" aria-hidden="true">{{ d.companyName[0]!.toUpperCase() }}</span><b>{{ d.companyName }}</b></p>
+    <p v-if="d?.logoUrl" class="brand"><img :src="d.logoUrl" :alt="d.companyName ?? 'Company logo'" class="logo"></p>
+    <p v-else-if="d?.companyName" class="brand"><span class="mono-mark" aria-hidden="true">{{ d.companyName[0]!.toUpperCase() }}</span><b>{{ d.companyName }}</b></p>
 
     <section v-if="loadError?.status === 404" class="card sheet" aria-labelledby="lost-h">
       <div>
@@ -212,6 +213,7 @@ async function askLink() {
 .status :deep(:focus-visible) { outline-color: var(--ink); }
 .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .brand b { overflow-wrap: anywhere; }
+.logo { display: block; height: 32px; max-width: min(180px, 60vw); object-fit: contain; object-position: left; }
 .mono-mark { width: 28px; height: 28px; flex: none; display: grid; place-items: center; border-radius: 8px; background: var(--ink); color: #fff; font-size: var(--t-xs); font-weight: 600; }
 h1 { overflow-wrap: anywhere; }
 .sub { margin-top: 6px; color: var(--ink-2); }

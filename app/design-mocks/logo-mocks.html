@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Company Logo Mock</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Mock: a company logo in Settings, shown on /careers in place of the initial. Tokens copied from app/assets/css/main.css. */
+:root {
+  color-scheme: light;
+  --bg: oklch(0.974 0.004 330); --surface: oklch(1 0 0); --sunk: oklch(0.955 0.005 330);
+  --ink: oklch(0.24 0.018 330); --ink-2: oklch(0.46 0.016 330); --ink-3: oklch(0.53 0.012 330);
+  --line: oklch(0.912 0.008 330); --line-2: oklch(0.86 0.01 330);
+  --accent: oklch(0.55 0.21 352); --accent-tint: oklch(0.955 0.03 352);
+  --bad: oklch(0.52 0.19 27);
+  --font: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --t-xs: 0.75rem; --t-sm: 0.8125rem; --t-md: 0.875rem; --t-lg: 1rem; --t-xl: 1.25rem; --t-2xl: 1.625rem; --t-3xl: 2.25rem;
+  --h-sm: 30px; --h-md: 38px; --r-field: 10px; --r-card: 20px; --r-panel: 14px; --r-pill: 999px;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 400 var(--t-md)/1.45 var(--font); -webkit-font-smoothing: antialiased; }
+h1, h2, h3 { margin: 0; font-weight: 600; }
+p { margin: 0; }
+.doc { max-width: 1180px; margin: 0 auto; padding: 32px 16px 64px; display: grid; gap: 28px; }
+.doc-head { display: grid; gap: 6px; max-width: 78ch; }
+.doc-head p, .note { color: var(--ink-2); }
+.eyebrow { font-size: var(--t-xs); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); }
+.row { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 20px; align-items: start; }
+.frame { display: grid; gap: 10px; }
+
+/* settings panel */
+.panel { background: var(--surface); border-radius: var(--r-panel); box-shadow: inset 0 0 0 1px var(--line); padding: 24px; display: grid; gap: 24px; }
+.sect-top { display: flex; justify-content: space-between; align-items: center; }
+.sect-h { font-size: var(--t-lg); }
+.field { display: grid; gap: 6px; }
+.label { font-weight: 500; }
+.hint { font-size: var(--t-sm); color: var(--ink-2); }
+.btn { display: inline-flex; align-items: center; gap: 6px; height: var(--h-sm); padding: 0 12px; border-radius: var(--r-pill); border: 0; background: var(--sunk); font: 500 var(--t-sm) var(--font); color: var(--ink); cursor: pointer; }
+.btn-quiet { background: none; }
+.textarea { min-height: 64px; border-radius: var(--r-field); box-shadow: inset 0 0 0 1px var(--line-2); padding: 10px 12px; color: var(--ink-3); }
+
+.logo-field { display: flex; align-items: center; gap: 16px; }
+.logo-box { width: 160px; height: 64px; flex: none; display: grid; place-items: center; border-radius: var(--r-field); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); padding: 10px; }
+.logo-box.empty { box-shadow: none; border: 1px dashed var(--line-2); background: var(--sunk); color: var(--ink-3); font-size: var(--t-sm); }
+.logo-box img, .logo-box svg { max-width: 100%; max-height: 100%; }
+.logo-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.err { color: var(--bad); font-size: var(--t-sm); font-weight: 500; }
+
+/* careers header */
+.page { background: var(--bg); border-radius: var(--r-panel); box-shadow: inset 0 0 0 1px var(--line); overflow: hidden; }
+.top { background: var(--surface); border-bottom: 1px solid var(--line); }
+.bar { display: flex; align-items: center; gap: 10px; min-height: 64px; padding: 0 20px; font-size: var(--t-lg); }
+.mono-mark { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 9px; background: var(--ink); color: #fff; font-weight: 600; }
+.logo { height: 36px; max-width: 180px; display: block; }
+.body { padding: 28px 20px 32px; display: grid; gap: 10px; }
+.body h1 { font-size: var(--t-2xl); letter-spacing: -0.02em; }
+.job { margin-top: 8px; padding: 16px 18px; border-radius: var(--r-card); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); font-weight: 600; }
+.q { padding: 14px 16px; border-radius: var(--r-panel); background: var(--accent-tint); font-size: var(--t-sm); }
+</style>
+</head>
+<body>
+<!-- a stand-in logo: the employer's own image goes here -->
+<svg width="0" height="0" style="position:absolute"><symbol id="nw" viewBox="0 0 150 36"><circle cx="18" cy="18" r="16" fill="#1f6feb"/><path d="M10 24V12l16 12V12" stroke="#fff" stroke-width="3.2" fill="none" stroke-linejoin="round"/><text x="42" y="25" font-family="Georgia, serif" font-size="19" font-weight="700" fill="#14213d">Northwind</text></symbol></svg>
+
+<main class="doc">
+  <header class="doc-head">
+    <span class="eyebrow">Mock · Company logo</span>
+    <h1>Upload a logo in Settings, show it on the careers page</h1>
+    <p>The logo goes in the Careers page section, above Introduction. On /careers it takes the place of the initial square. Without a logo, nothing changes.</p>
+  </header>
+
+  <section class="frame">
+    <span class="eyebrow">1 · Settings → Careers page</span>
+    <div class="row">
+      <div class="panel">
+        <div class="sect-top"><h2 class="sect-h">Careers page</h2><span class="btn btn-quiet">Open it ↗</span></div>
+        <div class="field">
+          <span class="label">Logo</span>
+          <div class="logo-field">
+            <div class="logo-box empty">No logo</div>
+            <div class="logo-actions"><span class="btn">⤒ Upload logo</span></div>
+          </div>
+          <p class="hint">PNG, JPG, WebP or SVG, up to 1 MB. A wide logo on a clear background looks best.</p>
+        </div>
+        <div class="field"><span class="label">Introduction</span><div class="textarea">We’re a family-run bakery…</div></div>
+      </div>
+
+      <div class="panel">
+        <div class="sect-top"><h2 class="sect-h">Careers page</h2><span class="btn btn-quiet">Open it ↗</span></div>
+        <div class="field">
+          <span class="label">Logo</span>
+          <div class="logo-field">
+            <div class="logo-box"><svg viewBox="0 0 150 36"><use href="#nw"/></svg></div>
+            <div class="logo-actions"><span class="btn">⤒ Replace</span><span class="btn btn-quiet">Remove</span></div>
+          </div>
+          <p class="hint">PNG, JPG, WebP or SVG, up to 1 MB. A wide logo on a clear background looks best.</p>
+          <p class="err">⚠ That file is 3.4 MB. Pick one under 1 MB.</p>
+        </div>
+        <div class="field"><span class="label">Introduction</span><div class="textarea">We’re a family-run bakery…</div></div>
+      </div>
+    </div>
+    <p class="note">The logo saves as soon as it’s picked (like attaching a file), not with “Save settings”. Errors show under the hint, as above.</p>
+  </section>
+
+  <section class="frame">
+    <span class="eyebrow">2 · /careers header</span>
+    <div class="row">
+      <div class="frame">
+        <span class="hint">Today: the initial</span>
+        <div class="page">
+          <div class="top"><div class="bar"><span class="mono-mark">N</span><b>Northwind Logistics</b></div></div>
+          <div class="body"><h1>Work with us</h1><div class="job">Warehouse Associate</div></div>
+        </div>
+      </div>
+      <div class="frame">
+        <span class="hint">With a logo: the logo alone (it usually carries the name)</span>
+        <div class="page">
+          <div class="top"><div class="bar"><svg class="logo" viewBox="0 0 150 36" role="img" aria-label="Northwind Logistics"><use href="#nw"/></svg></div></div>
+          <div class="body"><h1>Work with us</h1><div class="job">Warehouse Associate</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="q"><b>One question:</b> the apply, booking and offer pages show the same initial square. Should the logo replace it there too? It’s the same few lines each, and keeps the employer looking the same everywhere a candidate goes.</div>
+</main>
+</body>
+</html>

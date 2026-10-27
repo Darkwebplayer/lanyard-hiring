@@ -3,7 +3,7 @@ useHead({ title: 'Settings' })
 
 interface Settings {
   companyName: string | null, replyToEmail: string | null, consentText: string | null, aiNoticeText: string | null
-  aiEnabled: boolean, careersIntro: string | null, rejectReasons: string[]
+  aiEnabled: boolean, careersIntro: string | null, logoUrl: string | null, rejectReasons: string[]
 }
 
 const form = reactive({ companyName: '', replyToEmail: '', consentText: '', aiNoticeText: '', aiEnabled: true, careersIntro: '' })
@@ -18,6 +18,7 @@ async function load() {
     const s = await api<Settings>('/api/settings')
     Object.assign(form, { companyName: s.companyName ?? '', replyToEmail: s.replyToEmail ?? '', consentText: s.consentText ?? '', aiNoticeText: s.aiNoticeText ?? '', aiEnabled: s.aiEnabled, careersIntro: s.careersIntro ?? '' })
     reasons.value = s.rejectReasons.map(text => ({ id: seq++, text }))
+    logoUrl.value = s.logoUrl
     loaded.value = true
   }
   catch (e) { loadError.value = toApiError(e).message }
@@ -31,6 +32,37 @@ async function copyFeed() {
   feedCopied.value = (await copyText(feedUrl)) || 'failed'
   setTimeout(() => (feedCopied.value = false), feedCopied.value === 'failed' ? 4000 : 2000)
 }
+
+// ---------- logo: saved as soon as it's picked, apart from Save settings ----------
+const LOGO_MAX = 1024 * 1024
+const logoUrl = ref<string | null>(null)
+const logoBusy = ref(false)
+const logoError = ref('')
+async function logoCall(work: () => Promise<{ logoUrl: string | null }>) {
+  logoBusy.value = true
+  logoError.value = ''
+  try { logoUrl.value = (await work()).logoUrl }
+  catch (e) {
+    const x = toApiError(e)
+    // the shared wording for these two is about CVs and documents
+    logoError.value = x.status === 413 ? 'That file is over 1 MB. Pick a smaller one.' : x.code === 'unsupported_file' ? 'Only PNG, JPG, WebP or SVG images work.' : x.message
+  }
+  finally { logoBusy.value = false }
+}
+function pickLogo(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = '' // picking the same file again still fires change
+  if (!file) return
+  if (file.size > LOGO_MAX) {
+    logoError.value = `That file is ${(file.size / 1024 / 1024).toFixed(1)} MB. Pick one under 1 MB.`
+    return
+  }
+  const fd = new FormData()
+  fd.set('file', file)
+  logoCall(() => api('/api/settings/logo', { method: 'PUT', body: fd }))
+}
+const removeLogo = () => logoCall(() => api('/api/settings/logo', { method: 'DELETE' }))
 
 // ---------- reject reasons ----------
 const newReason = ref('')
@@ -155,6 +187,22 @@ async function save() {
             <a href="/careers" target="_blank" rel="noopener" class="btn btn-sm btn-quiet">Open it<Icon name="external" :size="14" /></a>
           </div>
           <div class="field">
+            <span id="s-logo-l" class="label">Logo</span>
+            <div class="logo-field">
+              <div class="logo-box" :class="{ empty: !logoUrl }">
+                <img v-if="logoUrl" :src="logoUrl" alt="Your logo">
+                <span v-else>No logo</span>
+              </div>
+              <label class="btn btn-sm" :aria-busy="logoBusy">
+                <span v-if="logoBusy" class="spinner" /><Icon v-else name="upload" />{{ logoUrl ? 'Replace' : 'Upload logo' }}
+                <input type="file" class="sr-only" accept="image/png,image/jpeg,image/webp,image/svg+xml" :disabled="logoBusy" aria-labelledby="s-logo-l" aria-describedby="s-logo-h" @change="pickLogo">
+              </label>
+              <button v-if="logoUrl" type="button" class="btn btn-sm btn-quiet" :disabled="logoBusy" @click="removeLogo">Remove</button>
+            </div>
+            <p id="s-logo-h" class="hint">PNG, JPG, WebP or SVG, up to 1 MB. Shown at the top of your careers page and every page candidates see. A wide logo on a clear background looks best.</p>
+            <p v-if="logoError" class="field-error" role="alert"><Icon name="alert" :size="14" />{{ logoError }}</p>
+          </div>
+          <div class="field">
             <label for="s-intro">Introduction</label>
             <textarea id="s-intro" v-model="form.careersIntro" rows="2" maxlength="500" placeholder="We’re a family-run bakery with three shops in Tampines and Bedok." aria-describedby="s-intro-h" />
             <p id="s-intro-h" class="hint">Sits under your company name, above the list of open jobs. <span class="count">{{ form.careersIntro.length }}/500</span></p>
@@ -229,6 +277,10 @@ async function save() {
 .copy { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 4px 4px 4px 14px; border-radius: var(--r-pill); background: var(--sunk); }
 .url { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--t-sm); color: var(--ink); text-decoration: none; }
 .url:hover { text-decoration: underline; }
+.logo-field { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.logo-box { width: 160px; height: 64px; flex: none; display: grid; place-items: center; padding: 10px; margin-right: 8px; border-radius: var(--r-field); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
+.logo-box.empty { box-shadow: none; border: 1px dashed var(--line-2); background: var(--sunk); color: var(--ink-3); font-size: var(--t-sm); }
+.logo-box img { max-width: 100%; max-height: 100%; object-fit: contain; }
 
 /* reasons: numbered because the order is the order people see them in the reject menu */
 .reasons { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }

@@ -2,7 +2,7 @@
 definePageMeta({ layout: 'bare' })
 
 interface Careers {
-  company: { name: string | null, careersIntro: string | null }
+  company: { name: string | null, careersIntro: string | null, logoUrl: string | null }
   jobs: {
     id: string, title: string, location: string | null, employmentType: string | null
     workplaceType: 'on_site' | 'hybrid' | 'remote' | null
@@ -37,8 +37,12 @@ function clearFilters() { place.value = ''; type.value = '' }
   <div class="careers">
     <header class="top">
       <div class="bar">
-        <span v-if="company" class="mono-mark" aria-hidden="true">{{ company[0]!.toUpperCase() }}</span>
-        <b>{{ company ?? 'Careers' }}</b>
+        <!-- a logo usually carries the name, so it stands alone -->
+        <img v-if="data?.company.logoUrl" :src="data.company.logoUrl" :alt="company ?? 'Careers'" class="logo">
+        <template v-else>
+          <span v-if="company" class="mono-mark" aria-hidden="true">{{ company[0]!.toUpperCase() }}</span>
+          <b>{{ company ?? 'Careers' }}</b>
+        </template>
       </div>
     </header>
 
@@ -105,7 +109,8 @@ function clearFilters() { place.value = ''; type.value = '' }
 .bar, .body { width: min(880px, 100%); margin-inline: auto; padding-inline: 16px; }
 .bar { display: flex; align-items: center; gap: 10px; min-height: 64px; font-size: var(--t-lg); }
 .bar b { overflow-wrap: anywhere; }
-/* the employer's initial, not a logo we don't have */
+.logo { display: block; height: 36px; max-width: min(200px, 60vw); object-fit: contain; object-position: left; }
+/* the employer's initial, when they have no logo */
 .mono-mark { width: 32px; height: 32px; flex: none; display: grid; place-items: center; border-radius: 9px; background: var(--ink); color: #fff; font-weight: 600; }
 .body { padding-block: 40px 64px; display: grid; gap: 24px; }
 .intro { display: grid; gap: 10px; }

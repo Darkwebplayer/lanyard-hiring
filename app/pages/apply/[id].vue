@@ -7,7 +7,7 @@ definePageMeta({ layout: 'bare' })
 
 interface PublicJob {
   id: string, title: string, description: string | null, location: string | null, employmentType: string | null, closesAt: string | null
-  companyName: string | null, contactEmail: string | null, minExperienceYears: number | null, mustHaveSkills: string[]
+  companyName: string | null, logoUrl: string | null, contactEmail: string | null, minExperienceYears: number | null, mustHaveSkills: string[]
   workplaceType: 'on_site' | 'hybrid' | 'remote' | null, openings: number, postedAt: string | null
   salary: { min: number | null, max: number | null, currency: string | null } | null
   form: FormField[], consentText: string | null, aiNoticeText: string | null
@@ -267,7 +267,8 @@ function focusFirst() {
     <template v-else-if="job">
       <section v-show="step === 'job'" class="post" aria-labelledby="post-h">
         <header class="head">
-          <p v-if="job.companyName" class="company">{{ job.companyName }}</p>
+          <img v-if="job.logoUrl" :src="job.logoUrl" :alt="job.companyName ?? 'Company logo'" class="logo">
+          <p v-else-if="job.companyName" class="company">{{ job.companyName }}</p>
           <h1 id="post-h" ref="postH" tabindex="-1">{{ job.title }}</h1>
           <p v-if="meta.length" class="meta">
             <span v-for="m in meta" :key="m">{{ m }}</span>
@@ -416,6 +417,7 @@ function focusFirst() {
 /* min-height: the dated facts arrive after hydration into this line */
 .facts { margin-top: 4px; font-size: var(--t-sm); min-height: 1lh; }
 .post { display: grid; gap: 24px; }
+.logo { display: block; height: 40px; max-width: min(220px, 70vw); object-fit: contain; object-position: left; margin-bottom: 6px; }
 .company { font-weight: 600; color: var(--ink-2); margin-bottom: 6px; }
 h1:focus { outline: none; }
 .looking { display: grid; gap: 10px; padding: 20px; border-radius: var(--r-panel); background: var(--surface); border: 1px solid var(--line); }

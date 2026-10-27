@@ -9,6 +9,7 @@ import { applications, candidates, jobs, jobVersions, settings } from '../db/sch
 import { sha256Hex, sniffCv } from '../engine/handlers/extract'
 import { queueEmail, words } from './emails'
 import { DomainError, pgCode } from './errors'
+import { logoUrl } from './settings'
 
 export interface Bucket {
   put: (key: string, value: Uint8Array, options?: { httpMetadata?: { contentType?: string }, sha256?: string }) => Promise<unknown>
@@ -41,7 +42,7 @@ export async function openJobs(db: Db, now: Date) {
     .orderBy(desc(jobs.createdAt))
   const [s] = await db.select().from(settings)
   return {
-    company: { name: s?.companyName ?? null, careersIntro: s?.careersIntro ?? null },
+    company: { name: s?.companyName ?? null, careersIntro: s?.careersIntro ?? null, logoUrl: logoUrl(s?.logoKey) },
     jobs: rows.map(({ requirements, ...j }) => {
       const req = requirements as Requirements
       return {
@@ -86,6 +87,7 @@ export async function publicJob(db: Db, jobId: string, now: Date) {
     title: job.title,
     description: job.description,
     companyName: s?.companyName ?? null,
+    logoUrl: logoUrl(s?.logoKey),
     // candidates reach the team by replying, so the reply-to address is already theirs to see
     contactEmail: s?.replyToEmail ?? null,
     location: req.location ?? null,

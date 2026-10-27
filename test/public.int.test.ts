@@ -47,7 +47,7 @@ afterAll(() => db.close())
 describe('careers list', () => {
   it('lists only open, published jobs before their closing date, with public fields', async () => {
     const { company, jobs } = await openJobs(db, now)
-    expect(company).toEqual({ name: 'Fish & <Chips>', careersIntro: 'Small team, big kitchen.' })
+    expect(company).toEqual({ name: 'Fish & <Chips>', careersIntro: 'Small team, big kitchen.', logoUrl: null })
     expect(jobs.map(j => j.title).sort()).toEqual(['Bookkeeper', 'Cook ]]> & <Chef>'])
     const cook = jobs.find(j => j.id === ids.open)!
     expect(cook).toMatchObject({ location: 'Berlin, Germany', employmentType: 'Full-time', workplaceType: null, salary: { min: 40000, max: 50000, currency: 'EUR' }, postedAt: expect.any(Date) })

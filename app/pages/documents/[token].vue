@@ -2,7 +2,7 @@
 definePageMeta({ layout: 'bare' })
 
 interface Docs {
-  companyName: string | null, candidateFirstName: string, jobTitle: string, open: boolean
+  companyName: string | null, logoUrl: string | null, candidateFirstName: string, jobTitle: string, open: boolean
   documents: { label: string, required: boolean, received: boolean, fileName: string | null }[]
 }
 
@@ -60,7 +60,8 @@ async function upload(i: number, e: Event) {
 
 <template>
   <main class="docs">
-    <p v-if="d?.companyName" class="brand"><span class="mono-mark" aria-hidden="true">{{ d.companyName[0]!.toUpperCase() }}</span><b>{{ d.companyName }}</b></p>
+    <p v-if="d?.logoUrl" class="brand"><img :src="d.logoUrl" :alt="d.companyName ?? 'Company logo'" class="logo"></p>
+    <p v-else-if="d?.companyName" class="brand"><span class="mono-mark" aria-hidden="true">{{ d.companyName[0]!.toUpperCase() }}</span><b>{{ d.companyName }}</b></p>
 
     <div v-if="loadError?.status === 404" class="card sheet">
       <h1>This link doesn’t work</h1>
@@ -119,6 +120,7 @@ async function upload(i: number, e: Event) {
 .docs :deep(:focus-visible) { outline-color: var(--ink); }
 .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .brand b { overflow-wrap: anywhere; }
+.logo { display: block; height: 32px; max-width: min(180px, 60vw); object-fit: contain; object-position: left; }
 .mono-mark { width: 28px; height: 28px; flex: none; display: grid; place-items: center; border-radius: 8px; background: var(--ink); color: #fff; font-size: var(--t-xs); font-weight: 600; }
 .sheet { padding: 24px; display: grid; gap: 18px; box-shadow: inset 0 0 0 1px var(--line); border: 0; }
 @media (max-width: 400px) { .sheet { padding: 20px 16px; } }

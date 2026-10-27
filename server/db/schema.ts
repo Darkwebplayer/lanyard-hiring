@@ -84,6 +84,7 @@ export const settings = pgTable('settings', {
   aiNoticeText: text('ai_notice_text'),
   aiEnabled: boolean('ai_enabled').notNull().default(true), // off: AI steps fail with ai_off, Ask and flow drafts hide
   careersIntro: text('careers_intro'), // the line under "Work with us" on /careers
+  logoKey: text('logo_key'), // R2 logo/<key>, served at /api/public/logo/<key>; a new upload gets a new key
   // picked when closing as rejected; stored on the event, so renaming one never rewrites history
   rejectReasons: jsonb('reject_reasons').$type<string[]>().notNull()
     .default(['Not enough experience', 'Skills don’t match', 'Salary expectations', 'Position filled', 'Other']),

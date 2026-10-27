@@ -2,7 +2,7 @@
 definePageMeta({ layout: 'bare' })
 
 interface Booking {
-  companyName: string | null, jobTitle: string, candidateFirstName: string, interviewers: string[], durationMin: number
+  companyName: string | null, logoUrl: string | null, jobTitle: string, candidateFirstName: string, interviewers: string[], durationMin: number
   location: string | null, cancelled: boolean, timezoneHint: string | null, startsAt: string | null, canBook: boolean, noAvailability: boolean, slots: string[]
 }
 
@@ -115,7 +115,8 @@ const picking = computed(() => !!b.value?.canBook && (!b.value.startsAt || chang
 
 <template>
   <main class="book">
-    <p v-if="b?.companyName" class="brand"><span class="mono-mark" aria-hidden="true">{{ b.companyName[0]!.toUpperCase() }}</span><b>{{ b.companyName }}</b></p>
+    <p v-if="b?.logoUrl" class="brand"><img :src="b.logoUrl" :alt="b.companyName ?? 'Company logo'" class="logo"></p>
+    <p v-else-if="b?.companyName" class="brand"><span class="mono-mark" aria-hidden="true">{{ b.companyName[0]!.toUpperCase() }}</span><b>{{ b.companyName }}</b></p>
 
     <div v-if="loadError?.status === 404" class="card sheet">
       <h1>This booking link doesn’t work</h1>
@@ -219,6 +220,7 @@ const picking = computed(() => !!b.value?.canBook && (!b.value.startsAt || chang
 .book :deep(:focus-visible) { outline-color: var(--ink); }
 .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .brand b { overflow-wrap: anywhere; }
+.logo { display: block; height: 32px; max-width: min(180px, 60vw); object-fit: contain; object-position: left; }
 .mono-mark { width: 28px; height: 28px; flex: none; display: grid; place-items: center; border-radius: 8px; background: var(--ink); color: #fff; font-size: var(--t-xs); font-weight: 600; }
 .sheet { padding: 24px; display: grid; gap: 18px; box-shadow: inset 0 0 0 1px var(--line); border: 0; }
 @media (max-width: 400px) { .sheet { padding: 20px 16px; } }

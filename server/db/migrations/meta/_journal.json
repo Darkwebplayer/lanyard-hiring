@@ -113,6 +113,13 @@
       "when": 1793033976176,
       "tag": "0015_notices",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1793080867322,
+      "tag": "0016_settings_logo",
+      "breakpoints": true
     }
   ]
 }

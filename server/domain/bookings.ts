@@ -6,6 +6,7 @@ import { atLeastManager } from './access'
 import { heldThrough, type Viewer } from './applications'
 import { queueEmail, words } from './emails'
 import { DomainError } from './errors'
+import { logoUrl } from './settings'
 
 // Interview booking: a human task with `booking` gets a link (bookings.token) where the candidate picks a
 // time all open assignees are free. Times are computed in each assignee's own zone with Intl.
@@ -139,9 +140,10 @@ async function offer(db: Db | Tx, b: Awaited<ReturnType<typeof loadBooking>>, no
 export async function publicBooking(db: Db, token: string, now: Date) {
   const b = await loadBooking(db, token)
   const o = await offer(db, b, now)
-  const [s] = await db.select({ companyName: settings.companyName }).from(settings)
+  const [s] = await db.select({ companyName: settings.companyName, logoKey: settings.logoKey }).from(settings)
   return {
     companyName: s?.companyName ?? null,
+    logoUrl: logoUrl(s?.logoKey),
     jobTitle: b.jobTitle,
     candidateFirstName: b.firstName,
     interviewers: o.people.map(p => p.name),

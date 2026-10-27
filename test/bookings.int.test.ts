@@ -117,7 +117,7 @@ describe('booking an interview', () => {
     expect(b.token).toMatch(/^[\w-]{32}$/)
     expect(b.durationMin).toBe(60)
     expect(await publicBooking(db, b.token, t)).toEqual({
-      companyName: 'Acme, Inc.', jobTitle: 'Engineer; Backend', candidateFirstName: 'Jane', interviewers: ['Olivia Owner'],
+      companyName: 'Acme, Inc.', logoUrl: null, jobTitle: 'Engineer; Backend', candidateFirstName: 'Jane', interviewers: ['Olivia Owner'],
       durationMin: 60, location: null, cancelled: false, timezoneHint: null, startsAt: null, canBook: true, noAvailability: true, slots: [],
     })
   })

@@ -2,7 +2,7 @@
 definePageMeta({ layout: 'bare' })
 
 interface Offer {
-  company: string | null, jobTitle: string, candidateFirstName: string, letter: string
+  company: string | null, logoUrl: string | null, jobTitle: string, candidateFirstName: string, letter: string
   terms: { salary: string, start_date: string, location?: string }
   status: 'sent' | 'accepted' | 'declined' | 'withdrawn', expiresAt: string | null
   signedName: string | null, respondedAt: string | null
@@ -94,8 +94,11 @@ const print = () => window.print()
 <template>
   <main class="offer">
     <header class="brand noprint">
-      <span v-if="offer?.company" class="mono-mark" aria-hidden="true">{{ offer.company[0]!.toUpperCase() }}</span>
-      <b>{{ offer?.company }}</b>
+      <img v-if="offer?.logoUrl" :src="offer.logoUrl" :alt="offer.company ?? 'Company logo'" class="logo">
+      <template v-else>
+        <span v-if="offer?.company" class="mono-mark" aria-hidden="true">{{ offer.company[0]!.toUpperCase() }}</span>
+        <b>{{ offer?.company }}</b>
+      </template>
       <button v-if="state === 'open' || state === 'accepted'" type="button" class="btn btn-sm" @click="print"><Icon name="download" />Save as PDF</button>
     </header>
 
@@ -203,6 +206,7 @@ const print = () => window.print()
 .offer :deep(:focus-visible) { outline-color: var(--ink); }
 .brand { display: flex; align-items: center; gap: 10px; min-height: 34px; }
 .brand b { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.logo { display: block; height: 32px; max-width: min(180px, 50vw); object-fit: contain; object-position: left; margin-right: auto; }
 .mono-mark { width: 28px; height: 28px; flex: none; display: grid; place-items: center; border-radius: 8px; background: var(--ink); color: #fff; font-size: var(--t-xs); font-weight: 600; }
 .sheet { padding: 24px; display: grid; gap: 14px; box-shadow: inset 0 0 0 1px var(--line); border: 0; }
 .sheet h1 { font-size: var(--t-2xl); letter-spacing: -0.015em; overflow-wrap: anywhere; }

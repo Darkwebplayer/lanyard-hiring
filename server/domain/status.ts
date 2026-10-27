@@ -5,7 +5,7 @@ import type { Db } from '../db/client'
 import { applications, bookings, candidateEmails, candidates, documentRequests, jobs, jobVersions, nodeRuns, offers } from '../db/schema'
 import { queueEmail, words } from './emails'
 import { DomainError } from './errors'
-import { getSettings } from './settings'
+import { getSettings, logoUrl } from './settings'
 
 // A candidate's status page: every application they made here, as far as our emails have told them. Progress,
 // outcomes and things to do appear only once the email that says so has been sent, so the page never says more
@@ -25,7 +25,7 @@ export async function publicStatus(db: Db, token: string, now: Date) {
     .where(eq(applications.candidateId, c.id)).orderBy(desc(applications.createdAt))
   const ids = apps.map(a => a.app.id)
   const settings = await getSettings(db)
-  const base = { companyName: settings.companyName, contactEmail: settings.replyToEmail, firstName: c.firstName }
+  const base = { companyName: settings.companyName, logoUrl: logoUrl(settings.logoKey), contactEmail: settings.replyToEmail, firstName: c.firstName }
   if (!ids.length) return { ...base, applications: [], todo: [], updates: [] }
 
   const sent = await db.select({

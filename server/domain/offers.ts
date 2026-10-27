@@ -7,6 +7,7 @@ import { buildContext } from '../engine/context'
 import { answerOfferStep, cancelBookings, type EngineDeps, type Enqueued, flush, moveApplication } from '../engine/engine'
 import { queueEmail, words } from './emails'
 import { DomainError } from './errors'
+import { logoUrl } from './settings'
 
 // Shown when the library is empty (and used for templateId: null), so a new company can make an offer at once.
 export const STANDARD_OFFER = {
@@ -182,7 +183,8 @@ async function loadOffer(db: Pick<Db, 'select'>, where: { token: string } | { id
 
 export async function publicOffer(db: Db, token: string) {
   const { offer, candidate, jobTitle } = await loadOffer(db, { token })
-  return { company: await companyName(db), jobTitle, candidateFirstName: candidate.firstName, letter: offer.letter, terms: offer.terms, status: offer.status, expiresAt: offer.expiresAt, signedName: offer.signedName, respondedAt: offer.respondedAt }
+  const [s] = await db.select({ logoKey: settings.logoKey }).from(settings)
+  return { company: await companyName(db), logoUrl: logoUrl(s?.logoKey), jobTitle, candidateFirstName: candidate.firstName, letter: offer.letter, terms: offer.terms, status: offer.status, expiresAt: offer.expiresAt, signedName: offer.signedName, respondedAt: offer.respondedAt }
 }
 
 // Patronymic connectors (Malay bin/binte, Indian a/l, s/o…) that people add or leave out when they sign.

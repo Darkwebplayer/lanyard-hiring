@@ -10,6 +10,7 @@ import { queueEmail } from './emails'
 import { assertCanSee, type Viewer } from './applications'
 import type { Bucket } from './apply'
 import { DomainError } from './errors'
+import { logoUrl } from './settings'
 
 // Request documents: the candidate uploads each one through a link (document_requests.token), the team can
 // tick one off when it came another way, and the step completes once every required one is in.
@@ -55,6 +56,7 @@ export async function publicDocuments(db: Db, token: string) {
   const { req, app, firstName, jobTitle } = await byToken(db, token)
   return {
     companyName: await companyName(db),
+    logoUrl: logoUrl((await db.select({ k: settings.logoKey }).from(settings))[0]?.k),
     candidateFirstName: firstName,
     jobTitle,
     open: app.status === 'active',
